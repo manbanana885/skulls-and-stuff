@@ -8,14 +8,40 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
 - Drop-in local co-op for 2 players
 
-## Run
+## How to play (Windows, no Python experience needed)
+
+1. **Download the game.** Near the top of this page, click the green **Code** button,
+   then **Download ZIP**.
+2. **Unzip it.** Open your Downloads folder, right-click `skulls-and-stuff-main.zip`
+   and choose **Extract All...**, then **Extract**.
+3. **Run the setup once.** In the extracted folder, double-click **`install.bat`**.
+   - If Windows shows a blue "Windows protected your PC" box, click **More info**, then **Run anyway**.
+   - If you don't have Python yet, the setup installs it for you. When it's finished, it asks you to
+     close the window and double-click `install.bat` a second time to finish.
+   - When it says **All done!**, press any key to close it.
+4. **Play.** Double-click **`run_game.bat`**. You only need this step from now on.
+
+**If the automatic Python install fails**, get Python from
+[python.org/downloads](https://www.python.org/downloads/). On the installer's first screen, tick
+**"Add python.exe to PATH"** before clicking Install. Then double-click `install.bat` again.
+
+**If it says "No module named pygame"**, double-click `install.bat` again.
+
+### Running it yourself (any OS)
+
+You need Python 3.10 or newer.
 
 ```
-pip install pygame-ce numpy scipy
-run_game.bat          (or: python game/main.py)
+pip install pygame-ce numpy
+python game/main.py
 ```
 
-Controls: WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire).
+If you already have the regular `pygame` package installed, uninstall it first (`pip uninstall pygame`).
+It clashes with `pygame-ce`.
+
+## Controls
+
+WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire).
 Player 2 joins any time by pressing BACK / SELECT on a second controller.
 
 ## Rebuild assets
