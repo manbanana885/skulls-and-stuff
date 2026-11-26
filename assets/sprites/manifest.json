@@ -1,0 +1,3999 @@
+{
+ "_meta": {
+  "tile_w": 128
+ },
+ "player_legs": {
+  "dirs": 8,
+  "anims": {
+   "walk": 8,
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "player_torso": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "zombie": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "spider": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   384,
+   384
+  ],
+  "anchor": [
+   192.0,
+   231.19183588453086
+  ]
+ },
+ "leech": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   151.5151015307185
+  ]
+ },
+ "drone": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   190.70693741524934
+  ]
+ },
+ "floor_metal": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_cables": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_grate": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_concrete": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_hazard": {
+  "dirs": 1,
+  "anims": {
+   "idle": 5
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 5
+ },
+ "floor_bones": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_gore": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_flesh": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 8
+ },
+ "wall_tech": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_skull": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_pipe": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_flesh": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "barrel": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   127.35346870762467
+  ]
+ },
+ "crate": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   123.43428511917159
+  ]
+ },
+ "tank": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   175.03020306143702
+  ]
+ },
+ "skullpile": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   107.75755076535926
+  ]
+ },
+ "gorepile": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   107.75755076535926
+  ]
+ },
+ "corpse": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "cables": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   99.91918358845308
+  ]
+ },
+ "portal": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   115.59591794226543
+  ]
+ },
+ "spawner": {
+  "dirs": 1,
+  "anims": {
+   "idle": 4
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   119.51510153071851
+  ]
+ },
+ "health": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   128,
+   128
+  ],
+  "anchor": [
+   64.0,
+   87.51510153071851
+  ]
+ },
+ "power": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   128,
+   128
+  ],
+  "anchor": [
+   64.0,
+   87.51510153071851
+  ]
+ },
+ "gib_bone": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_rib": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_skull": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_jaw": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_meat": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_meat_green": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_gut": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_eye": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_chitin": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_spiderleg": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_leech": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_metal": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_gear": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_wire": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_chrome": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_armor": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_pod": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "gib_barrel": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "torso_shotgun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.99,
+   1.17
+  ]
+ },
+ "torso_rocket": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.88,
+   1.33
+  ]
+ },
+ "torso_flamer": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.0,
+   1.14
+  ]
+ },
+ "gun_sniper": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "brute": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   384,
+   384
+  ],
+  "anchor": [
+   192.0,
+   262.5453045921555
+  ]
+ },
+ "crawler": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   147.59591794226543
+  ]
+ },
+ "spitter": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "turret": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   159.35346870762467
+  ]
+ },
+ "walker": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   320,
+   320
+  ],
+  "anchor": [
+   160.0,
+   222.70693741524934
+  ]
+ },
+ "bloater": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "skull": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   206.3836717690617
+  ]
+ },
+ "torso_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.67,
+   1.18
+  ]
+ },
+ "torso_revolver": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.79,
+   1.1849999999999998
+  ]
+ },
+ "torso_smg": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.8,
+   1.14
+  ]
+ },
+ "torso_carbine": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.01,
+   1.14
+  ]
+ },
+ "torso_assault": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.09,
+   1.15
+  ]
+ },
+ "torso_sniper": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.35,
+   1.16
+  ]
+ },
+ "torso_grenade": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.87,
+   1.17
+  ]
+ },
+ "torso_laser_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.73,
+   1.18
+  ]
+ },
+ "torso_laser_rifle": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.1,
+   1.14
+  ]
+ },
+ "torso_plasma": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.13
+  ]
+ },
+ "gun_pistol": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_revolver": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_smg": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_shotgun": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_carbine": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_assault": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_grenade": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_rocket": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_laser_pistol": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_laser_rifle": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_plasma": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_flamer": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gib_plank": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "hellspawn": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "wretch": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   288
+  ],
+  "anchor": [
+   128.0,
+   206.70693741524934
+  ]
+ },
+ "stalker": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   159.35346870762467
+  ]
+ },
+ "mimic": {
+  "dirs": 8,
+  "anims": {
+   "dormant": 1,
+   "walk": 6
+  },
+  "size": [
+   320,
+   320
+  ],
+  "anchor": [
+   160.0,
+   191.35346870762467
+  ]
+ },
+ "wall_crypt": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "floor_flagstone": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "candles": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "sarcophagus": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   119.51510153071851
+  ]
+ },
+ "wall_rust": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_fence": {
+  "dirs": 1,
+  "anims": {
+   "idle": 6
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 6
+ },
+ "floor_rustgrate": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_rust": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "gurney": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   147.27265229607775
+  ]
+ },
+ "bodybag": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "wall_ice": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_lab": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "floor_snow": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_lab": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "thingcorpse": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   111.67673435381234
+  ]
+ },
+ "generator": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   143.35346870762467
+  ]
+ },
+ "wall_hellrock": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_spine": {
+  "dirs": 1,
+  "anims": {
+   "idle": 6
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 6
+ },
+ "floor_brimstone": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_rune": {
+  "dirs": 1,
+  "anims": {
+   "idle": 6
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 6
+ },
+ "brazier": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   147.27265229607775
+  ]
+ },
+ "impaler": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   175.03020306143702
+  ]
+ },
+ "floor_rubble": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "gib_rubble": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   80,
+   80
+  ],
+  "anchor": [
+   40.0,
+   40.0
+  ]
+ },
+ "floor_snowblood": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_marble": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_thorn": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "floor_gold": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_tomb": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_vat": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "floor_catwalk": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_castle": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "cauldron": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   119.51510153071851
+  ]
+ },
+ "biovat": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   175.03020306143702
+  ]
+ },
+ "shade": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "glutton": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   320,
+   320
+  ],
+  "anchor": [
+   160.0,
+   214.86857023834318
+  ]
+ },
+ "meltgunner": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "eelmaw": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "revenant": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "radhound": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "thornling": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "boss_gatekeeper": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_leviathan": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_thornmother": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_liquidator": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_gorged": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "floor_ash": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_bloodriver": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "column_broken": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   143.35346870762467
+  ]
+ },
+ "floor_thornwood": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "ashpile": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "lustbed": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   135.5151015307185
+  ]
+ },
+ "rosebush": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   111.67673435381234
+  ]
+ },
+ "feast": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "chest": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   111.67673435381234
+  ]
+ },
+ "coinpile": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "deadtree": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   288
+  ],
+  "anchor": [
+   96.0,
+   198.86857023834318
+  ]
+ },
+ "swampcorpse": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "wall_marble": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "burningtomb": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   139.4342851191716
+  ]
+ },
+ "wall_thorntree": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "candelabra": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   143.35346870762467
+  ]
+ },
+ "spikerack": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   167.19183588453086
+  ]
+ },
+ "bloodpool": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   99.91918358845308
+  ]
+ },
+ "raddrum": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   127.35346870762467
+  ]
+ },
+ "fuelrods": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   143.35346870762467
+  ]
+ },
+ "wall_ruin": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_bloodrock": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "spectable": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   119.51510153071851
+  ]
+ },
+ "outflow": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   139.4342851191716
+  ]
+ },
+ "trashpile": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "chemdrum": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   127.35346870762467
+  ]
+ },
+ "valvestation": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   139.4342851191716
+  ]
+ },
+ "floor_velvet": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "armorstand": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   171.11101947298394
+  ]
+ },
+ "torchstand": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   167.19183588453086
+  ]
+ },
+ "floor_reactor": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_storm": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_radtile": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_reactor": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_coolant": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_silk": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "floor_cleanroom": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_mud": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_biogrowth": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_rot": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_cleanroom": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_mudbrick": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_gorge": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "floor_sewer": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_sludge": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_vault": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_vault": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_sewerbrick": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_hoard": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_outflow": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "hollow": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "floor_bog": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_peat": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_corroded": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_chemtank": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_bogrock": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_corroded": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_deadtree": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "floor_tomb": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "siren": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "floor_cobble": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_cinder": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "floor_hall": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ],
+  "variants": 10
+ },
+ "wall_pyre": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "wall_keep": {
+  "dirs": 1,
+  "anims": {
+   "idle": 10
+  },
+  "size": [
+   192,
+   224
+  ],
+  "anchor": [
+   96.0,
+   151.19183588453086
+  ],
+  "variants": 10
+ },
+ "maggot": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   151.5151015307185
+  ]
+ },
+ "hoarder": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "goldgolem": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   320,
+   320
+  ],
+  "anchor": [
+   160.0,
+   214.86857023834318
+  ]
+ },
+ "specimen": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "boss_ashcolossus": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "berserker": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   320,
+   320
+  ],
+  "anchor": [
+   160.0,
+   214.86857023834318
+  ]
+ },
+ "boss_tempestqueen": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "sporewalker": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "boss_entwined": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "drowned": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "heretic": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "boss_triplemaw": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "sludgegunner": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "pyrewraith": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "meltman": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "flayed": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "acidcrab": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "harpy": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "bowman": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "boss_goldenmaw": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_butcherking": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_sewerking": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_midasengine": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_gatorbeast": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_wrathful": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_coreabom": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_distiller": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_melttitan": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_archheretic": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_subjectzero": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_blackknight": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_tombtitan": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_hivemind": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "boss_necroking": {
+  "dirs": 8,
+  "anims": {
+   "walk": 4
+  },
+  "size": [
+   512,
+   600
+  ],
+  "anchor": [
+   256.0,
+   448.9289763612172
+  ]
+ },
+ "torso_tac_nuke": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.76,
+   1.33
+  ]
+ },
+ "torso_nuke": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.07,
+   1.36
+  ]
+ },
+ "torso_saw": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.86,
+   1.23
+  ]
+ },
+ "torso_chem": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.14
+  ]
+ },
+ "torso_cryo": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.14
+  ]
+ },
+ "gun_tac_nuke": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_nuke": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_saw": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_chem": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "gun_cryo": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   160,
+   160
+  ],
+  "anchor": [
+   80.0,
+   103.51510153071851
+  ]
+ },
+ "pinkmelt": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "rustbound": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   320,
+   320
+  ],
+  "anchor": [
+   160.0,
+   214.86857023834318
+  ]
+ },
+ "mourner": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "chestmimic": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "shieldbearer": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "wendigo": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "enthraller": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "raddrone": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "devourer": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   320,
+   320
+  ],
+  "anchor": [
+   160.0,
+   214.86857023834318
+  ]
+ },
+ "bonepriest": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "clone": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "lurker": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   151.5151015307185
+  ]
+ },
+ "boghag": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "hazmatsprayer": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "flagellant": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "cinderfiend": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "hookman": {
+  "dirs": 8,
+  "anims": {
+   "walk": 6
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   182.86857023834318
+  ]
+ },
+ "trap_spikes": {
+  "dirs": 1,
+  "anims": {
+   "rise": 4
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   107.75755076535926
+  ]
+ },
+ "trap_bonespikes": {
+  "dirs": 1,
+  "anims": {
+   "rise": 4
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   107.75755076535926
+  ]
+ },
+ "trap_saw": {
+  "dirs": 4,
+  "anims": {
+   "spin": 4
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   115.59591794226543
+  ]
+ },
+ "trap_vent": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   160,
+   144
+  ],
+  "anchor": [
+   80.0,
+   72.0
+  ]
+ },
+ "trap_hole": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   160,
+   144
+  ],
+  "anchor": [
+   80.0,
+   72.0
+  ]
+ },
+ "trap_chemreactor": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   171.11101947298394
+  ]
+ },
+ "trap_radreactor": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   256
+  ],
+  "anchor": [
+   96.0,
+   171.11101947298394
+  ]
+ },
+ "trap_turret": {
+  "dirs": 16,
+  "anims": {
+   "rise": 4
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   115.59591794226543
+  ]
+ },
+ "trap_tesla": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   288
+  ],
+  "anchor": [
+   96.0,
+   191.03020306143702
+  ]
+ },
+ "trap_maw": {
+  "dirs": 1,
+  "anims": {
+   "bite": 4
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   103.83836717690617
+  ]
+ },
+ "trap_hands": {
+  "dirs": 1,
+  "anims": {
+   "grab": 4
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   115.59591794226543
+  ]
+ },
+ "trap_thorns": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   115.59591794226543
+  ]
+ },
+ "trap_pendulum": {
+  "dirs": 4,
+  "anims": {
+   "swing": 12
+  },
+  "size": [
+   288,
+   352
+  ],
+  "anchor": [
+   144.0,
+   246.54530459215553
+  ]
+ },
+ "torso_chaingun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.2,
+   1.0899999999999999
+  ]
+ },
+ "torso_railgun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.47,
+   1.15
+  ]
+ },
+ "gun_chaingun": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ },
+ "gun_railgun": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ }
+}
