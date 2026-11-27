@@ -531,6 +531,7 @@ class Game:
         self.damage_numbers = False         # option: coloured damage numbers (off by default)
         self.chars = ["skelebot", "canbot"]  # character picked by P1 / P2 on the title screen
         self.last_host = ""                 # last address typed on the join screen
+        self.last_name = ""                 # ... and the game name
         try:
             with open(SAVE) as fh:
                 data = json.load(fh)
@@ -538,6 +539,7 @@ class Game:
                 self.damage_numbers = bool(data.get("damage_numbers", False))
                 self.chars = [c if c in CH.CHARS else d for c, d in zip(data.get("chars", self.chars), self.chars)]
                 self.last_host = str(data.get("last_host", ""))[:60]
+                self.last_name = str(data.get("last_name", ""))[:40]
         except Exception:
             pass
         self.minimap = None
@@ -681,7 +683,7 @@ class Game:
         try:
             with open(SAVE, "w") as fh:
                 json.dump({"best": self.best, "damage_numbers": self.damage_numbers, "chars": self.chars,
-                           "last_host": self.last_host}, fh)
+                           "last_host": self.last_host, "last_name": self.last_name}, fh)
         except Exception:
             pass
 
@@ -711,13 +713,13 @@ class Game:
                 if ev.type == pygame.KEYDOWN:
                     if ev.key == pygame.K_F11:
                         pygame.display.toggle_fullscreen()
+                    elif self.net is not None and hasattr(self.net, "key") and self.net.key(self, ev):
+                        pass                          # typed into a lobby / join screen box
                     elif ev.key == pygame.K_ESCAPE and self.net is not None:
                         if self.state == "play":      # Esc in a net game: menu first, then leave the game
                             self.state = "pause"
                         else:
                             self.leave_net()
-                    elif self.state == "netjoin" and self.net is not None:
-                        self.net.key(self, ev)
                     elif ev.key == pygame.K_ESCAPE:
                         # Esc pauses; Esc again (or on title / game over) quits
                         if self.state == "play":

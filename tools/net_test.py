@@ -93,10 +93,14 @@ guest, gb = make_game()
 games.append((guest, gb))
 guest.chars[0] = "canbot"
 guest.net = NP.JoinScreen(guest)
-guest.net.text = "127.0.0.1:%d" % PORT
+NAME = host.net.name
+check(len(net.norm_name(NAME)) >= 6, "the host gets a random game name (%s)" % NAME)
+guest.net.addr = "127.0.0.1:%d" % PORT
+guest.net.name = NAME.upper().replace("-", " ")        # case, spaces and dashes don't matter
+guest.net.sel = guest.net.name_row
 guest.draw()
 pygame.image.save(guest.screen, os.path.join(out, "net_join_screen.png"))
-guest.net.connect(guest, guest.net.text)
+guest.net.connect(guest)
 check(until(lambda: isinstance(guest.net, NP.GuestSession) and guest.net.slot is not None),
       "guest connects and gets a slot (%s)" % getattr(guest.net, "slot", None))
 check(until(lambda: guest.net.lobby is not None and len(guest.net.lobby["players"]) == 2), "both appear in the lobby")
@@ -245,7 +249,8 @@ for k, ch in enumerate(("skelebot", "mutant")):
     games.append((g3, b3))
     g3.chars[0] = ch
     g3.net = NP.JoinScreen(g3)
-    g3.net.connect(g3, "127.0.0.1:%d" % PORT)
+    g3.net.addr, g3.net.name = "127.0.0.1:%d" % PORT, NAME
+    g3.net.connect(g3)
     ok = until(lambda: isinstance(g3.net, NP.GuestSession) and g3.net.slot is not None)
     frames(3, (b3, {"a"}))
     ok = ok and until(lambda: g3.state == "play")
@@ -257,13 +262,97 @@ check(all(len(g_.world.players) == 4 for g_, _ in games), "every machine sees 4 
 g5, b5 = make_game()
 games.append((g5, b5))
 g5.net = NP.JoinScreen(g5)
-g5.net.connect(g5, "127.0.0.1:%d" % PORT)
+g5.net.addr, g5.net.name = "127.0.0.1:%d" % PORT, NAME
+g5.net.connect(g5)
 until(lambda: g5.net is None or (isinstance(g5.net, NP.GuestSession) and g5.net.error))
 check(g5.net is None and "full" in g5.title_msg[0], "a fifth player is told the game is full (%r)" % g5.title_msg[0])
 games.remove((g5, b5))
 g3 = extra[0][0]
 g3.draw()
 pygame.image.save(g3.screen, os.path.join(out, "net_p3_view.png"))
+
+print("== locked out without the game name")
+
+
+def raw_conn():
+    c = net.Connector("127.0.0.1:%d" % PORT)
+    for _ in range(200):
+        conn_ = c.poll()
+        if conn_:
+            return conn_
+        frames(1)
+
+
+def answer(conn_, limit=200):
+    """Run frames until the host says something; returns (nonce, kick message or None)."""
+    nonce_, msg_ = None, None
+    for _ in range(limit):
+        frames(1)
+        for kind, payload in conn_.poll():
+            d = net.read_json(payload)
+            if kind == "n":
+                nonce_ = d.get("nonce")
+            elif kind == "x":
+                msg_ = d.get("msg")
+        if msg_ or conn_.closed:
+            break
+    return nonce_, msg_
+
+
+gx, bx = make_game()
+games.append((gx, bx))
+gx.net = NP.JoinScreen(gx)
+gx.net.addr, gx.net.name = "127.0.0.1:%d" % PORT, "wrong-name-99"
+gx.net.connect(gx)
+until(lambda: gx.net is None)
+check(gx.net is None and "Wrong game name" in gx.title_msg[0], "a wrong game name is refused: %r" % gx.title_msg[0])
+games.remove((gx, bx))
+check(len(host.world.players) == 4, "and nobody was added")
+
+c = raw_conn()
+nonce, _ = answer(c, 20)
+c.send_json("h", {"v": net.game_version(), "p": net.name_proof(NAME, "some-other-nonce")})
+_, msg = answer(c)
+check(msg and "Wrong" in msg, "replaying a proof made for a different challenge doesn't work")
+for k in range(4):
+    c = raw_conn()
+    nonce, _ = answer(c, 20)
+    c.send_json("h", {"v": net.game_version(), "p": net.name_proof("guess-%d" % k, nonce)})
+    answer(c)
+c = raw_conn()
+nonce, _ = answer(c, 20)
+c.send_json("h", {"v": net.game_version(), "p": net.name_proof(NAME, nonce)})
+_, msg = answer(c)
+check(msg and "Too many" in msg, "after 5 wrong names that address is locked out, even with the right one: %r" % msg)
+host.net.fails.clear()
+
+c = raw_conn()
+answer(c, 20)
+for gu in host.net.guests:
+    if not gu.hello:
+        gu.t0 -= 10                              # pretend it has sat there silently for 10 s
+_, msg = answer(c)
+check(c.closed or msg, "a connection that never gives the name is dropped (%r)" % msg)
+
+print("== flood / garbage protection")
+c = raw_conn()
+nonce, _ = answer(c, 20)
+c.send("i", b"{" + b" " * 20000 + b"}")
+_, msg = answer(c)
+check(c.closed, "an oversized message gets the connection closed (%s)" % (msg or c.error))
+c = raw_conn()
+nonce, _ = answer(c, 20)
+for k in range(15):
+    c.send("z", b"\x00\xff junk")
+_, msg = answer(c)
+check(msg and "garbage" in msg, "a stream of junk messages gets kicked: %r" % msg)
+c = raw_conn()
+nonce, _ = answer(c, 20)
+for k in range(500):
+    c.send_json("i", {"s": k, "m": [0, 0]})
+_, msg = answer(c)
+check(msg and "too much" in msg, "flooding gets kicked: %r" % msg)
+check(len(host.world.players) == 4 and host.state == "play", "the game carried on through all of it")
 
 print("== version mismatch")
 bad = net.Connector("127.0.0.1:%d" % PORT)

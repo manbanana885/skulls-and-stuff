@@ -12,10 +12,12 @@ Everything is non-blocking and polled from the game loop: no threads.
 """
 import errno
 import hashlib
+import hmac
 import io
 import json
 import os
 import pickle
+import secrets
 import socket
 import struct
 import time
@@ -23,8 +25,10 @@ import zlib
 
 PORT = 47777          # TCP: the game itself
 DISCOVERY = 47778     # UDP: "there's a game here" beacons on the local network
-PROTOCOL = 1
-MAX_FRAME = 32 << 20
+PROTOCOL = 2
+MAX_FRAME = 32 << 20          # host -> guest (a whole world can be big)
+GUEST_MAX_FRAME = 4096        # guest -> host: controls and lobby picks are tiny; anything bigger gets you kicked
+GUEST_MAX_BUFFER = 64 * 1024
 MAX_PLAYERS = 4
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -59,6 +63,31 @@ def local_addresses():
     except OSError:
         pass
     return found or ["127.0.0.1"]
+
+
+# ================================================================ game names (the join password)
+_ADJ = ("grim", "rusty", "bony", "sly", "feral", "hollow", "toxic", "frozen", "rabid", "silent", "crooked", "molten",
+        "ashen", "gloomy", "jagged", "wicked", "brittle", "vile", "spooky", "rotten")
+_NOUN = ("otter", "skull", "crow", "jackal", "lantern", "coffin", "badger", "raven", "cleaver", "gremlin", "ghoul",
+         "pickle", "wombat", "goblet", "beetle", "hatchet", "moth", "toad", "kettle", "spleen")
+
+
+def random_name():
+    return "%s-%s-%02d" % (secrets.choice(_ADJ), secrets.choice(_NOUN), secrets.randbelow(100))
+
+
+def norm_name(text):
+    """Game names ignore case, spaces and dashes: 'Grim Otter 47' == 'grim-otter-47'."""
+    return "".join(c for c in str(text).lower() if c.isalnum())
+
+
+def name_proof(name, nonce):
+    """Proof that a guest knows the game name, without sending the name itself."""
+    return hmac.new(norm_name(name).encode(), ("skulls:" + str(nonce)).encode(), hashlib.sha256).hexdigest()
+
+
+def proof_ok(name, nonce, proof):
+    return isinstance(proof, str) and hmac.compare_digest(proof, name_proof(name, nonce))
 
 
 # ================================================================ codec
@@ -171,7 +200,7 @@ def unpack(data, world=None):
 class Conn:
     """One non-blocking TCP connection with framed messages."""
 
-    def __init__(self, sock, addr=None):
+    def __init__(self, sock, addr=None, max_frame=MAX_FRAME, max_buffer=None):
         sock.setblocking(False)
         try:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -186,6 +215,8 @@ class Conn:
         self.sent_bytes = 0
         self.recv_bytes = 0
         self.zprev = b""              # last snapshot sent / received (compression dictionary)
+        self.max_frame = max_frame
+        self.max_buffer = max_buffer or max_frame * 2 + 16
 
     def send(self, kind, payload):
         if self.closed:
@@ -236,10 +267,13 @@ class Conn:
                 break
             self.recv_bytes += len(chunk)
             self.inbuf += chunk
+            if len(self.inbuf) > self.max_buffer:
+                self.close("sent too much at once")
+                return out
         while len(self.inbuf) >= 5:
             n = struct.unpack(">I", self.inbuf[:4])[0]
-            if n < 1 or n > MAX_FRAME:
-                self.close("bad frame")
+            if n < 1 or n > self.max_frame:
+                self.close("message too big")
                 break
             if len(self.inbuf) < 4 + n:
                 break
@@ -272,12 +306,15 @@ class Conn:
         return raw
 
 
-def read_json(payload):
+def read_json(payload, strict=False):
+    """A JSON object, or {} (None with strict=True) if it isn't one."""
     try:
         v = json.loads(payload.decode())
-        return v if isinstance(v, dict) else {}
-    except (ValueError, UnicodeDecodeError):
-        return {}
+        if isinstance(v, dict):
+            return v
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        pass
+    return None if strict else {}
 
 
 # ================================================================ host side
@@ -310,7 +347,7 @@ class HostServer:
                 break
             except OSError:
                 break
-            out.append(Conn(s, addr))
+            out.append(Conn(s, addr, GUEST_MAX_FRAME, GUEST_MAX_BUFFER))
         return out
 
     def announce(self, info):

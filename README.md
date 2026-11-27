@@ -90,9 +90,11 @@ and confirms with A / START (B / BACK backs out). The game waits while they choo
 Everyone needs the **same version** of the game. The easiest way is for everyone to download it from the
 same place at the same time. Windows, Mac and Linux players can play together.
 
-**Hosting:** on the title screen, choose **HOST NET GAME**. The lobby shows your address (for example
-`192.168.1.20`). Pick your body, wait for friends to show up, then press START / A to begin. Friends can
-also drop into a game that's already running.
+**Hosting:** on the title screen, choose **HOST NET GAME**. The lobby shows your **game name** (a random
+one like `grim-otter-47`) and your address (for example `192.168.1.20`). The game name is the password, so
+only give it to the people you want in. Press TAB to type your own name, or Y / Q for a new random one.
+Pick your body, wait for friends to show up, then press START / A to begin. Friends can also drop into a
+game that's already running.
 
 **Joining:** choose **JOIN NET GAME**.
 - **Same network** (same Wi-Fi or router): the host's game appears in the list. Pick it and press A / ENTER.
@@ -102,7 +104,14 @@ also drop into a game that's already running.
   - Or everyone installs a free virtual LAN such as [Tailscale](https://tailscale.com) or
     [ZeroTier](https://www.zerotier.com). Then use the host's Tailscale / ZeroTier address. No router setup is needed.
 
-Then pick a body with LEFT / RIGHT and press A when you're ready.
+Then type the **game name** the host gave you; capitals, spaces and dashes don't matter. Pick a body with
+LEFT / RIGHT and press A when you're ready.
+
+**Safety:** the game name never crosses the network. Your game proves it knows the name instead. Five wrong
+names from one address lock that address out for a minute. Guests can only send controls, never files or
+code, and anyone who floods the host or sends garbage is kicked. Tailscale / ZeroTier is still the safest
+way to play over the internet. If you forward a port, turn it off when you're not playing. Only join hosts
+you know.
 
 **The first time you host or join**, Windows or macOS may ask whether Python can use the network.
 Click **Allow** (on Windows, tick **Private networks**). Otherwise the game isn't visible to others.
