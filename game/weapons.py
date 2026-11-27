@@ -26,12 +26,12 @@ ARCH = {
     "auto_shotgun": dict(label="Auto Shotgun", dmg=0.7, rate=4.2, spread=0.36, pellets=7, speed=16, life=0.42, mag=20,
                          reload=2.6, proj="pellet", kick=3.5, sound="shot_autoshotgun", color=(255, 185, 90), weight=4),
     # break-action guns: every barrel goes off at once, then you crack it open and reload
-    "shotgun_2":    dict(label="Double-Barrel Shotgun", dmg=0.95, rate=3.0, spread=0.4, pellets=16, speed=16, life=0.42, mag=1,
+    "shotgun_2":    dict(label="Double-Barrel Shotgun", dmg=1.7, rate=3.0, spread=0.4, pellets=16, speed=16, life=0.42, mag=1,
                          reload=1.5, proj="pellet", kick=9, sound="shot_boomstick", color=(255, 195, 95), weight=6, barrels=2),
-    "shotgun_3":    dict(label="Triple-Barrel Shotgun", dmg=0.95, rate=3.0, spread=0.44, pellets=24, speed=16, life=0.42, mag=1,
+    "shotgun_3":    dict(label="Triple-Barrel Shotgun", dmg=1.75, rate=3.0, spread=0.44, pellets=24, speed=16, life=0.42, mag=1,
                          reload=1.9, proj="pellet", kick=11, sound="shot_boomstick", color=(255, 190, 90), weight=4, barrels=3,
                          heavy=0.94),
-    "shotgun_4":    dict(label="Quad-Barrel Shotgun", dmg=0.95, rate=3.0, spread=0.48, pellets=32, speed=16, life=0.42, mag=1,
+    "shotgun_4":    dict(label="Quad-Barrel Shotgun", dmg=1.8, rate=3.0, spread=0.48, pellets=32, speed=16, life=0.42, mag=1,
                          reload=2.3, proj="pellet", kick=13, sound="shot_boomstick", color=(255, 185, 85), weight=3, barrels=4,
                          heavy=0.86),
     "carbine":      dict(label="Carbine", dmg=1.25, rate=8, spread=0.035, speed=20, mag=25, reload=1.2, proj="bullet",
@@ -285,7 +285,7 @@ SHELLS = {
     "sabot":  dict(word="Sabot", label="Discarding-sabot steel cores", ammo="pen", share=0.8, speed=44.0, life=0.5,
                    spread=0.012, pierce=4, kick=1.1),
 }
-SHELL_ODDS = (("dumdum", 0.2), ("sabot", 0.2))       # the rest is buckshot
+SHELL_ODDS = (("dumdum", 0.2), ("sabot", 0.1))       # the other 70% is buckshot
 
 
 def is_shotgun(arch):

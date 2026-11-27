@@ -46,7 +46,8 @@ for a in SHOTGUNS:
             bad_slugs += 1
     check(bad_mag == 0, "%-12s break-action always holds one load (%d bad)" % (a, bad_mag))
     check(bad_slugs == 0, "%-12s slug guns fire one slug per barrel with the shell's ammo (%d bad)" % (a, bad_slugs))
-    check(all(v > 150 for v in shells.values()), "%-12s shells rolled: %s" % (a, shells))
+    check(abs(shells[None] / 1500 - 0.7) < 0.04 and abs(shells["dumdum"] / 1500 - 0.2) < 0.03
+          and abs(shells["sabot"] / 1500 - 0.1) < 0.025, "%-12s shells rolled 70/20/10: %s" % (a, shells))
 sample = [WP.generate(3, random.Random(s), arch=a, rarity=1).name for s in range(40) for a in ("shotgun_2", "auto_shotgun")]
 print("  names:", ", ".join(sorted(set(n for n in sample if "Dum" in n or "Sabot" in n))[:6]))
 
