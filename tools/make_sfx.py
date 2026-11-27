@@ -851,6 +851,42 @@ def shield_down(seed):
     return finish(drive(wind + crack, 1.6), 10, 2, 2800, 0.08, 0.2)
 
 
+def magnet_pulse(seed):
+    """Magnetic retaliation: a deep 'whum' with a falling hum and a little crackle."""
+    r = R(seed)
+    n = n_of(0.7)
+    t = tt(n)
+    f = 160 * np.exp(-t / 0.15) + 45
+    whum = (sine(f, n) + 0.4 * saw(f * 0.5, n)) * ar(n, 0.005, 0.25)
+    cr = np.zeros(n)
+    for _ in range(10):
+        k = n_of(0.008)
+        place(cr, bp(noise(k, r), 400, 2000) * expdec(k, 0.002), int(r.uniform(0, 0.3) * SR), r.uniform(0.3, 0.8))
+    return finish(lp(drive(whum, 2.0), 1500) + cr * 0.5, 10, 2, 2600, 0.06, 0.2)
+
+
+def decoy_on(seed):
+    """Hologram flickering on: a soft rising shimmer of detuned tones."""
+    n = n_of(0.6)
+    t = tt(n)
+    x = np.zeros(n)
+    for k, f0 in enumerate((220, 330, 440)):
+        f = f0 * (0.8 + 0.2 * np.clip(t / 0.3, 0, 1))
+        x += sine(f * (1 + 0.004 * k), n) * (0.6 + 0.4 * np.sin(2 * np.pi * (11 + k * 3) * t))
+    return finish(lp(x * ar(n, 0.05, 0.2), 1800) * 0.5, 10, 2, 2600, 0.08, 0.25)
+
+
+def dash_snd(seed):
+    """Jump-jet burst: a short low roar sweeping open then closed."""
+    r = R(seed)
+    n = n_of(0.45)
+    t = tt(n)
+    env01 = np.clip(t / 0.06, 0, 1) * np.exp(-t / 0.18)
+    roar = sweep_lp(noise(n, r), env01, 200, 2200) * ar(n, 0.01, 0.16)
+    thump = sine(70 + 60 * np.exp(-t / 0.03), n) * expdec(n, 0.08) * 0.7
+    return finish(drive(roar * 1.4 + thump, 1.6), 10, 2, 3000)
+
+
 def shield_up(seed):
     n = n_of(0.5)
     t = tt(n)
@@ -937,6 +973,7 @@ SOUNDS = {
     "shot_chaingun": (chaingun, 6), "shot_railgun": (railgun, 2),
     "shot_barrage": (barrage, 5), "shot_coil": (coil, 5), "shot_microwave": (microwave, 4),
     "shield_block": (shield_block, 4), "shield_down": (shield_down, 1), "shield_up": (shield_up, 1),
+    "magnet_pulse": (magnet_pulse, 2), "decoy_on": (decoy_on, 2), "dash": (dash_snd, 3),
 }
 
 

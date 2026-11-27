@@ -6,7 +6,8 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - Procedural levels across 17 biomes, each with its own enemies, a signature monster, bosses and 2-3 trap types
 - Procedural guns (25 archetypes x brands x rarities x mods) and power-ups, including heavy weapons
   (chaingun, railgun, barrage missile launcher, storm coil) that slow you down but hit much harder
-- Support gadgets with rolled stats, one at a time: buzzsaw orbiter, arc shield, medbot and gun drone
+- Modules with rolled stats, up to 3 equipped plus a backpack (managed from the pause menu): buzzsaw orbiter,
+  arc shield, medbot and gun drone
 - Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
 - Drop-in local co-op for 2 players
 
@@ -43,7 +44,9 @@ It clashes with `pygame-ce`.
 
 ## Controls
 
-WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire).
+WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). E / A picks things up, Q / Y swaps guns,
+SHIFT / LB dashes (with Jump Jets equipped). ENTER / START pauses and opens the Modules screen:
+arrows / D-pad to move, E / A to equip or unequip, R / X to drop.
 Player 2 joins any time by pressing BACK / SELECT on a second controller.
 
 ## Rebuild assets

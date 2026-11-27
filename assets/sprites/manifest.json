@@ -4211,5 +4211,173 @@
    72.0,
    72.0
   ]
+ },
+ "sup_gunarm": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_leech": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_core": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_decoy": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_mines": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_aura": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_battery": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_autoloader": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_jets": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_tether": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_magnet": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_skull": {
+  "dirs": 8,
+  "anims": {
+   "hover": 4
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
  }
 }

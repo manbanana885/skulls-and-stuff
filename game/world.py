@@ -253,6 +253,10 @@ class Loot:
 TETHER_X, TETHER_Y = (960 - 180) * _S, (540 - 150) * _S   # max on-screen separation between co-op players
 
 
+GEAR_SLOTS = 3
+PACK_SIZE = 6
+
+
 class Player:
     R = 0.28
     SPEED = 4.4
@@ -280,7 +284,9 @@ class Player:
         self.buffs = {}            # kind -> [magnitude, seconds left]
         self.status = {}           # chill / confuse -> seconds left
         self.perm_dmg = 1.0
-        self.support = None        # one support gadget (support.Support)
+        self.gear = [None] * GEAR_SLOTS    # equipped accessories (support.Support)
+        self.pack = []                      # spare accessories, up to PACK_SIZE
+        self.inv_cur = (0, 0)               # pause-menu cursor (column, row)
         self.salvo_q = 0           # barrage missiles still to ripple out
         self.salvo_t = 0.0
         self.salvo_n = 0
@@ -289,6 +295,39 @@ class Player:
     @property
     def weapon(self):
         return self.weapons[self.cur]
+
+    def equipped(self):
+        return [g for g in self.gear if g is not None]
+
+    def give(self, item):
+        """New accessory: first free gear slot, else the backpack. Returns where it went, or None if full."""
+        for i, g in enumerate(self.gear):
+            if g is None:
+                self.gear[i] = item
+                item.attach(self, i)
+                return "slot %d" % (i + 1)
+        if len(self.pack) < PACK_SIZE:
+            self.pack.append(item)
+            return "backpack"
+        return None
+
+    def equip_from_pack(self, k, col):
+        """Backpack item k -> first free gear slot, or swap with the item in gear slot col."""
+        item = self.pack.pop(k)
+        free = next((i for i, g in enumerate(self.gear) if g is None), None)
+        i = free if free is not None else col
+        old = self.gear[i]
+        self.gear[i] = item
+        item.attach(self, i)
+        if old is not None:
+            self.pack.insert(k, old)
+
+    def unequip(self, i):
+        if self.gear[i] is None or len(self.pack) >= PACK_SIZE:
+            return False
+        self.pack.append(self.gear[i])
+        self.gear[i] = None
+        return True
 
     def mult(self, kind, default=1.0):
         b = self.buffs.get(kind)
@@ -356,6 +395,10 @@ class Player:
             sfx.play("swap")
         if "reload" in pressed and self.weapon.start_reload():
             sfx.play("reload")
+        if "dash" in pressed:
+            jet = next((g for g in self.equipped() if g.ready()), None)
+            if jet is not None:
+                jet.dash(w, self, *inp.move)
         wp = self.weapon
         su = wp.st.get("spinup", 0.0)
         if su:
@@ -511,7 +554,7 @@ class Enemy:
         w.snd("mimic_scream" if self.kind == "mimic" else "spawn", self.x, self.y)
 
     def update(self, w, dt):
-        p = w.nearest_player(self.x, self.y)
+        p = w.target_for(self.x, self.y)
         self.target = p
         dx, dy = p.x - self.x, p.y - self.y
         d = math.hypot(dx, dy) or 1e-6
@@ -1180,11 +1223,13 @@ class World:
             pl.idx = i
         self.players = players
         for pl in players:
-            if pl.support:
-                pl.support.attach(pl)
+            for i, g in enumerate(pl.gear):
+                if g is not None:
+                    g.attach(pl, i)
             pl.salvo_q = 0
         self._shooter = players[0]
         self.arcs = []             # lightning: [[(x, y, z), ...], life, max, colour, width]
+        self.decoys = []           # decoy projector holograms monsters chase instead of players
         self.blocked = set()       # ids of enemy projectiles eaten by an arc shield this frame
         self.near_loot_by = {}
         self.score = score
@@ -1274,6 +1319,14 @@ class World:
                 if d < bd:
                     best, bd = pl, d
         return best or self.players[0]
+
+    def target_for(self, x, y):
+        """Who a monster at (x, y) goes after: any decoy hologram within 10 tiles wins, else the nearest player."""
+        if self.decoys:
+            d = min(self.decoys, key=lambda q: (q.x - x) ** 2 + (q.y - y) ** 2)
+            if (d.x - x) ** 2 + (d.y - y) ** 2 < 100:
+                return d
+        return self.nearest_player(x, y)
 
     def add_player(self):
         """Drop-in co-op: a new player appears next to the first living one."""
@@ -1444,18 +1497,24 @@ class World:
         self.loot.append(Loot("support", x, y, SU.generate(self.depth, bonus=bonus), pop=True))
 
     def take_support(self, lt, p=None):
+        """Pick up an accessory: free gear slot, else backpack; with both full it swaps with gear slot 1."""
         p = p or self.player
-        old = p.support
         new = lt.item
-        p.support = new
-        new.attach(p)
-        if old is not None:
+        where = p.give(new)
+        if where is None:
+            old = p.gear[0]
+            p.gear[0] = new
+            new.attach(p, 0)
             lt.item = old
             lt.vz, lt.z = 3.0, 0.0
+            where = "slot 1 (swapped out %s)" % old.name
         elif lt in self.loot:
             self.loot.remove(lt)
-        self.message("Deployed %s  [%s %s, lvl %d]" % (new.name, new.rarity_name, new.label, new.level), new.color)
+        self.message("%s  ->  %s" % (new.name, where), new.color)
         sfx.play("power")
+
+    def drop_item(self, p, item):
+        self.loot.append(Loot("support", p.x, p.y, item, pop=True))
 
     def drop_buff(self, x, y):
         self.loot.append(Loot("buff", x, y, WP.roll_buff(level=self.depth), pop=True))
@@ -1783,6 +1842,14 @@ class World:
         return False
 
     def hurt_player(self, dmg, sx, sy, knock=7.0, who=None):
+        if getattr(who, "decoy", False):
+            who.flash = 0.15
+            return
+        if who is None and self.decoys:          # a monster swinging at a hologram hits nothing
+            d = min(self.decoys, key=lambda q: (q.x - sx) ** 2 + (q.y - sy) ** 2)
+            if math.hypot(d.x - sx, d.y - sy) < 1.4:
+                d.flash = 0.15
+                return
         p = who or self.nearest_player(sx, sy)
         if p.invuln > 0 or not p.alive:
             return
@@ -1803,6 +1870,15 @@ class World:
     def check_player_death(self, sx, sy, p=None):
         p = p or self.player
         if p.hp <= 0 and p.alive:
+            for g in p.equipped():
+                if g.kind == "battery" and g.elem == "revive" and g.charge >= g.p["capacity"]:
+                    g.charge = 0
+                    p.hp = p.max_hp * g.p["heal"]
+                    p.invuln = 2.0
+                    self.explode(p.x, p.y, 2.5, 20, (230, 220, 190), hurt_player=False)
+                    self.message("BONE BATTERY DISCHARGED - REBOOTED", (230, 220, 190))
+                    sfx.play("power")
+                    return
             p.hp = 0
             p.alive = False
             self.gibs_from("player", p.x, p.y, 1.0, p.x - sx, p.y - sy, force=1.3)
@@ -1827,8 +1903,11 @@ class World:
             self.splat(e.x, e.y, (150, 190, 220), 0.35)
             self.snd("shatter", e.x, e.y)
         p = getattr(e, "last_hit_by", None)
+        p = getattr(p, "owner_player", p)
         if not isinstance(p, Player):
             p = self.player
+        for g in p.equipped():
+            g.on_kill(self) if g.kind == "battery" else None
         self.score += st["score"]
         self.kills += 1
         hz = st["hz"]
@@ -2135,8 +2214,9 @@ class World:
 
         self.blocked = set()
         for pl in self.players:
-            if pl.alive and pl.support is not None:
-                pl.support.update(self, dt, pl)
+            if pl.alive:
+                for g in pl.equipped():
+                    g.update(self, dt, pl)
         self.projs = [b for b in self.projs if id(b) not in self.blocked and self.step_proj(b, dt)]
         self.enemies = [e for e in self.enemies if e.alive]
         self.spawners = [s for s in self.spawners if s.alive]

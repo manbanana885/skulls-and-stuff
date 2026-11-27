@@ -127,20 +127,20 @@ for kind in SU.KINDS:
 
 # sawbot
 w, p, L = fresh()
-p.support = SU.generate(2, random.Random(1), kind="sawbot", rarity=2)
-p.support.attach(p)
-r = p.support.radius()
+sb = SU.generate(2, random.Random(1), kind="sawbot", rarity=2)
+p.give(sb)
+r = sb.radius()
 ms, pin = frozen_monsters(w, [(p.x + math.cos(a) * r, p.y + math.sin(a) * r) for a in (0.3, 2.4, 4.4)])
 p.hp = p.max_hp = 1e6
 run(4, pin, "sup_sawbot")
 dmg = [round(1e6 - m.hp) for m in ms]
-print("  sawbot  orbit %.2f spin %.1f dmg/hit %.1f -> 3 monsters on the ring took %s in 4s" % (r, p.support.p["spin"], p.support.p["dmg"], dmg))
+print("  sawbot  orbit %.2f spin %.1f dmg/hit %.1f -> 3 monsters on the ring took %s in 4s" % (r, sb.p["spin"], sb.p["dmg"], dmg))
 check(all(d > 0 for d in dmg), "sawbot hits every monster on its orbit")
 
 # shield: enemy shots from every direction
 w, p, L = fresh()
-sh = p.support = SU.generate(2, random.Random(2), kind="shield", rarity=4)
-sh.attach(p)
+sh = SU.generate(2, random.Random(2), kind="shield", rarity=4)
+p.give(sh)
 sh.p["capacity"] = sh.charge = 999
 p.hp = p.max_hp = 1e6
 blocked = hits = fired = 0
@@ -186,8 +186,8 @@ check(sh.down <= 0 and sh.charge == 3, "shield comes back fully charged after re
 
 # medbot
 w, p, L = fresh()
-md = p.support = SU.generate(2, random.Random(4), kind="medbot", rarity=1)
-md.attach(p)
+md = SU.generate(2, random.Random(4), kind="medbot", rarity=1)
+p.give(md)
 p.hp = 40
 bot.move = (0.6, 0.2)
 run(5, shot="sup_medbot", at=200)
@@ -201,8 +201,8 @@ check(math.hypot(md.x - p.x, md.y - p.y) < md.p["reach"], "medbot keeps up with 
 
 # gun drone
 w, p, L = fresh()
-gb = p.support = SU.generate(2, random.Random(5), kind="gunbot", rarity=2)
-gb.attach(p)
+gb = SU.generate(2, random.Random(5), kind="gunbot", rarity=2)
+p.give(gb)
 ms, pin = frozen_monsters(w, [(p.x + 3.5, p.y + 0.5), (p.x - 1, p.y + 3.2)])
 run(4, pin, "sup_gunbot")
 dmg = [round(1e6 - m.hp, 1) for m in ms]
@@ -217,12 +217,56 @@ w.loot = [Loot("support", p.x + 0.3, p.y, a)]
 bot.pressed = {"interact"}
 g.update(1 / 60)
 bot.pressed = set()
-check(p.support is a and not w.loot, "picking up a support with an empty slot equips it")
+check(p.gear[0] is a and not w.loot, "picking up a module with a free slot equips it")
 w.loot = [Loot("support", p.x + 0.3, p.y, b_)]
 bot.pressed = {"interact"}
 g.update(1 / 60)
 bot.pressed = set()
-check(p.support is b_ and len(w.loot) == 1 and w.loot[0].item is a, "taking a second support swaps the old one onto the floor")
+check(p.gear[1] is b_ and not w.loot, "a second module goes into the next free slot")
+# fill all 3 slots + the 6-slot backpack, then one more swaps with slot 1
+for k in range(7):
+    w.loot = [Loot("support", p.x + 0.3, p.y, SU.generate(2, random.Random(100 + k)))]
+    bot.pressed = {"interact"}
+    g.update(1 / 60)
+    bot.pressed = set()
+check(all(p.gear) and len(p.pack) == 6, "slots fill first, then the backpack (gear %d, pack %d)" % (len(p.equipped()), len(p.pack)))
+extra = SU.generate(2, random.Random(200))
+first = p.gear[0]
+w.loot = [Loot("support", p.x + 0.3, p.y, extra)]
+bot.pressed = {"interact"}
+g.update(1 / 60)
+bot.pressed = set()
+check(p.gear[0] is extra and len(w.loot) == 1 and w.loot[0].item is first, "with everything full, a pickup swaps with slot 1")
+# pause-menu inventory: unequip, equip from pack (swap by column), drop
+g.state = "pause"
+p.pack.pop()                      # make room to unequip
+p.inv_cur = (1, 0)
+geared = p.gear[1]
+bot.pressed = {"confirm"}
+g.update(1 / 60)
+bot.pressed = set()
+check(p.gear[1] is None and p.pack[-1] is geared, "confirm on a gear slot unequips into the backpack")
+p.inv_cur = (0, 1)
+want = p.pack[0]
+bot.pressed = {"confirm"}
+g.update(1 / 60)
+bot.pressed = set()
+check(p.gear[1] is want, "confirm on a backpack item equips it into the free slot")
+p.inv_cur = (2, 1)
+victim = g.inv_item(p, 2, 1)
+n_loot = len(w.loot)
+bot.pressed = {"reload"}
+g.update(1 / 60)
+bot.pressed = set()
+check(victim not in p.pack and len(w.loot) == n_loot + 1, "drop puts the module on the floor")
+for name in ("nav_right", "nav_down"):
+    bot.pressed = {name}
+    g.update(1 / 60)
+bot.pressed = set()
+check(p.inv_cur == (0, 2), "cursor moves with the navigation keys (at %s)" % (p.inv_cur,))
+g.draw()
+pygame.image.save(g.screen, os.path.join(out, "inventory.png"))
+g.state = "play"
 g.draw()
 pygame.image.save(g.screen, os.path.join(out, "sup_pickup_card.png"))
 n_sup = 0
@@ -361,8 +405,8 @@ for d, arch, kind in ((1, "barrage", "sawbot"), (3, "coil_heavy", "shield"), (5,
         p = w.player
         p.hp = p.max_hp = 1e6
         p.weapons[p.cur] = WP.generate(d, arch=arch, rarity=3)
-        p.support = SU.generate(d, kind=kind, rarity=3)
-        p.support.attach(p)
+        for k_ in range(3):
+            p.give(SU.generate(d, kind=kind if k_ == 0 else None, rarity=3))
         bot.fire = True
         for f in range(60 * 12):
             bot.move = (math.cos(f / 50), math.sin(f / 70))

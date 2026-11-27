@@ -295,7 +295,7 @@ class Boss:
         return ATTACKS[name](self, w, **kw)
 
     def update(self, w, dt):
-        p = w.nearest_player(self.x, self.y)
+        p = w.target_for(self.x, self.y)
         self.target = p
         dx, dy = p.x - self.x, p.y - self.y
         d = math.hypot(dx, dy) or 1e-6
