@@ -98,11 +98,20 @@ game that's already running.
 
 **Joining:** choose **JOIN NET GAME**.
 - **Same network** (same Wi-Fi or router): the host's game appears in the list. Pick it and press A / ENTER.
-- **Over the internet:** type the host's address and press ENTER. This needs one of these:
-  - The host forwards **TCP port 47777** on their router to their computer, and gives you their public IP.
-    Search "what is my IP" to find it.
-  - Or everyone installs a free virtual LAN such as [Tailscale](https://tailscale.com) or
-    [ZeroTier](https://www.zerotier.com). Then use the host's Tailscale / ZeroTier address. No router setup is needed.
+- **Over the internet:** type the host's address. The easiest and safest way is **Tailscale** (free):
+  1. Everyone installs it from [tailscale.com/download](https://tailscale.com/download) and signs in (a Google or
+     Microsoft account works). Press **F1** on the host or join screen to open that page.
+  2. The host shares their PC: open [the Tailscale admin page](https://login.tailscale.com/admin/machines), click
+     **...** next to your PC, choose **Share...**, and send the link to your friends. They open it and accept.
+  3. The host's lobby shows a **TAILSCALE** address (it starts with `100.`). Read that and the game name out to
+     your friends.
+
+  If it won't connect, allow Python through Windows Firewall on **Public** networks too: search the Start menu
+  for "Allow an app through Windows Firewall", find Python, and tick both boxes.
+
+  Without Tailscale, the host can forward **TCP port 47777** on their router to their PC, and give friends
+  their public IP (search "what is my IP"). This doesn't work on some internet connections (CGNAT). Remove
+  the forward when you're done playing.
 
 Then type the **game name** the host gave you; capitals, spaces and dashes don't matter. Pick a body with
 LEFT / RIGHT and press A when you're ready.

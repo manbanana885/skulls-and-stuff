@@ -20,7 +20,7 @@ import netplay as NP  # noqa: E402
 S = A.S
 W, H = int(960 * S), int(540 * S)
 HW, HH = A.HALF_W, A.HALF_H
-SAVE = os.path.join(ROOT, "save.json")
+SAVE = os.environ.get("SKULLS_SAVE") or os.path.join(ROOT, "save.json")   # tests point this somewhere harmless
 rnd = random.Random()
 
 

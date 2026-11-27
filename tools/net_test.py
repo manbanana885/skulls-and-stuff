@@ -8,6 +8,7 @@ import random
 
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 os.environ["SDL_AUDIODRIVER"] = "dummy"
+os.environ["SKULLS_SAVE"] = os.devnull        # never touch the player's save.json
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "game"))
 import pygame  # noqa: E402

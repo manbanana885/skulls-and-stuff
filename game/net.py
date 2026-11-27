@@ -18,7 +18,10 @@ import json
 import os
 import pickle
 import secrets
+import shutil
 import socket
+import subprocess
+import threading
 import struct
 import time
 import zlib
@@ -45,8 +48,21 @@ def game_version():
     return h.hexdigest()[:8]
 
 
+def is_tailscale_ip(ip):
+    """Tailscale hands out addresses in 100.64.0.0/10."""
+    try:
+        a, b = (int(x) for x in ip.split(".")[:2])
+    except ValueError:
+        return False
+    return a == 100 and 64 <= b <= 127
+
+
 def local_addresses():
-    """This machine's LAN address(es), for the host to read out to friends."""
+    """This machine's address(es) on its home network, for friends on the same Wi-Fi."""
+    return [ip for ip in _all_addresses() if not is_tailscale_ip(ip)] or ["127.0.0.1"]
+
+
+def _all_addresses():
     found = []
     try:                                   # the address the OS would use to reach the internet (no packet is sent)
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -62,7 +78,77 @@ def local_addresses():
                 found.append(ip)
     except OSError:
         pass
-    return found or ["127.0.0.1"]
+    return found
+
+
+# ================================================================ Tailscale (a free private network for playing over the internet)
+TAILSCALE_DOWNLOAD = "https://tailscale.com/download"
+TAILSCALE_SHARE = "https://login.tailscale.com/admin/machines"      # "..." next to your PC -> Share
+
+
+def _tailscale_cli():
+    found = shutil.which("tailscale")
+    if found:
+        return found
+    for path in (r"C:\Program Files\Tailscale\tailscale.exe", r"C:\Program Files (x86)\Tailscale\tailscale.exe",
+                 "/Applications/Tailscale.app/Contents/MacOS/Tailscale", "/usr/bin/tailscale", "/usr/local/bin/tailscale",
+                 "/opt/homebrew/bin/tailscale"):
+        if os.path.exists(path):
+            return path
+    return None
+
+
+class TailscaleProbe:
+    """Finds out (in the background, so the screen never stalls) whether Tailscale is here and this PC's address on it.
+    state: 'checking' | 'missing' | 'off' (installed, not signed in / connected) | 'on'"""
+
+    def __init__(self):
+        self.state = "checking"
+        self.ip = None
+        self.name = None
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        installed = False
+        try:
+            try:                       # the address this PC would use to reach Tailscale's own DNS (no packet is sent)
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("100.100.100.100", 53))
+                ip = s.getsockname()[0]
+                s.close()
+                if is_tailscale_ip(ip):
+                    self.ip, installed = ip, True
+            except OSError:
+                pass
+            if self.ip is None:
+                self.ip = next((ip for ip in _all_addresses() if is_tailscale_ip(ip)), None)
+                installed = installed or self.ip is not None
+            cli = _tailscale_cli()
+            if cli:
+                installed = True
+                out = subprocess.run([cli, "status", "--json"], capture_output=True, timeout=4,
+                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                d = json.loads(out.stdout.decode("utf-8", "replace") or "{}")
+                me = d.get("Self") or {}
+                ips = [ip for ip in me.get("TailscaleIPs") or () if "." in ip]
+                if ips:
+                    self.ip = ips[0]
+                name = (me.get("DNSName") or "").rstrip(".")
+                self.name = name.split(".")[0] if name else (me.get("HostName") or None)
+                if d.get("BackendState") not in (None, "Running"):
+                    self.ip = None
+        except Exception:
+            pass
+        self.state = "on" if self.ip else ("off" if installed else "missing")
+
+
+def open_link(url):
+    try:
+        import webbrowser
+        webbrowser.open(url)
+        return True
+    except Exception:
+        return False
 
 
 # ================================================================ game names (the join password)

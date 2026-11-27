@@ -136,6 +136,7 @@ class HostSession:
         self.typed = False
         self.before = self.name
         self.fails = {}                  # ip -> times of wrong game names
+        self.tailscale = net.TailscaleProbe()
         sfx.router = self.route_sound
         sfx.music_router = self.route_music
         g.state = "lobby"
@@ -471,6 +472,9 @@ class HostSession:
         """Keyboard: TAB to type a new game name, ENTER / TAB to finish, ESC to undo."""
         if g.state != "lobby":
             return False
+        if ev.key == pygame.K_F1:
+            net.open_link(net.TAILSCALE_SHARE if self.tailscale.state == "on" else net.TAILSCALE_DOWNLOAD)
+            return True
         if not self.editing:
             if ev.key == pygame.K_TAB:
                 self.editing = True
@@ -529,17 +533,44 @@ class HostSession:
         g.center_text(s, g.font, "GAME NAME  (friends type this to get in - only share it with them)", g.sc(98), (150, 170, 200))
         g.center_text(s, g.big, (self.name + caret) if (self.name or self.editing) else "-", g.sc(132),
                       (255, 230, 120) if self.editing else (120, 230, 255))
-        g.center_text(s, g.small, ("type a name, ENTER to keep it, ESC to undo" if self.editing else
+        g.center_text(s, g.font, ("type a name, ENTER to keep it, ESC to undo" if self.editing else
                                    "TAB type your own name (keyboard)   -   Y / Q new random name"), g.sc(160), (150, 160, 180))
-        g.center_text(s, g.font, "Address:  " + "   ".join(a + port for a in self.addresses[:3])
-                      + "    (on the same network it's listed for them)", g.sc(182), (170, 185, 205))
-        g.center_text(s, g.small, "Over the internet: Tailscale / ZeroTier (safest), or forward TCP port %d to this PC."
-                      "   Version %s" % (self.server.port, self.version), g.sc(199), (110, 120, 140))
+        self.draw_addresses(g, s, port)
         draw_lobby_players(g, s, info, 0)
         g.center_text(s, g.font, "LEFT / RIGHT your body   -   START / A begin   -   B / ESC stop hosting"
                       + ("   (guests can drop in later too)" if len(info["players"]) == 1 else ""),
                       g.H - g.sc(40), (255, 220, 120))
         return True
+
+    def draw_addresses(self, g, s, port):
+        """What to read out to friends: the game name (above), plus the address for how they're connecting."""
+        x = g.W // 2 - g.sc(350)
+        y = g.sc(172)
+        g.panel(s, pygame.Rect(x - g.sc(12), y - g.sc(5), g.sc(724), g.sc(66)), 215)
+
+        def line(label, text, col, hint=""):
+            nonlocal y
+            lab = g.font.render(label, True, (150, 160, 180))
+            s.blit(lab, (x, y))
+            t = g.font.render(text, True, col)
+            s.blit(t, (x + g.sc(150), y))
+            if hint:
+                h = g.small.render(hint, True, (175, 185, 200))
+                s.blit(h, (x + g.sc(160) + t.get_width(), y + g.sc(3)))
+            y += g.sc(20)
+        line("SAME WI-FI:", "   ".join(a + port for a in self.addresses[:2]), (170, 230, 255), "(they'll also see it listed)")
+        ts = self.tailscale
+        if ts.state == "on":
+            line("TAILSCALE:", ts.ip + port, (120, 255, 170),
+                 ("(%s)   F1: share this PC with a friend" % ts.name) if ts.name else "F1: share this PC with a friend")
+        elif ts.state == "off":
+            line("TAILSCALE:", "installed, not connected", (255, 200, 120), "open Tailscale and sign in")
+        elif ts.state == "missing":
+            line("TAILSCALE:", "not installed", (200, 205, 215), "over the internet? F1 opens %s (free)" % net.TAILSCALE_DOWNLOAD)
+        else:
+            line("TAILSCALE:", "checking...", (150, 155, 170))
+        line("OR:", "forward TCP port %d to this PC" % self.server.port, (150, 155, 170),
+             "and give your public IP   -   version %s" % self.version)
 
     def status_line(self, g):
         n = sum(1 for gu in self.guests if gu.in_game)
@@ -549,11 +580,11 @@ class HostSession:
 def draw_lobby_players(g, s, info, me):
     chars = {p["slot"]: p["char"] for p in info["players"]}
     slots = sorted(chars)
-    g.draw_char_row(s, slots, g.H / 2 + g.sc(90), chars=chars)
+    g.draw_char_row(s, slots, g.H / 2 + g.sc(142), chars=chars)
     x0 = g.W / 2 - g.sc(330)
     for i in range(net.MAX_PLAYERS):
         p = next((q for q in info["players"] if q["slot"] == i), None)
-        r = pygame.Rect(int(x0 + i * g.sc(170)), int(g.sc(214)), g.sc(150), g.sc(52))
+        r = pygame.Rect(int(x0 + i * g.sc(170)), int(g.sc(240)), g.sc(150), g.sc(46))
         g.panel(s, r, 170)
         col = g.PLAYER_COLORS[i]
         if p is None:
@@ -566,7 +597,7 @@ def draw_lobby_players(g, s, info, me):
         s.blit(t, (r.x + g.sc(8), r.y + g.sc(6)))
         st = CH.CHARS[p["char"]]["name"] + ("" if p["ready"] else "  -  picking")
         t2 = g.small.render(st, True, (220, 225, 235) if p["ready"] else (150, 155, 170))
-        s.blit(t2, (r.x + g.sc(8), r.y + g.sc(30)))
+        s.blit(t2, (r.x + g.sc(8), r.y + g.sc(26)))
 
 
 # ================================================================ guest
@@ -855,6 +886,7 @@ class JoinScreen:
         self.connector = None
         self.error = None
         self.typed = False
+        self.tailscale = net.TailscaleProbe()
         g.state = "netjoin"
 
     @property
@@ -867,6 +899,9 @@ class JoinScreen:
 
     def key(self, g, ev):
         """Keyboard typing into the address / game-name boxes. Returns True if the key was used here."""
+        if ev.key == pygame.K_F1:
+            net.open_link(net.TAILSCALE_DOWNLOAD)
+            return True
         if self.connector is not None or ev.key in (pygame.K_UP, pygame.K_DOWN, pygame.K_ESCAPE):
             return False                  # arrows move through the rows as menu presses; ESC leaves
         self.typed = True                 # a typed letter also shows up as a menu press (W, S, F...) this frame: ignore that
@@ -990,6 +1025,13 @@ class JoinScreen:
             g.center_text(s, g.mid, "Connecting to %s:%d ..." % (self.connector.host, self.connector.port), y, (120, 230, 255))
         elif self.error:
             g.center_text(s, g.font, self.error, y, (255, 140, 120))
+        ts = self.tailscale.state
+        tip = {"on": "Tailscale is connected on this PC - type the host's Tailscale address (100.x.x.x)",
+               "off": "Tailscale is installed but not connected - open it and sign in to play over the internet",
+               "missing": "Playing over the internet? You both install Tailscale (free) - F1 opens " + net.TAILSCALE_DOWNLOAD,
+               }.get(ts, "")
+        if tip:
+            g.center_text(s, g.small, tip, g.H - g.sc(70), (120, 255, 170) if ts == "on" else (150, 165, 185))
         g.center_text(s, g.font, "UP / DOWN choose   -   type with the keyboard   -   A / ENTER next / join   -   B / ESC back",
                       g.H - g.sc(40), (255, 220, 120))
         return True
