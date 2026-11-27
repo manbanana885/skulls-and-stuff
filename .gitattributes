@@ -1,0 +1,3 @@
+# shell launchers must keep Unix line endings, even in a Windows checkout
+*.sh text eol=lf
+*.command text eol=lf

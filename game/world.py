@@ -280,8 +280,9 @@ class Player:
     R = 0.28
     SPEED = 4.4
 
-    def __init__(self, x, y, idx=0, char="skelebot"):
+    def __init__(self, x, y, idx=0, char="skelebot", name=""):
         self.idx = idx
+        self.name = name             # shown over your head / in the lobby (net play); '' -> "P1".."P4"
         self.char = char if char in CH.CHARS else "skelebot"
         self.cat = CH.CHARS[self.char]["cat"]
         self.spraying = None
@@ -438,7 +439,7 @@ class Player:
             self.aim = screen_to_world_dir(*inp.aim)
         ox, oy = self.x, self.y
         self.x, self.y = resolve(w.level, self.x + dx + self.kbx * dt, self.y + dy + self.kby * dt, self.R)
-        for o in w.players:      # elastic co-op tether: you can't walk off your partner's screen
+        for o in (() if w.free_roam else w.players):      # elastic co-op tether: you can't walk off your partner's screen
             if o is not self and o.alive:
                 a1, b1 = to_screen(self.x, self.y)
                 a2, b2 = to_screen(o.x, o.y)
@@ -1337,6 +1338,10 @@ class World:
         self.dot_targets = []      # monsters with pooled (spray / damage-over-time) numbers waiting to show
         self.blocked = set()       # ids of enemy projectiles eaten by an arc shield this frame
         self.near_loot_by = {}
+        self.net_events = None     # net play host: sounds / music for the guests ([("s", name, x, y, vol), ...])
+        self.actor = None          # the player whose action is running (so a guest's reload click only plays for them)
+        self.local_idx = None      # net play: which players sit at this machine (None = all of them)
+        self.free_roam = False     # net play: everyone has their own screen, so no co-op leash
         self.score = score
         self.time = 0.0
         self.enemies = [Enemy(k, x, y, depth=depth) for k, x, y in L.enemies]
@@ -1451,28 +1456,63 @@ class World:
                 return t
         return p
 
-    def add_player(self, char=None):
+    def add_player(self, char=None, idx=None, limit=2, name=""):
         """Drop-in co-op: a new player appears next to the first living one."""
-        if len(self.players) >= 2:
+        if len(self.players) >= limit:
             return None
         host = self.player
         if char is None:            # default to a different body than the host
             char = CH.ORDER[(CH.ORDER.index(host.char) + 1) % len(CH.ORDER)]
-        pl = Player(host.x, host.y, idx=len(self.players), char=char)
+        if idx is None:
+            idx = next(i for i in range(limit + 1) if all(p.idx != i for p in self.players))
+        pl = Player(host.x, host.y, idx=idx, char=char, name=name)
         pl.x, pl.y = resolve(self.level, host.x + 0.6, host.y + 0.6, pl.R)
         pl.max_hp = int(round(pl.max_hp * host.max_hp / (100 * CH.CHARS[host.char]["hp"])))   # match grafts so far
         pl.hp = pl.max_hp
         self.players.append(pl)
-        self.message("PLAYER 2 JOINED", (90, 230, 230))
+        self.players.sort(key=lambda p_: p_.idx)
+        self.message("%s JOINED" % (name or "PLAYER %d" % (idx + 1)), (90, 230, 230))
         sfx.play("weapon_pickup")
         return pl
 
+    def remove_player(self, idx):
+        """Net play: a guest left. Their body goes, with whatever they carried."""
+        gone = [p for p in self.players if p.idx == idx]
+        if not gone or len(self.players) <= 1:
+            return
+        self.players = [p for p in self.players if p.idx != idx]
+        for t in self.turrets:
+            if getattr(t, "owner", None) is gone[0]:
+                t.owner = self.player
+        if self._shooter is gone[0]:
+            self._shooter = self.player
+        self.message("%s LEFT" % (getattr(gone[0], "name", "") or "PLAYER %d" % (idx + 1)), (150, 160, 180))
+
+    def listeners(self):
+        """Players whose ears are at this machine."""
+        if self.local_idx is None:
+            return self.players
+        return [p for p in self.players if p.idx in self.local_idx] or self.players[:1]
+
+    def sound_loops(self):
+        """Continuous sounds that follow the players' state (also run by net guests from the replicated players)."""
+        sfx.loop("tread_loop", any(pl.alive and pl.moving and pl.char == "canbot" for pl in self.players))
+        for arch_, loop_ in (("flamer", "flame_loop"), ("chem", "chem_loop"), ("cryo", "cryo_loop")):
+            sfx.loop(loop_, any(pl.alive and pl.spraying == arch_ for pl in self.players))
+        sfx.loop("static_loop", self.static > 0.02, self.static)
+
     # ---- fx helpers
     def snd(self, name, x, y, vol=1.0):
-        """Positional-ish sound: fades with distance from the nearest player."""
-        np_ = self.nearest_player(x, y)
-        d = math.hypot(x - np_.x, y - np_.y)
-        sfx.play(name, vol * max(0.15, min(1.0, 1.25 - d / 12)))
+        """Positional-ish sound: fades with distance from the nearest player (at this machine)."""
+        if self.net_events is not None:
+            self.net_events.append(("s", name, round(x, 2), round(y, 2), vol))
+        ears = self.listeners()
+        d = min(math.hypot(x - p_.x, y - p_.y) for p_ in ears)
+        r, sfx.router = sfx.router, None          # already recorded for the guests above
+        try:
+            sfx.play(name, vol * max(0.15, min(1.0, 1.25 - d / 12)))
+        finally:
+            sfx.router = r
 
     def message(self, text, color=(230, 230, 230)):
         self.messages.append([text, color, 3.0])
@@ -2468,10 +2508,9 @@ class World:
         L = self.level
         for i, pl in enumerate(self.players):
             if pl.alive and i < len(inputs) and inputs[i] is not None:
+                self.actor = pl
                 pl.update(self, dt, inputs[i])
-        sfx.loop("tread_loop", any(pl.alive and pl.moving and pl.char == "canbot" for pl in self.players))
-        for arch_, loop_ in (("flamer", "flame_loop"), ("chem", "chem_loop"), ("cryo", "cryo_loop")):
-            sfx.loop(loop_, any(pl.alive and pl.spraying == arch_ for pl in self.players))
+                self.actor = None
         alive = [pl for pl in self.players if pl.alive]
         p = self.player
         pts = tuple(sorted((int(pl.x), int(pl.y)) for pl in (alive or self.players)))
@@ -2492,7 +2531,7 @@ class World:
                         pl.hp = pl.max_hp * 0.4
                         pl.invuln = 2.0
                         pl.revive_t = 0.0
-                        self.message("PLAYER %d REVIVED" % (pl.idx + 1), (120, 230, 255))
+                        self.message("%s REVIVED" % (getattr(pl, "name", "") or "PLAYER %d" % (pl.idx + 1)), (120, 230, 255))
                         sfx.play("power")
                 else:
                     pl.revive_t = max(0.0, pl.revive_t - dt)
@@ -2515,8 +2554,10 @@ class World:
         self.blocked = set()
         for pl in self.players:
             if pl.alive:
+                self.actor = pl
                 for g in pl.equipped():
                     g.update(self, dt, pl)
+        self.actor = None
         for t in self.turrets:            # deployed turrets run on their own (their module left the inventory)
             if t.alive:
                 t.update(self, dt, getattr(t, "owner", None) or self.player)
@@ -2544,7 +2585,7 @@ class World:
         near = min((math.hypot(e.x - pl.x, e.y - pl.y) for e in self.enemies if e.kind == "wretch" for pl in alive), default=99)
         self.static_kick = max(0.0, self.static_kick - dt)
         self.static = max(self.static_kick, max(0.0, 1 - near / 8.0) * 0.8)
-        sfx.loop("static_loop", self.static > 0.02, self.static)
+        self.sound_loops()
         # hazards: acid pools hurt you, burning ground hurts them
         self.acid_t -= dt
         for hz in self.hazards:
@@ -2702,6 +2743,7 @@ class World:
             if tg is None or not pl.alive or i >= len(inputs) or "interact" not in getattr(inputs[i], "pressed", ()):
                 continue
             kind, obj = tg
+            self.actor = pl
             if kind == "loot" and obj in self.loot:
                 if obj.kind == "support":
                     self.take_support(obj, pl)
@@ -2711,6 +2753,7 @@ class World:
                 pl.pick_up_barrel(self, obj)
             elif kind == "turret" and obj.alive:
                 obj.mod.pack_up(self, pl, pl.sel)
+            self.actor = None
 
         ex, ey = L.exit
         if not self.bosses and any(math.hypot(ex - pl.x, ey - pl.y) < 0.6 for pl in alive):
