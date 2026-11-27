@@ -4,10 +4,19 @@ An isometric twin-stick shooter about cyborg skeletons, written in Python with p
 Every sprite is pre-rendered from procedural Blender models and every sound is synthesized offline.
 
 - Procedural levels across 17 biomes, each with its own enemies, a signature monster, bosses and 2-3 trap types
-- Procedural guns (25 archetypes x brands x rarities x mods) and power-ups, including heavy weapons
+- Procedural guns (26 archetypes x brands x rarities x mods) and power-ups, including heavy weapons
   (chaingun, railgun, barrage missile launcher, storm coil) that slow you down but hit much harder
-- Support gadgets with rolled stats, one at a time: buzzsaw orbiter, arc shield, medbot and gun drone
+- Modules with rolled stats, up to 3 equipped plus a backpack (managed from the pause menu): buzzsaw orbiter,
+  arc shield, medbot and gun drone
 - Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
+- Damage types (Kinetic, Explosive, Fire, Chemical, Cryo, Radiation, Electrical) against enemy categories
+  (Undead, Robot, Demon, Construct, Mutant): bring the right gun. Kinetic guns can roll Penetrating Core or
+  Expanding rounds; optional colour-coded damage numbers ([Q / Y] on the title or pause screen)
+- Three playable bodies, picked on the title screen: Skelebot (undead, balanced), CanBot (robot drum on tank
+  treads, +20% integrity / -20% speed) and Super Mutant (mutant, +20% speed / -20% integrity)
+- Deployable MG and mortar turret modules (F / B) that draw monsters, take damage, and go up like a tactical nuke
+- Explosive barrels in four kinds: red (fire + burning ground), green (toxic gas + acid), yellow (radiation
+  fallout) and orange (shrapnel) - they hurt monsters and you alike, and chain off each other
 - Drop-in local co-op for 2 players
 
 ## How to play (Windows, no Python experience needed)
@@ -43,7 +52,9 @@ It clashes with `pygame-ce`.
 
 ## Controls
 
-WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire).
+WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). E / A picks things up, Q / Y swaps guns,
+SHIFT / LB dashes (with Jump Jets equipped), F / B deploys or packs up a turret module. ENTER / START pauses and opens the Modules screen:
+arrows / D-pad to move, E / A to equip or unequip, R / X to drop.
 Player 2 joins any time by pressing BACK / SELECT on a second controller.
 
 ## Rebuild assets

@@ -5,10 +5,12 @@ A weapon = archetype (base stats + projectile behaviour) + brand (stat leanings)
 """
 import random
 
+import damage as DM
+
 # ---------------------------------------------------------------- archetypes
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
-                heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0)
+                heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
@@ -53,6 +55,9 @@ ARCH = {
     # barrage launcher: one trigger pull = a rippling salvo of 4-16 small homing missiles
     "barrage":      dict(label="Barrage Launcher", dmg=4.0, rate=0.6, spread=0.2, speed=7, life=2.2, mag=3, reload=3.0, proj="missile",
                          blast=1.4, homing=0.7, salvo=(4, 16), kick=2.5, heavy=0.6, sound="shot_barrage", color=(255, 165, 70), weight=3),
+    # cluster bomb launcher: a fat lobbed shell that bursts into a spray of bouncing bomblets
+    "cluster":      dict(label="Cluster Launcher", dmg=9, rate=0.8, spread=0.03, speed=8, life=1.3, mag=4, reload=2.6, proj="grenade",
+                         blast=1.6, cluster=(5, 9), kick=5, sound="shot_grenade", color=(255, 160, 60), weight=3),
     # coil guns: instant lightning that ricochets off walls and chains between monsters
     "coil_pistol":  dict(label="Coil Pistol", dmg=2.4, rate=3.6, spread=0.04, speed=0, mag=12, reload=1.1, proj="arc",
                          chain=2, bounce=1, arc_range=8.0, kick=1.0, sound="shot_coil", color=(150, 190, 255), weight=6),
@@ -75,7 +80,7 @@ MUZZLE = {
     "flamer": (1.0, 1.14), "tac_nuke": (0.76, 1.33), "nuke": (1.07, 1.36), "saw": (0.86, 1.23), "chem": (0.98, 1.14),
     "cryo": (0.98, 1.14), "chaingun": (1.2, 1.09), "railgun": (1.47, 1.15),
     "barrage": (0.98, 1.2), "coil_pistol": (0.74, 1.18), "coil_rifle": (1.12, 1.14), "coil_heavy": (1.22, 1.1),
-    "microwave": (0.98, 1.13),
+    "microwave": (0.98, 1.13), "cluster": (1.0, 1.17),
 }
 SHOULDER = {"rocket": 0.14, "tac_nuke": 0.14, "nuke": 0.15}   # sideways offset to the right shoulder
 
@@ -92,7 +97,7 @@ BRANDS = {
 }
 
 NO_PROJ_SPEED = {"beam", "arc"}
-EXPLOSIVE = {"grenade", "rocket", "tac_nuke", "nuke", "barrage"}
+EXPLOSIVE = {"grenade", "rocket", "tac_nuke", "nuke", "barrage", "cluster"}
 SPRAYS = {"flame", "chem", "cryo"}
 
 
@@ -118,6 +123,19 @@ def _set_twin(st):
     st["twin"] = True
 
 
+def _penetrating(st):
+    st["pierce"] += 2
+    st["ammo"] = "pen"
+
+
+def _expanding(st):
+    st["ammo"] = "exp"
+
+
+BULLETS = ("bullet", "pellet", "slug")
+AMMO_MODS = {"penetrating", "expanding"}
+
+
 def _explosive(st):
     st["blast"] = max(st["blast"], 0.75)
     st["dmg"] *= 0.9
@@ -126,7 +144,13 @@ def _explosive(st):
 MODS = [
     _m("incendiary", "Incendiary", "Sets targets ablaze", _add(burn=1.2)),
     _m("explosive", "Explosive", "Rounds explode on impact", _explosive, lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "wave"} and a not in EXPLOSIVE),
-    _m("piercing", "Piercing", "Punches through 2 more targets", _add(pierce=2), lambda a: a not in EXPLOSIVE and ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail", "arc", "wave"}),
+    _m("piercing", "Piercing", "Punches through 2 more targets", _add(pierce=2),
+       lambda a: a not in EXPLOSIVE and ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail", "arc", "wave"} | set(BULLETS)),
+    # ammo types are rolled separately (every bullet gun gets one), never as bonus mods
+    _m("penetrating", "Penetrating Core", "Pierces 2 more; x1.35 vs robots & constructs, x0.8 vs undead & mutants",
+       _penetrating, lambda a: False),
+    _m("expanding", "Expanding", "x1.35 vs undead & mutants, x0.75 vs robots & constructs",
+       _expanding, lambda a: False),
     _m("ricochet", "Ricochet", "Bounces off walls", _add(bounce=1), lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "bolt", "slug", "plasma", "saw", "arc")),
     _m("twin", "Twin-Linked", "Fires a second parallel shot", _set_twin, lambda a: ARCH[a]["proj"] not in SPRAYS | {"nuke", "missile"}),
     _m("rapid", "Rapid", "+35% fire rate", _mul(rate=1.35, dmg=0.88)),
@@ -139,6 +163,8 @@ MODS = [
     _m("seeking", "Seeking", "Projectiles home in", _add(homing=1), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail", "arc", "wave"}),
     _m("velocity", "High-Velocity", "+50% projectile speed", _mul(speed=1.5), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "arc"}),
     _m("cryo", "Cryo", "Chills and slows targets", _add(slow=1)),
+    _m("acid", "Acid-Augmented", "Hits leave corrosive puddles", _add(acid=1),
+       lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "slug", "bolt", "rocket", "grenade", "missile", "saw", "plasma", "rail")),
 ]
 MOD_BY_KEY = {m["key"]: m for m in MODS}
 
@@ -156,19 +182,35 @@ class Weapon:
         self.level = level
         st = dict(DEFAULTS)
         st.update(ARCH[arch])
+        st["dtype"] = DM.WEAPON_TYPE.get(arch, "kinetic")
         for k in ("dmg", "rate", "mag", "reload", "speed"):
             st[k] *= rng.uniform(0.88, 1.12)
         st["spread"] *= rng.uniform(0.8, 1.2)
+        if st["cluster"]:
+            st["cluster"] = rng.randint(*st["cluster"])
         if st["salvo"]:
             st["salvo"] = rng.randint(*st["salvo"])
             st["dmg"] *= (10.0 / st["salvo"]) ** 0.35     # small salvos hit a little harder per missile
         self.brand = rng.choice(list(BRANDS))
         for k, v in BRANDS[self.brand].items():
             st[k] *= v
+        # bullet guns always roll an ammo type: standard 50%, Penetrating Core 25%, Expanding 25%
+        self.ammo = None
+        if ARCH[arch]["proj"] in BULLETS:
+            r_ = rng.random()
+            self.ammo = "pen" if r_ < 0.25 else ("exp" if r_ < 0.5 else None)
+            if self.ammo:
+                MOD_BY_KEY["penetrating" if self.ammo == "pen" else "expanding"]["fn"](st)
         pool = [m for m in MODS if m["ok"](arch)]
         rng.shuffle(pool)
         n_mods = min(rarity, 3)
-        self.mods = pool[:n_mods]
+        self.mods = []
+        for m in pool:                       # Penetrating Core and Expanding rounds are mutually exclusive
+            if len(self.mods) >= n_mods:
+                break
+            if m["key"] in AMMO_MODS and any(o["key"] in AMMO_MODS for o in self.mods):
+                continue
+            self.mods.append(m)
         for m in self.mods:
             m["fn"](st)
         st["dmg"] *= (1 + 0.07 * rarity) * (1.35 if rarity == 4 else 1.0) * (1 + 0.2 * (level - 1))
@@ -178,7 +220,8 @@ class Weapon:
             self.name = '"%s"' % rng.choice(UNIQUE_NAMES)
         else:
             adj = self.mods[0]["adj"] + " " if self.mods else ""
-            self.name = "%s%s" % (adj, st["label"])
+            ammo_word = {"pen": "Penetrating ", "exp": "Expanding "}.get(self.ammo, "")
+            self.name = "%s%s%s" % (adj, ammo_word, st["label"])
         self.ammo = st["mag"]
         self.reload_t = 0.0
         self.cd = 0.0
@@ -204,6 +247,8 @@ class Weapon:
             per_shot *= 2.5
         if st["chain"]:
             per_shot *= 1 + st["chain"] * 0.55
+        if st["cluster"]:
+            per_shot *= 1 + st["cluster"] * 0.45
         if st["proj"] == "wave":
             per_shot *= 2.0
         cycle = st["mag"] / st["rate"] + st["reload"]

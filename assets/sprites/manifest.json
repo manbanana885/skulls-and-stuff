@@ -4211,5 +4211,1283 @@
    72.0,
    72.0
   ]
+ },
+ "sup_gunarm": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_leech": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_core": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_decoy": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_mines": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_aura": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_battery": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_autoloader": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_jets": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_tether": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_magnet": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_skull": {
+  "dirs": 8,
+  "anims": {
+   "hover": 4
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "canbot_legs": {
+  "dirs": 8,
+  "anims": {
+   "walk": 8,
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "mutant_legs": {
+  "dirs": 8,
+  "anims": {
+   "walk": 8,
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ]
+ },
+ "cbtorso_carbine": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.01,
+   1.14
+  ]
+ },
+ "mttorso_carbine": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.01,
+   1.14
+  ]
+ },
+ "cbtorso_rocket": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.88,
+   1.33
+  ]
+ },
+ "mttorso_flamer": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.0,
+   1.14
+  ]
+ },
+ "cbtorso_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.67,
+   1.18
+  ]
+ },
+ "cbtorso_chaingun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.2,
+   1.0899999999999999
+  ]
+ },
+ "cbtorso_revolver": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.79,
+   1.1849999999999998
+  ]
+ },
+ "cbtorso_railgun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.47,
+   1.15
+  ]
+ },
+ "cbtorso_smg": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.8,
+   1.14
+  ]
+ },
+ "cbtorso_barrage": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.2
+  ]
+ },
+ "cbtorso_shotgun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.99,
+   1.17
+  ]
+ },
+ "cbtorso_coil_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.74,
+   1.18
+  ]
+ },
+ "cbtorso_coil_rifle": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.12,
+   1.14
+  ]
+ },
+ "cbtorso_assault": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.09,
+   1.15
+  ]
+ },
+ "cbtorso_coil_heavy": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.22,
+   1.0999999999999999
+  ]
+ },
+ "cbtorso_sniper": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.35,
+   1.16
+  ]
+ },
+ "cbtorso_microwave": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.13
+  ]
+ },
+ "cbtorso_grenade": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.87,
+   1.17
+  ]
+ },
+ "cbtorso_flamer": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.0,
+   1.14
+  ]
+ },
+ "mttorso_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.67,
+   1.18
+  ]
+ },
+ "cbtorso_laser_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.73,
+   1.18
+  ]
+ },
+ "mttorso_revolver": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.79,
+   1.1849999999999998
+  ]
+ },
+ "cbtorso_laser_rifle": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.1,
+   1.14
+  ]
+ },
+ "mttorso_smg": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.8,
+   1.14
+  ]
+ },
+ "mttorso_shotgun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.99,
+   1.17
+  ]
+ },
+ "cbtorso_plasma": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.13
+  ]
+ },
+ "cbtorso_tac_nuke": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.76,
+   1.33
+  ]
+ },
+ "mttorso_assault": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.09,
+   1.15
+  ]
+ },
+ "cbtorso_nuke": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.07,
+   1.36
+  ]
+ },
+ "mttorso_sniper": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.35,
+   1.16
+  ]
+ },
+ "cbtorso_saw": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.86,
+   1.23
+  ]
+ },
+ "cbtorso_chem": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.14
+  ]
+ },
+ "mttorso_grenade": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.87,
+   1.17
+  ]
+ },
+ "mttorso_laser_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.73,
+   1.18
+  ]
+ },
+ "mttorso_laser_rifle": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.1,
+   1.14
+  ]
+ },
+ "mttorso_plasma": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.13
+  ]
+ },
+ "mttorso_tac_nuke": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.76,
+   1.33
+  ]
+ },
+ "mttorso_nuke": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.07,
+   1.36
+  ]
+ },
+ "mttorso_saw": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.86,
+   1.23
+  ]
+ },
+ "mttorso_chem": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.14
+  ]
+ },
+ "mttorso_cryo": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.14
+  ]
+ },
+ "mttorso_chaingun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.2,
+   1.0899999999999999
+  ]
+ },
+ "mttorso_railgun": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.47,
+   1.15
+  ]
+ },
+ "mttorso_barrage": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.2
+  ]
+ },
+ "mttorso_coil_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.74,
+   1.18
+  ]
+ },
+ "mttorso_coil_rifle": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.12,
+   1.14
+  ]
+ },
+ "mttorso_coil_heavy": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.22,
+   1.0999999999999999
+  ]
+ },
+ "mttorso_microwave": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.13
+  ]
+ },
+ "cbtorso_cryo": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.14
+  ]
+ },
+ "mttorso_rocket": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.88,
+   1.33
+  ]
+ },
+ "dep_mgturret": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   123.43428511917159
+  ]
+ },
+ "dep_mortar": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   123.43428511917159
+  ]
+ },
+ "sup_mgturret": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_mortar": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "torso_cluster": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.0,
+   1.17
+  ]
+ },
+ "gun_cluster": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ },
+ "cbtorso_cluster": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.0,
+   1.17
+  ]
+ },
+ "mttorso_cluster": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.0,
+   1.17
+  ]
+ },
+ "barrel_fire": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   127.35346870762467
+  ]
+ },
+ "barrel_chem": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   127.35346870762467
+  ]
+ },
+ "barrel_rad": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   127.35346870762467
+  ]
+ },
+ "barrel_shrap": {
+  "dirs": 1,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   192,
+   192
+  ],
+  "anchor": [
+   96.0,
+   127.35346870762467
+  ]
  }
 }

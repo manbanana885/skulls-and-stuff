@@ -519,8 +519,11 @@ def seamless(x, n, fade=0.25):
 
 
 def loop_finish(x, fc=6000, peak=0.85):
-    x = hp(lp(crush(x, 10, 2), fc), 35)
-    return normalize(x, peak)
+    """Filter three copies end to end and keep the middle one, so the filters are already 'warm' at the loop seam
+    (filtering a single copy restarts them from zero and puts a click right where the loop wraps)."""
+    n = len(x)
+    y = hp(lp(crush(np.tile(x, 3), 10, 2), fc), 35)[n:2 * n]
+    return normalize(y, peak)
 
 
 def flame_loop(seed):
@@ -851,6 +854,108 @@ def shield_down(seed):
     return finish(drive(wind + crack, 1.6), 10, 2, 2800, 0.08, 0.2)
 
 
+def magnet_pulse(seed):
+    """Magnetic retaliation: a deep 'whum' with a falling hum and a little crackle."""
+    r = R(seed)
+    n = n_of(0.7)
+    t = tt(n)
+    f = 160 * np.exp(-t / 0.15) + 45
+    whum = (sine(f, n) + 0.4 * saw(f * 0.5, n)) * ar(n, 0.005, 0.25)
+    cr = np.zeros(n)
+    for _ in range(10):
+        k = n_of(0.008)
+        place(cr, bp(noise(k, r), 400, 2000) * expdec(k, 0.002), int(r.uniform(0, 0.3) * SR), r.uniform(0.3, 0.8))
+    return finish(lp(drive(whum, 2.0), 1500) + cr * 0.5, 10, 2, 2600, 0.06, 0.2)
+
+
+def decoy_on(seed):
+    """Hologram flickering on: a soft rising shimmer of detuned tones."""
+    n = n_of(0.6)
+    t = tt(n)
+    x = np.zeros(n)
+    for k, f0 in enumerate((220, 330, 440)):
+        f = f0 * (0.8 + 0.2 * np.clip(t / 0.3, 0, 1))
+        x += sine(f * (1 + 0.004 * k), n) * (0.6 + 0.4 * np.sin(2 * np.pi * (11 + k * 3) * t))
+    return finish(lp(x * ar(n, 0.05, 0.2), 1800) * 0.5, 10, 2, 2600, 0.08, 0.25)
+
+
+def dash_snd(seed):
+    """Jump-jet burst: a short low roar sweeping open then closed."""
+    r = R(seed)
+    n = n_of(0.45)
+    t = tt(n)
+    env01 = np.clip(t / 0.06, 0, 1) * np.exp(-t / 0.18)
+    roar = sweep_lp(noise(n, r), env01, 200, 2200) * ar(n, 0.01, 0.16)
+    thump = sine(70 + 60 * np.exp(-t / 0.03), n) * expdec(n, 0.08) * 0.7
+    return finish(drive(roar * 1.4 + thump, 1.6), 10, 2, 3000)
+
+
+# ---------------------------------------------------------------- per-character hits / deaths / movement
+def hurt_can(seed):
+    """CanBot hit: a hollow steel drum 'bong' with a clank."""
+    r = R(seed)
+    n = n_of(0.6)
+    t = tt(n)
+    f = r.uniform(120, 150)
+    bong = (sine(f, n) + 0.5 * sine(f * 2.31, n) * expdec(n, 0.12) + 0.3 * sine(f * 3.9, n) * expdec(n, 0.06)) * expdec(n, 0.28)
+    x = mix((bong * 0.9, 0), (metal(seed, r.uniform(350, 500), 0.3) * 0.6, 0.0))
+    return finish(lp(x, 3200), 10, 2, 3500, 0.06, 0.2)
+
+
+def death_can(seed):
+    r = R(seed)
+    parts = [(explosion(seed, 1.2), 0)]
+    for k in range(5):
+        parts.append((hurt_can(seed + 20 + k) * (0.7 - k * 0.1), 0.12 + k * 0.14 + r.uniform(0, 0.05)))
+    return finish(mix(*parts), 10, 2, 4500, 0.1, 0.25)
+
+
+def hurt_mutant(seed):
+    """Super Mutant hit: a wet squelch and a short grunt."""
+    r = R(seed)
+    n = n_of(0.4)
+    sq = lp(noise(n, r), 700) * ar(n, 0.003, 0.05) * 1.2
+    x = mix((sq, 0), (gurgle(seed, r.uniform(1.1, 1.4), 0.3) * 0.8, 0.01), (growl(seed)[:n_of(0.35)] * 0.5, 0.03))
+    return finish(x, 10, 2, 3000)
+
+
+def death_mutant(seed):
+    r = R(seed)
+    parts = [(splat(seed) * 1.2, 0), (gurgle(seed + 3, 0.6, 1.0), 0.05), (growl(seed + 5) * 0.8, 0.0)]
+    for k in range(4):
+        parts.append((splat(seed + 10 + k) * 0.6, 0.15 + k * 0.12 + r.uniform(0, 0.05)))
+    return finish(mix(*parts), 10, 2, 3200, 0.08, 0.2)
+
+
+def step_mutant(seed):
+    """Wet, squishy footstep."""
+    r = R(seed)
+    n = n_of(0.18)
+    t = tt(n)
+    thud = sine(65 + 40 * np.exp(-t / 0.015), n) * expdec(n, 0.05)
+    squish = lp(noise(n, r), r.uniform(500, 800)) * ar(n, 0.01, 0.05) * 0.9
+    gl = np.zeros(n)
+    place(gl, gurgle(seed, 1.6, 0.12)[:n] * 0.3, 0)
+    return finish(thud + squish + gl, 10, 2, 2500)
+
+
+def tread_loop(seed):
+    """CanBot tank treads: engine rumble + rolling grind + track links clanking past."""
+    r = R(seed)
+    dur = 1.2
+    n = n_of(dur)
+    m = n + n_of(0.3)
+    t = tt(m)
+    engine = lp(saw(46 + 3 * np.sin(2 * np.pi * 2.5 * t), m) + 0.5 * pulse(92, m, 0.3), 260) * 0.7
+    grind = bp(noise(m, r), 150, 700) * (0.7 + 0.3 * np.sin(2 * np.pi * 7.5 * t)) * 0.6
+    clank = np.zeros(m)
+    for k in range(int(m / n_of(1 / 10.0))):           # a track link every 0.1 s
+        c = metal(seed + k % 5, r.uniform(500, 700), 0.08)
+        place(clank, c * r.uniform(0.15, 0.3), k * n_of(1 / 10.0))
+    x = drive(engine + grind + lp(clank, 2500), 1.5)
+    return loop_finish(seamless(x, n), 2600)
+
+
 def shield_up(seed):
     n = n_of(0.5)
     t = tt(n)
@@ -937,6 +1042,9 @@ SOUNDS = {
     "shot_chaingun": (chaingun, 6), "shot_railgun": (railgun, 2),
     "shot_barrage": (barrage, 5), "shot_coil": (coil, 5), "shot_microwave": (microwave, 4),
     "shield_block": (shield_block, 4), "shield_down": (shield_down, 1), "shield_up": (shield_up, 1),
+    "magnet_pulse": (magnet_pulse, 2), "decoy_on": (decoy_on, 2), "dash": (dash_snd, 3),
+    "hurt_can": (hurt_can, 3), "death_can": (death_can, 1), "hurt_mutant": (hurt_mutant, 3), "death_mutant": (death_mutant, 1),
+    "step_mutant": (step_mutant, 5), "tread_loop": (tread_loop, 1),
 }
 
 

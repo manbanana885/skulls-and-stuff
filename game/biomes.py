@@ -129,3 +129,7 @@ from bestiary import SIGNATURE as _SIG  # noqa: E402
 for _b, _k in _SIG.items():
     BIOMES[_b]["bias"][_k] = 4.0
     BIOMES[_b]["signature"].append(_k)
+
+# explosive barrels (fire / chemical / radiation / shrapnel kinds are rolled per barrel in World)
+for _b in ("nuclear", "chemical", "biotech", "heresy", "violence"):
+    BIOMES[_b]["solids"].append("barrel")

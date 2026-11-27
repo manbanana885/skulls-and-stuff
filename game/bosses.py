@@ -248,6 +248,8 @@ class Boss:
     def __init__(self, kind, x, y, depth):
         sp = BE.BOSSES[kind]
         self.kind, self.sp, self.title = kind, sp, sp["title"]
+        import damage as DM
+        self.cat = DM.BOSS_CATEGORY.get(kind, "demon")
         self.maxhp = self.hp = 450 + 170 * depth
         self.x, self.y = x, y
         self.r = sp["r"]
@@ -295,7 +297,7 @@ class Boss:
         return ATTACKS[name](self, w, **kw)
 
     def update(self, w, dt):
-        p = w.nearest_player(self.x, self.y)
+        p = w.target_for(self.x, self.y)
         self.target = p
         dx, dy = p.x - self.x, p.y - self.y
         d = math.hypot(dx, dy) or 1e-6
