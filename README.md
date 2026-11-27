@@ -22,7 +22,7 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - Explosive barrels in four kinds: red (fire + burning ground), green (toxic gas + acid), yellow (radiation
   fallout) and orange (shrapnel) - they hurt monsters and you alike, and chain off each other. Pick one up
   with E / A and put it down somewhere better
-- Drop-in local co-op for 2 players
+- Drop-in local co-op for 2 players, and net play for up to 4 across Windows, Mac and Linux
 
 ## How to play (Windows, no Python experience needed)
 
@@ -42,6 +42,19 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 **"Add python.exe to PATH"** before clicking Install. Then double-click `install.bat` again.
 
 **If it says "No module named pygame"**, double-click `install.bat` again.
+
+## How to play (Mac and Linux)
+
+1. **Download and unzip the game** (green **Code** button, then **Download ZIP**).
+2. **Run the setup once.**
+   - **Mac:** double-click **`install.command`**. If macOS says it's from an unidentified developer,
+     right-click it, choose **Open**, then **Open** again.
+   - **Linux:** in a terminal in the game folder, run `bash install.sh`.
+
+   It needs Python 3.10 or newer. If you don't have it, the setup tells you where to get it. On a Mac,
+   use the installer from [python.org/downloads](https://www.python.org/downloads/). The setup keeps the
+   game's libraries in a `.venv` folder inside the game folder, so nothing else on your computer changes.
+3. **Play.** Double-click **`run_game.command`** (Mac), or run `bash run_game.sh` (Linux).
 
 ### Running it yourself (any OS)
 
@@ -71,6 +84,33 @@ ENTER / START pauses: the pause screen shows your two guns (E / A takes the
 highlighted one in hand) and your modules (arrows / D-pad to move, E / A to equip or unequip, R / X to drop).
 Player 2 joins any time by pressing BACK / SELECT on a second controller, then picks a body with LEFT / RIGHT
 and confirms with A / START (B / BACK backs out). The game waits while they choose.
+
+## Net play (up to 4 players)
+
+Everyone needs the **same version** of the game. The easiest way is for everyone to download it from the
+same place at the same time. Windows, Mac and Linux players can play together.
+
+**Hosting:** on the title screen, choose **HOST NET GAME**. The lobby shows your address (for example
+`192.168.1.20`). Pick your body, wait for friends to show up, then press START / A to begin. Friends can
+also drop into a game that's already running.
+
+**Joining:** choose **JOIN NET GAME**.
+- **Same network** (same Wi-Fi or router): the host's game appears in the list. Pick it and press A / ENTER.
+- **Over the internet:** type the host's address and press ENTER. This needs one of these:
+  - The host forwards **TCP port 47777** on their router to their computer, and gives you their public IP.
+    Search "what is my IP" to find it.
+  - Or everyone installs a free virtual LAN such as [Tailscale](https://tailscale.com) or
+    [ZeroTier](https://www.zerotier.com). Then use the host's Tailscale / ZeroTier address. No router setup is needed.
+
+Then pick a body with LEFT / RIGHT and press A when you're ready.
+
+**The first time you host or join**, Windows or macOS may ask whether Python can use the network.
+Click **Allow** (on Windows, tick **Private networks**). Otherwise the game isn't visible to others.
+
+In a net game everyone has their own screen and camera, and the co-op leash is off. START / ENTER opens
+your menu (inventory), but the game keeps running for everyone while it's open. ESC leaves the net game.
+If the host leaves, the game ends for everyone. The host runs the game, so the host's computer and
+connection matter most. Each guest uses about 30-60 KB/s.
 
 ## Rebuild assets
 

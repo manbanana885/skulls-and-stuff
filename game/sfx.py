@@ -68,7 +68,13 @@ def init():
             pass
 
 
-def play(name, vol=1.0):
+router = None        # net play host: router(name, vol) records the sound for guests; False = don't play it here
+music_router = None  # net play host: music_router(track, fade_ms) tells the guests about music changes
+
+
+def play(name, vol=1.0, net=True):
+    if net and router is not None and not router(name, vol):
+        return
     if not _enabled:
         return
     variants = _sounds.get(name)
@@ -112,6 +118,8 @@ def stop_loops():
 def music(track, fade_ms=1500):
     """Start (or keep) a looping music track. None fades out."""
     global _track
+    if music_router is not None:
+        music_router(track, fade_ms)
     if not _enabled or track == _track:
         return
     _track = track

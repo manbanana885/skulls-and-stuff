@@ -6,3 +6,4 @@ save.json
 Thumbs.db
 blender/_batches.txt
 samples/
+.venv/
