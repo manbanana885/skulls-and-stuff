@@ -576,18 +576,38 @@ class Game:
             if "back" in inp.pressed or "start" in inp.pressed:
                 dev = inp.dev
                 break
+        self.join_from_p1 = False
         if dev is None and self.inputs[0].dev is not None and "back" in self.inputs[0].pressed:
             dev = self.inputs[0].dev          # hand P1's only pad to P2
             self.inputs[0].set_device(None)
             self.inputs[0].mouse_mode = True
+            self.join_from_p1 = True
         if dev is None:
             return
         self.inputs.append(Input(False, dev))
         self.refresh_spares()
+        sfx.play("weapon_pickup")
         if self.world and self.state == "play":
-            self.world.add_player(self.chars[1] if self.chars[1] != self.world.player.char else None)
-        else:
-            sfx.play("weapon_pickup")
+            self.state = "join"               # P2 picks a body first; the game waits
+
+    def cancel_join(self):
+        """P2 backed out of the pick screen: drop their input (and give a borrowed pad back to P1)."""
+        inp = self.inputs.pop()
+        if getattr(self, "join_from_p1", False) and self.inputs[0].dev is None:
+            self.inputs[0].set_device(inp.dev)
+            self.inputs[0].mouse_mode = False
+        self.join_from_p1 = False
+        self.refresh_spares()
+        self.state = "play"
+        sfx.play("swap", 0.6)
+
+    def pick_char(self, i, inp):
+        """LEFT / RIGHT on input inp cycles player i's body."""
+        for name, d in (("nav_left", -1), ("nav_right", 1)):
+            if name in inp.pressed:
+                self.chars[i] = CH.ORDER[(CH.ORDER.index(self.chars[i]) + d) % len(CH.ORDER)]
+                sfx.play("swap", 0.6)
+                self.save_settings()
 
     def any_pressed(self, name):
         return any(name in inp.pressed for inp in self.inputs)
@@ -684,17 +704,21 @@ class Game:
                 self.toggle_numbers()
                 return
             for i, inp_ in enumerate(self.inputs[:2]):
-                for name, d in (("nav_left", -1), ("nav_right", 1)):
-                    if name in inp_.pressed:
-                        k = (CH.ORDER.index(self.chars[i]) + d) % len(CH.ORDER)
-                        self.chars[i] = CH.ORDER[k]
-                        sfx.play("swap", 0.6)
-                        self.save_settings()
+                self.pick_char(i, inp_)
             if self.inputs[0].keyboard and pygame.mouse.get_pressed()[0] or any(
                     ("start" in i.pressed or "a" in i.pressed) for i in self.inputs):
                 sfx.play("start")
                 self.new_world(1)
                 self.state = "play"
+            return
+        if self.state == "join":
+            p2 = self.inputs[1]
+            self.pick_char(1, p2)
+            if "a" in p2.pressed or "start" in p2.pressed:
+                self.world.add_player(self.chars[1])
+                self.state = "play"
+            elif "deploy" in p2.pressed or "back" in p2.pressed:
+                self.cancel_join()
             return
         if self.state == "pause":
             if self.any_pressed("start"):
@@ -765,6 +789,12 @@ class Game:
         self.draw_hud(s)
         if self.state == "pause":
             self.draw_inventory(s)
+        elif self.state == "join":
+            self.overlay(s, 225)
+            self.center_text(s, self.big, "PLAYER 2", sc(120), self.PLAYER_COLORS[1])
+            self.draw_char_row(s, [1], H / 2 + sc(40))
+            self.center_text(s, self.font, "P2: LEFT / RIGHT choose a body   -   A / START join   -   B / BACK cancel",
+                             H / 2 + sc(150), (255, 220, 120))
         elif self.state == "dead":
             a = min(170, int((self.time - self.dead_at) * 200))
             self.overlay(s, a)
@@ -2576,8 +2606,8 @@ class Game:
         info = self.font.render("SECTOR %d   -   HIVES %d   -   find the exit portal" % (w.depth, len(w.spawners)), True, (160, 170, 190))
         s.blit(info, (W / 2 - info.get_width() / 2, sc(38)))
         self.draw_minimap(s)
-        if len(w.players) == 1 and int(self.time * 0.5) % 2 == 0:
-            hint = self.small.render("P2: press BACK / SELECT on a controller to join", True, (90, 200, 200))
+        if len(w.players) == 1 and self.state == "play" and int(self.time * 0.5) % 2 == 0:
+            hint = self.small.render("P2: press BACK / SELECT on a controller to pick a body and join", True, (90, 200, 200))
             s.blit(hint, (W / 2 - hint.get_width() / 2, H - sc(22)))
         # messages
         my = int(H * 0.66)
@@ -2651,18 +2681,25 @@ class Game:
                 if -sc(40) < sx < W + sc(40) and -sc(20) < sy < H + sc(40):
                     h = (cx * 7 + cy * 13) % 11
                     s.blit(alt[h % 4] if h < 4 else fl, (sx - fax, sy - fay))
-        # character select: three bodies walking in place, tops spinning; P1 (and P2) cursors underneath
+        self.draw_char_row(s, list(range(min(2, len(self.inputs)))), H / 2 + sc(110))
+        self.center_text(s, self.font, "LEFT / RIGHT to choose a body" + ("  (each player on their own controller)" if len(self.inputs) > 1 else ""),
+                         H / 2 + sc(196), (255, 220, 120))
+        self.draw_title_text(s)
+
+    def draw_char_row(self, s, who, row_y):
+        """Character select: three bodies walking in place, tops spinning; a P1 / P2 tag over each player's pick."""
+        t = self.time
         guns = ("carbine", "shotgun", "rocket", "flamer", "sniper", "plasma", "chaingun", "coil_rifle")
         arch = guns[int(t / 2.5) % len(guns)]
         for i, ch in enumerate(CH.ORDER):
             C = CH.CHARS[ch]
             legs, torso = self.spr[C["legs"]], self.spr[C["torso"] + arch]
-            picked = [k for k in range(min(2, len(self.inputs))) if self.chars[k] == ch]
+            picked = [k for k in who if self.chars[k] == ch]
             z = 1.5 if picked else 1.15
             big_l = pygame.transform.scale_by(legs.get("walk", 1, t * 10), z)
             big_t = pygame.transform.scale_by(torso.get("idle", int(-t * 4 + i * 5) % 16), z)
             bob = -abs(math.sin(t * 10 / 8 * math.tau)) * sc(3) * z
-            cx, cy = W / 2 + (i - 1) * sc(300), H / 2 + sc(110)
+            cx, cy = W / 2 + (i - 1) * sc(300), row_y
             sh = pygame.transform.scale_by(shadow(sc(14)), z)
             s.blit(sh, (cx - sh.get_width() / 2, cy - sh.get_height() / 2))
             if not picked:
@@ -2680,17 +2717,19 @@ class Game:
             s.blit(de, (cx - de.get_width() / 2, cy + sc(60)))
             for k in picked:
                 tag = self.mid.render("P%d" % (k + 1), True, self.PLAYER_COLORS[k])
-                s.blit(tag, (cx - tag.get_width() / 2 + (k - (len(picked) - 1) / 2) * sc(40), cy - sc(128)))
-        self.center_text(s, self.font, "LEFT / RIGHT to choose a body", H / 2 + sc(196), (255, 220, 120))
+                s.blit(tag, (cx - tag.get_width() / 2 + (picked.index(k) - (len(picked) - 1) / 2) * sc(40), cy - sc(128)))
+
+    def draw_title_text(self, s):
+        t = self.time
         s.blit(self.vig, (0, 0), special_flags=pygame.BLEND_MULT)
         self.center_text(s, self.big, "SKULLS & STUFF", sc(70), (235, 240, 255))
         self.center_text(s, self.font, "an isometric twin-stick shooter  -  procedurally generated sectors", sc(112), (150, 170, 200))
         dev = self.input.device_name
         lines = [
-            "Gamepad: L-STICK move  -  R-STICK aim & fire  -  RT fire  -  A take  -  X reload  -  Y/RB swap  -  LB dash  -  B turret  -  START pause",
-            "Keyboard: WASD move  -  MOUSE aim  -  CLICK fire  -  E take  -  R reload  -  Q/wheel swap  -  SHIFT dash  -  F turret  -  ENTER pause",
+            "Gamepad: L-STICK move  -  R-STICK aim & fire  -  RT fire  -  A take  -  X reload  -  Y/RB swap  -  LB dash  -  D-PAD select module  -  B use it  -  START pause",
+            "Keyboard: WASD move  -  MOUSE aim  -  CLICK fire  -  E take  -  R reload  -  Q/wheel swap  -  SHIFT dash  -  1-4 select module  -  F use it  -  ENTER pause",
             ("Controller detected: %s" % dev) if dev else "No controller detected (plug one in any time)",
-            "CO-OP: player 2 presses BACK / SELECT on a controller to join - any time"
+            "CO-OP: player 2 presses BACK / SELECT on a controller to join and picks a body - here or any time in game"
             + ("   (P2 READY)" if len(self.inputs) > 1 else ""),
         ]
         for i, ln in enumerate(lines):

@@ -62,7 +62,8 @@ SHIFT / LB dashes (with Jump Jets equipped). The D-pad (or keys 1-4) selects a m
 the selected module (throw a grenade, deploy a turret, put a barrel down). F / B also packs up your turret
 when you stand next to it, and picks up a barrel you're standing next to. ENTER / START pauses: the pause screen shows your two guns (E / A takes the
 highlighted one in hand) and your modules (arrows / D-pad to move, E / A to equip or unequip, R / X to drop).
-Player 2 joins any time by pressing BACK / SELECT on a second controller.
+Player 2 joins any time by pressing BACK / SELECT on a second controller, then picks a body with LEFT / RIGHT
+and confirms with A / START (B / BACK backs out). The game waits while they choose.
 
 ## Rebuild assets
 
