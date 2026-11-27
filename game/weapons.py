@@ -282,7 +282,7 @@ AMMO_MODS = {"penetrating", "expanding"}
 SHELLS = {
     "dumdum": dict(word="Dum-Dum", label="Dum-Dum slugs", ammo="exp", share=1.0, speed=17.0, life=0.95, spread=0.035,
                    pierce=0, kick=1.3),
-    "sabot":  dict(word="Sabot", label="Discarding-sabot steel cores", ammo="pen", share=0.8, speed=44.0, life=0.5,
+    "sabot":  dict(word="Sabot", label="Discarding-sabot steel cores", ammo="pen", share=0.95, speed=44.0, life=0.5,
                    spread=0.012, pierce=4, kick=1.1),
 }
 SHELL_ODDS = (("dumdum", 0.2), ("sabot", 0.1))       # the other 70% is buckshot
