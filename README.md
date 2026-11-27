@@ -9,6 +9,9 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - Modules with rolled stats, up to 3 equipped plus a backpack (managed from the pause menu): buzzsaw orbiter,
   arc shield, medbot and gun drone
 - Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
+- Damage types (Kinetic, Explosive, Fire, Chemical, Cryo, Radiation, Electrical) against enemy categories
+  (Undead, Robot, Demon, Construct, Mutant): bring the right gun. Kinetic guns can roll Penetrating Core or
+  Expanding rounds; optional colour-coded damage numbers ([Q / Y] on the title or pause screen)
 - Drop-in local co-op for 2 players
 
 ## How to play (Windows, no Python experience needed)

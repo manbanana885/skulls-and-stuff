@@ -514,9 +514,12 @@ class Game:
         self.banner = ("", 0.0)
         self.transition = 0.0
         self.best = 0
+        self.damage_numbers = False         # option: coloured damage numbers (off by default)
         try:
             with open(SAVE) as fh:
-                self.best = json.load(fh).get("best", 0)
+                data = json.load(fh)
+                self.best = data.get("best", 0)
+                self.damage_numbers = bool(data.get("damage_numbers", False))
         except Exception:
             pass
         self.minimap = None
@@ -584,6 +587,7 @@ class Game:
         self.biome = biome_for(depth, self.run_seed)
         B = BIOMES[self.biome]
         self.world = World(depth, player, score, biome=self.biome)
+        self.world.show_numbers = self.damage_numbers
         self.vig_biome = self.vig.copy()
         self.vig_biome.fill(B["tint"], special_flags=pygame.BLEND_MULT)
         self.ambient = Ambient(B["ambient"])
@@ -598,11 +602,21 @@ class Game:
     def save_best(self):
         if self.world and self.world.score > self.best:
             self.best = self.world.score
-            try:
-                with open(SAVE, "w") as fh:
-                    json.dump({"best": self.best}, fh)
-            except Exception:
-                pass
+            self.save_settings()
+
+    def save_settings(self):
+        try:
+            with open(SAVE, "w") as fh:
+                json.dump({"best": self.best, "damage_numbers": self.damage_numbers}, fh)
+        except Exception:
+            pass
+
+    def toggle_numbers(self):
+        self.damage_numbers = not self.damage_numbers
+        if self.world:
+            self.world.show_numbers = self.damage_numbers
+        self.save_settings()
+        sfx.play("swap", 0.6)
 
     def run(self):
         clock = pygame.time.Clock()
@@ -651,6 +665,9 @@ class Game:
         if self.state != "play" or self.transition > 0:
             sfx.stop_loops()
         if self.state == "title":
+            if self.any_pressed("swap"):
+                self.toggle_numbers()
+                return
             if self.inputs[0].keyboard and pygame.mouse.get_pressed()[0] or any(
                     ("start" in i.pressed or "a" in i.pressed) for i in self.inputs):
                 sfx.play("start")
@@ -661,6 +678,8 @@ class Game:
             if self.any_pressed("start"):
                 self.state = "play"
                 return
+            if self.any_pressed("swap"):
+                self.toggle_numbers()
             for i, p in enumerate(self.world.players):
                 if i < len(self.inputs):
                     self.inventory_input(p, self.inputs[i])
@@ -782,7 +801,8 @@ class Game:
         w = self.world
         coop = len(w.players) > 1
         self.center_text(s, self.big, "PAUSED", sc(46), (230, 235, 255))
-        self.center_text(s, self.font, "START / ENTER resume   -   ESC quit", sc(86), (150, 160, 180))
+        self.center_text(s, self.font, "START / ENTER resume   -   ESC quit   -   [Q / Y] damage numbers: %s"
+                         % ("ON" if self.damage_numbers else "OFF"), sc(86), (150, 160, 180))
         if not coop:      # grid on the left, stat card beside it
             box, gap, card = sc(80), sc(12), sc(370)
             gw = box * 3 + gap * 2
@@ -939,7 +959,7 @@ class Game:
         for hz in w.hazards:
             gx, gy = ground(hz[0], hz[1])
             if on_screen(gx, gy):
-                if hz[4] == "acid":
+                if hz[4] in ("acid", "acidp"):
                     self.draw_pool(gx, gy, hz)
                 elif hz[4] == "rad":
                     self.draw_rad(gx, gy, hz)
@@ -1166,6 +1186,14 @@ class Game:
             self.draw_beam(bm, ox, oy)
         for a_ in w.arcs:
             self.draw_arc(a_, ox, oy)
+        for x_, y_, z_, txt, col, life in w.popups:
+            a, b = to_screen(x_, y_, z_)
+            img = self.small.render(txt, True, col)
+            img.set_alpha(int(255 * min(1.0, life / 0.4)))
+            sh = self.small.render(txt, True, (0, 0, 0))
+            sh.set_alpha(img.get_alpha())
+            surf.blit(sh, (a + ox - img.get_width() / 2 + 2, b + oy + 2))
+            surf.blit(img, (a + ox - img.get_width() / 2, b + oy))
 
         if self.ambient:
             last = getattr(self, "_last_cam", tuple(self.cam))
@@ -1997,6 +2025,10 @@ class Game:
         lines = [(self.mid, su.name, su.color),
                  (self.small, "%s %s  -  LVL %d" % (su.rarity_name, su.label, su.level), (170, 175, 190)),
                  (self.small, "MODULE: " + su.blurb(), (150, 220, 160))]
+        dt_ = su.dtype()
+        if dt_:
+            import damage as DM
+            lines.append((self.small, [("DAMAGE: ", (130, 135, 150)), (dt_.upper(), DM.COLOR.get(dt_, (220, 220, 220)))], None))
         stats = su.card_lines()
         rows = (len(stats) + 2) // 3
         h = sc(12) + sum(f.get_height() + sc(2) for f, _, _ in lines) + sc(22) * rows + (sc(20) if title else 0)
@@ -2008,7 +2040,14 @@ class Game:
             s.blit(self.small.render(title, True, (255, 220, 120)), (x + sc(12), cy))
             cy += sc(20)
         for f, txt, col in lines:
-            s.blit(f.render(txt, True, col), (x + sc(12), cy))
+            if isinstance(txt, list):          # multi-coloured line: [(text, colour), ...]
+                xx = x + sc(12)
+                for part, pc in txt:
+                    img = f.render(part, True, pc)
+                    s.blit(img, (xx, cy))
+                    xx += img.get_width()
+            else:
+                s.blit(f.render(txt, True, col), (x + sc(12), cy))
             cy += f.get_height() + sc(2)
         params = [(k_, v_) for k_, v_ in SU.KINDS[su.kind]["params"].items()
                   if not (su.kind == "battery" and k_ == ("dmg" if su.elem == "revive" else "heal"))]
@@ -2082,6 +2121,11 @@ class Game:
         for m in wp.mods:
             lines.append((self.small, "+ %s: %s" % (m["adj"], m["desc"]), (150, 220, 160)))
         st_ = wp.st
+        import damage as DM
+        sec = DM.secondary(st_)
+        main_ = st_["dtype"].upper() + ((" (%s)" % DM.AMMO_LABEL[st_["ammo"]]) if st_.get("ammo") else "")
+        lines.append((self.small, [("DAMAGE: ", (130, 135, 150)), (main_, DM.COLOR[st_["dtype"]])]
+                      + [x_ for t in sec for x_ in (("  +  ", (130, 135, 150)), (t.upper(), DM.COLOR[t]))], None))
         if st_.get("salvo"):
             lines.append((self.small, "Fires %d-missile homing barrages" % st_["salvo"], (255, 200, 120)))
         if st_.get("chain"):
@@ -2103,7 +2147,14 @@ class Game:
             s.blit(self.small.render(title, True, (255, 220, 120)), (x + sc(12), cy))
             cy += sc(20)
         for f, txt, col in lines:
-            s.blit(f.render(txt, True, col), (x + sc(12), cy))
+            if isinstance(txt, list):          # multi-coloured line: [(text, colour), ...]
+                xx = x + sc(12)
+                for part, pc in txt:
+                    img = f.render(part, True, pc)
+                    s.blit(img, (xx, cy))
+                    xx += img.get_width()
+            else:
+                s.blit(f.render(txt, True, col), (x + sc(12), cy))
             cy += f.get_height() + sc(2)
         cx = x + sc(12)
         for i, (lbl, val) in enumerate(stats):
@@ -2310,6 +2361,8 @@ class Game:
         ]
         for i, ln in enumerate(lines):
             self.center_text(s, self.font, ln, sc(150 + i * 22), (190, 195, 210) if i < 2 else ((120, 230, 255) if i == 2 else (90, 230, 210)))
+        self.center_text(s, self.font, "[Q / Y]  Damage numbers: %s" % ("ON" if self.damage_numbers else "OFF"), H - sc(78),
+                         (255, 220, 120) if self.damage_numbers else (150, 160, 180))
         if int(t * 2) % 2 == 0:
             self.center_text(s, self.mid, "PRESS START / ENTER", H - sc(40), (255, 220, 120))
         if self.best:

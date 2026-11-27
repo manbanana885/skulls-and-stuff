@@ -5,6 +5,7 @@ from assets import screen_to_world_dir, dir_index, to_screen, S as _S
 from level import Level
 import weapons as WP
 import support as SU
+import damage as DM
 import bestiary as BE
 import sfx
 
@@ -213,7 +214,7 @@ class Proj:
     """kind: bullet | pellet | slug | bolt | plasma | flame | grenade | rocket | acid"""
     __slots__ = ("kind", "x", "y", "z", "vx", "vy", "vz", "life", "dmg", "hostile", "color", "r", "pierce", "bounce",
                  "blast", "burn", "shock", "homing", "slow", "grav", "hit", "trail", "age", "maxspeed", "rad", "gas", "chill", "spin",
-                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach")
+                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo")
 
     def __init__(self, kind, x, y, z, vx, vy, dmg, hostile=False, life=0.9, color=(255, 220, 140), r=0.1,
                  pierce=0, bounce=0, blast=0.0, burn=0.0, shock=0, homing=0, slow=0, vz=0.0, grav=0.0, maxspeed=22.0,
@@ -236,6 +237,9 @@ class Proj:
         self.ox = self.oy = 0.0
         self.cone = 0.0
         self.reach = None
+        self.dtype = "kinetic"
+        self.acid = 0.0
+        self.ammo = None
 
 
 class Loot:
@@ -490,6 +494,7 @@ def weapon_to_shot(wp):
 class Enemy:
     def __init__(self, kind, x, y, awake=False, depth=1):
         self.kind = kind
+        self.cat = DM.category(kind)
         st = STATS[kind]
         self.st = st
         self.hp = st["hp"] * (1 + 0.15 * (depth - 1))
@@ -564,6 +569,8 @@ class Enemy:
         if self.burn > 0:
             self.burn -= dt
             self.hp -= self.burn_dps * dt
+            if w.show_numbers:
+                w.damage_number(self, self.burn_dps * dt, "fire", True)
             if rnd.random() < dt * 25:
                 w.add(Particle("fire", self.x + rnd.uniform(-0.2, 0.2), self.y + rnd.uniform(-0.2, 0.2),
                                self.st["hz"] * rnd.uniform(0.4, 1.1), 0, 0, rnd.uniform(1, 2), 0.4, (255, 120, 30), rnd.uniform(6, 12)))
@@ -1230,6 +1237,8 @@ class World:
         self._shooter = players[0]
         self.arcs = []             # lightning: [[(x, y, z), ...], life, max, colour, width]
         self.decoys = []           # decoy projector holograms monsters chase instead of players
+        self.popups = []           # floating "WEAK" / "RESIST" ticks and damage numbers [x, y, z, text, colour, life]
+        self.show_numbers = False  # coloured damage numbers (option on the title / pause screens)
         self.blocked = set()       # ids of enemy projectiles eaten by an arc shield this frame
         self.near_loot_by = {}
         self.score = score
@@ -1421,8 +1430,56 @@ class World:
             if pr.hostile:
                 pr.life = min(pr.life, 0.05)
 
-    def dot(self, e, amount):
-        """Damage over time (radiation, gas) without per-tick blood sprays."""
+    def typed(self, e, dmg, dtype, ammo=None, tick=False):
+        """Scale damage by the target's category vs the damage type (and kinetic ammo mods); weak / resisted hits get
+        a little feedback, and with the option on, a damage number in the type's colour."""
+        m = DM.mult(e, dtype, ammo)
+        if self.show_numbers and dmg * m > 0:
+            self.damage_number(e, dmg * m, dtype or "kinetic", tick)
+        if (m >= 1.25 or m <= 0.7) and self.time - getattr(e, "_pop_t", -9) > 0.7:
+            e._pop_t = self.time
+            weak = m > 1
+            hz = (getattr(e, "st", None) or {}).get("hz", 0.8)
+            col = DM.COLOR.get(dtype, (255, 255, 255)) if weak else (140, 140, 150)
+            self.popups.append([e.x, e.y, hz + 0.5, "WEAK" if weak else "RESIST", col, 0.8])
+            for _ in range(10 if weak else 5):
+                a = rnd.random() * math.tau
+                s_ = rnd.uniform(2, 6) if weak else rnd.uniform(1, 2.5)
+                self.add(Particle("spark", e.x, e.y, hz * 0.7, math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(1, 3), 0.35,
+                                  col, 3 if weak else 2))
+        return dmg * m
+
+    def damage_number(self, e, amount, dtype, tick):
+        """Big single hits pop their own number; rapid small hits pool for 0.2s and damage over time for 0.5s,
+        per target and type, so sprays and burns read as a steady count instead of a blizzard."""
+        hz = (getattr(e, "st", None) or {}).get("hz", 0.8)
+        if tick or amount < 5:
+            acc = getattr(e, "_dot_acc", None)
+            if acc is None:
+                acc = e._dot_acc = {}
+            a = acc.get(dtype)
+            if a is None:
+                a = acc[dtype] = [0.0, self.time]
+            a[0] += amount
+            if self.time - a[1] < (0.5 if tick else 0.2):
+                return
+            amount, a[0], a[1] = a[0], 0.0, self.time
+            if amount < 0.5:
+                return
+        txt = "%d" % round(amount) if amount >= 1 else "%.1f" % amount
+        self.popups.append([e.x + rnd.uniform(-0.25, 0.25), e.y + rnd.uniform(-0.25, 0.25), hz + 0.2, txt, DM.COLOR[dtype], 0.7])
+
+    def acid_puddle(self, x, y, dps):
+        L = self.level
+        if L.is_solid(int(x), int(y)):
+            return
+        self.hazards.append([x, y, 0.55, 3.5, "acidp", dps, 3.5])
+        self.snd("sizzle", x, y, 0.35)
+
+    def dot(self, e, amount, dtype=None):
+        """Damage over time (radiation, gas, acid, auras) without per-tick blood sprays."""
+        if dtype:
+            amount = self.typed(e, amount, dtype, tick=True)
         e.hp -= amount
         e.awake = True
         if e.hp <= 0 and e.alive:
@@ -1594,6 +1651,10 @@ class World:
                                                 "slug": 0.12, "nuke": 0.2, "saw": 0.24}.get(kind, 0.1),
                           pierce=st["pierce"], bounce=bounce, blast=st["blast"], burn=burn, shock=st["shock"],
                           homing=st["homing"], slow=st["slow"], rad=rad, gas=gas, chill=st["chill"])
+                pr.dtype = st["dtype"]
+                pr.ammo = st["ammo"]
+                if st["acid"]:
+                    pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * st["pellets"]))
                 if kind == "grenade":
                     pr.vz, pr.grav = 3.0, 14.0
                 if kind == "rail":
@@ -1644,6 +1705,9 @@ class World:
                   color=st["color"], r=0.12, blast=st["blast"], burn=st["burn"] * 1.4 * lvl * p.dmg_mult(), shock=st["shock"],
                   homing=st["homing"], slow=st["slow"], chill=st["chill"], maxspeed=st["speed"] * 2.4)
         pr.cone = math.atan2(ay, ax)      # where the salvo was aimed: missiles with nothing to chase drift back to it
+        pr.dtype = st["dtype"]
+        if st["acid"]:
+            pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * (st["salvo"] or 1)))
         pr.owner = p
         self.projs.append(pr)
         for _ in range(2):
@@ -1788,17 +1852,25 @@ class World:
         get = (lambda k: fx.get(k, 0)) if isinstance(fx, dict) else (lambda k: getattr(fx, k, 0))
         burn, slow, shock, blast = get("burn"), get("slow"), get("shock"), get("blast")
         chill = get("chill")
+        dtype = get("dtype") or "kinetic"
+        ammo = get("ammo") or None
+        raw = dmg
         if isinstance(fx, dict):   # beam stats come unscaled
             burn = burn * 1.4 * self._shooter.dmg_mult()
         e.last_hit_by = getattr(fx, "owner", None) if not isinstance(fx, dict) else self._shooter
-        e.hit(self, dmg, vx, vy)
-        if burn:
+        e.hit(self, self.typed(e, dmg, dtype, ammo), vx, vy)
+        acid = get("acid")
+        if acid:
+            p_ = acid if not isinstance(fx, dict) else min(1.0, 1.6 / max(0.1, fx.get("rate", 1.0)))
+            if rnd.random() < p_:
+                self.acid_puddle(e.x, e.y, raw * 0.9)
+        if burn and hasattr(e, "burn_dps"):
             e.burn = max(e.burn, 2.5)
-            e.burn_dps = max(e.burn_dps, burn)
+            e.burn_dps = max(e.burn_dps, burn * DM.mult(e, "fire"))
         if slow:
             e.slow = 2.2
         if chill and e.alive and hasattr(e, "frozen"):
-            e.chill += chill
+            e.chill += chill * DM.mult(e, "cryo")
             if e.chill >= 1.0 and e.frozen <= 0:
                 e.frozen = 3.5
                 e.chill = 0.0
@@ -1814,11 +1886,11 @@ class World:
                             key=lambda o: math.hypot(o.x - e.x, o.y - e.y))[:2]
             for o in others:
                 self.beams.append([e.x, e.y, o.x, o.y, e.st["hz"], 0.12, 0.12, (140, 200, 255), 0.6])
-                o.hit(self, dmg * 0.5, o.x - e.x, o.y - e.y)
+                o.hit(self, self.typed(o, raw * 0.5, "electrical"), o.x - e.x, o.y - e.y)
             if others:
                 self.snd("shock", e.x, e.y, 0.6)
         if blast and (isinstance(fx, dict) or fx.kind not in ("grenade", "rocket", "plasma")):
-            self.explode(e.x, e.y, blast, dmg * 0.6, (255, 170, 60), hurt_player=False, quiet=True, small=True)
+            self.explode(e.x, e.y, blast, raw * 0.6, (255, 170, 60), hurt_player=False, quiet=True, small=True)
 
     def hit_solid(self, cell, dmg, x, y, z, b):
         """Something hit a solid cell: barrels / crates / hives take damage. Returns True if it was destructible."""
@@ -2043,7 +2115,7 @@ class World:
         return broke
 
     def explode(self, x, y, radius, dmg, color=(255, 170, 60), hurt_player=True, quiet=False, small=False, player_dmg=15,
-                breach=0.0):
+                breach=0.0, dtype="explosive"):
         self.add(Particle("ring", x, y, 0.05, radius * 3.2, 0, 0, 0.35, color, 0.1))
         n = 8 if small else 26
         for _ in range(n):
@@ -2069,7 +2141,7 @@ class World:
         if dmg:
             for e in list(self.enemies) + self.bosses + [t for t in self.traps if t.shootable or t.mech == "reactor"]:
                 if e.alive and not getattr(e, "submerged", False) and math.hypot(e.x - x, e.y - y) < radius + e.r:
-                    e.hit(self, dmg, (e.x - x) * 30, (e.y - y) * 30)
+                    e.hit(self, self.typed(e, dmg, dtype), (e.x - x) * 30, (e.y - y) * 30)
             for s in self.spawners:
                 if s.alive and math.hypot(s.x - x, s.y - y) < radius:
                     s.hit(self, dmg * 2)
@@ -2226,6 +2298,10 @@ class World:
         for bm in self.beams:
             bm[5] -= dt
         self.beams = [bm for bm in self.beams if bm[5] > 0]
+        for pu in self.popups:
+            pu[5] -= dt
+            pu[2] += dt * 1.2
+        self.popups = [pu for pu in self.popups if pu[5] > 0]
         for a_ in self.arcs:
             a_[1] -= dt
         self.arcs = [a_ for a_ in self.arcs if a_[1] > 0]
@@ -2256,7 +2332,7 @@ class World:
                                       (140, 255, 70), 2))
                 for e in list(self.enemies) + self.bosses:
                     if e.alive and e.state != "dormant" and not getattr(e, "submerged", False) and (e.x - x_) ** 2 + (e.y - y_) ** 2 < (r_ + e.r) ** 2:
-                        self.dot(e, dps * dt)
+                        self.dot(e, dps * dt, "radiation" if hz[4] == "rad" else "chemical")
                 for pl in alive:
                     if (pl.x - x_) ** 2 + (pl.y - y_) ** 2 < r_ * r_:
                         pl.hp -= dps * dt * pl.mult("aegis")
@@ -2266,6 +2342,15 @@ class World:
                             sfx.play("sizzle", 0.5)
                         self.check_player_death(x_, y_, pl)
                 continue
+            if hz[4] == "acidp":           # Acid-Augmented puddles: eat monsters, leave players alone
+                k_ = min(1.0, hz[3] / hz[6] * 2)
+                for e in self.nearby(hz[0], hz[1]):
+                    if e.alive and e.kind not in FLYERS and (e.x - hz[0]) ** 2 + (e.y - hz[1]) ** 2 < (hz[2] + e.r) ** 2:
+                        self.dot(e, hz[5] * k_ * dt, "chemical")
+                if rnd.random() < dt * 5:
+                    self.add(Particle("glow", hz[0] + rnd.uniform(-0.3, 0.3), hz[1] + rnd.uniform(-0.3, 0.3), 0.02, 0, 0, 0.8, 0.5,
+                                      (140, 255, 70), 2))
+                continue
             if hz[4] == "fire":
                 if rnd.random() < dt * 12:
                     self.add(Particle("fire", hz[0] + rnd.uniform(-0.3, 0.3), hz[1] + rnd.uniform(-0.3, 0.3), 0.05,
@@ -2273,7 +2358,7 @@ class World:
                 for e in self.nearby(hz[0], hz[1]):
                     if e.alive and e.kind not in FLYERS and math.hypot(e.x - hz[0], e.y - hz[1]) < hz[2] + e.r:
                         e.burn = max(e.burn, 1.5)
-                        e.burn_dps = max(e.burn_dps, hz[5] or 1.0)
+                        e.burn_dps = max(e.burn_dps, (hz[5] or 1.0) * DM.mult(e, "fire"))
                 continue
             if rnd.random() < dt * 6:
                 self.add(Particle("glow", hz[0] + rnd.uniform(-hz[2], hz[2]) * 0.6, hz[1] + rnd.uniform(-hz[2], hz[2]) * 0.6, 0.02,
@@ -2354,6 +2439,8 @@ class World:
 
     def impact(self, b, x, y):
         """Projectile ended at (x, y)."""
+        if getattr(b, "acid", 0) and not b.hostile and rnd.random() < b.acid:
+            self.acid_puddle(x, y, b.dmg * 0.9)
         if b.kind == "nuke":
             rr, dur, dps, breach_r = b.rad     # terrain destruction: 3 tiles (tactical) / 5 tiles (nuke)
             big = rr >= 3
@@ -2383,7 +2470,8 @@ class World:
             pdmg = b.dmg if b.hostile else min(b.dmg * (1.5 if b.kind == "missile" else 0.6), 40)
             self.explode(x, y, b.blast, b.dmg if not b.hostile else b.dmg * 0.5, col,
                          hurt_player=b.hostile or heavy, quiet=small, small=small, player_dmg=pdmg,
-                         breach=b.blast * 0.7 if (heavy or b.kind == "mortar") else 0.0)
+                         breach=b.blast * 0.7 if (heavy or b.kind == "mortar") else 0.0,
+                         dtype=getattr(b, "dtype", "explosive") if b.kind == "plasma" else "explosive")
             return
         if b.kind == "acid":
             self.hazards.append([x, y, 0.8, 4.0, "acid"])
@@ -2647,7 +2735,7 @@ class World:
                     b.hit.add(id(e))
                     self.hit_enemy(e, b.dmg, b.vx, b.vy, b)
                     if k == "plasma":
-                        self.explode(b.x, b.y, b.blast, b.dmg * 0.4, (120, 255, 90), hurt_player=False, quiet=True, small=True)
+                        self.explode(b.x, b.y, b.blast, b.dmg * 0.4, (120, 255, 90), hurt_player=False, quiet=True, small=True, dtype=b.dtype)
                     if b.pierce <= 0:
                         if k not in WP.SPRAYS:
                             self.impact(b, b.x, b.y)

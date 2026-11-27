@@ -261,6 +261,17 @@ class Support:
             out.append((lbl, fmt % v))
         return out
 
+    def dtype(self):
+        """Damage type this module deals (None for pure utility)."""
+        if self.kind == "core":
+            return "explosive" if self.elem == "blast" else "electrical"
+        if self.kind == "aura":
+            return {"burn": "fire", "chill": "cryo", "rad": "radiation"}[self.elem]
+        if self.kind == "battery":
+            return "explosive" if self.elem == "nova" else None
+        return {"sawbot": "kinetic", "gunbot": "kinetic", "leech": "chemical", "skull": "explosive", "mines": "explosive",
+                "jets": "fire", "tether": "electrical"}.get(self.kind)
+
     def blurb(self):
         return {"sawbot": "Orbits you, shredding monsters it touches",
                 "shield": "Orbiting barrier that blocks enemy shots",
@@ -339,7 +350,7 @@ class Support:
                 continue
             self.hit_cd[id(e)] = 0.28
             w._shooter = pl
-            w.hit_enemy(e, self.p["dmg"] * pl.dmg_mult(), tvx, tvy, {})
+            w.hit_enemy(e, self.p["dmg"] * pl.dmg_mult(), tvx, tvy, {"dtype": "kinetic"})
             self.flash = 0.06
             from world import Particle
             for _ in range(5):
@@ -546,7 +557,7 @@ class Support:
         for e, grow in self.latched:
             if grow >= 1.0:
                 amt = self.p["drain"] * pl.dmg_mult() * dt
-                w.dot(e, amt)
+                w.dot(e, amt, "chemical")
                 if pl.alive:
                     pl.hp = min(pl.max_hp, pl.hp + amt * self.p["heal"])
                 if random.random() < dt * 6:
@@ -576,7 +587,7 @@ class Support:
                     e.vx += (e.x - pl.x) / d * 14
                     e.vy += (e.y - pl.y) / d * 14
                 w._shooter = pl
-                w.hit_enemy(e, dmg * 0.4, (e.x - pl.x) * 10, (e.y - pl.y) * 10, {})
+                w.hit_enemy(e, dmg * 0.4, (e.x - pl.x) * 10, (e.y - pl.y) * 10, {"dtype": "electrical"})
             for b in w.projs:                     # enemy shots get flung back at their owners
                 if b.hostile and math.hypot(b.x - pl.x, b.y - pl.y) < R:
                     b.hostile = False
@@ -593,7 +604,7 @@ class Support:
             for e in targets(w, pl.x, pl.y, R)[:8]:
                 if los(w.level, pl.x, pl.y, e.x, e.y):
                     w._shooter = pl
-                    w.hit_enemy(e, dmg, e.x - pl.x, e.y - pl.y, {})
+                    w.hit_enemy(e, dmg, e.x - pl.x, e.y - pl.y, {"dtype": "electrical"})
                     pts.append((e.x, e.y, 0.7))
             if len(pts) > 1:
                 w.arcs.append([pts, 0.25, 0.25, col, 1.4])
@@ -709,15 +720,17 @@ class Support:
                 continue
             if self.elem == "burn":
                 if hasattr(e, "burn_dps"):
+                    import damage as DM
                     e.burn = max(e.burn, 0.6)
-                    e.burn_dps = max(e.burn_dps, dps)
+                    e.burn_dps = max(e.burn_dps, dps * DM.mult(e, "fire"))
             elif self.elem == "chill":
+                import damage as DM
                 e.slow = max(getattr(e, "slow", 0.0), 0.3)
-                w.dot(e, dps * 0.6 * dt)
+                w.dot(e, dps * 0.6 * dt, "cryo")
                 if hasattr(e, "frozen"):
-                    e.chill += dt * 0.15
+                    e.chill += dt * 0.15 * DM.mult(e, "cryo")
             else:
-                w.dot(e, dps * dt)
+                w.dot(e, dps * dt, "radiation")
         if random.random() < dt * 14:
             a = random.random() * math.tau
             r = R * random.uniform(0.3, 1.0)
@@ -791,7 +804,7 @@ class Support:
                     if id(e) not in self.trail_hit and math.hypot(e.x - pl.x, e.y - pl.y) < 0.6 + e.r:
                         self.trail_hit.add(id(e))
                         w._shooter = pl
-                        w.hit_enemy(e, self.p["burn"] * pl.dmg_mult(), pl.kbx, pl.kby, {"burn": 1.0})
+                        w.hit_enemy(e, self.p["burn"] * pl.dmg_mult(), pl.kbx, pl.kby, {"burn": 1.0, "dtype": "fire"})
 
     # ---- tether beam
     def update_tether(self, w, dt, pl):
@@ -815,7 +828,7 @@ class Support:
         for e in targets(w, (ax + bx) / 2, (ay + by) / 2, math.sqrt(ll) / 2 + 1.0):
             u = max(0.0, min(1.0, ((e.x - ax) * sx + (e.y - ay) * sy) / ll))
             if math.hypot(ax + sx * u - e.x, ay + sy * u - e.y) < e.r + 0.15:
-                w.dot(e, self.p["dps"] * pl.dmg_mult() * dt)
+                w.dot(e, self.p["dps"] * pl.dmg_mult() * dt, "electrical")
                 if random.random() < dt * 10:
                     from world import Particle
                     w.add(Particle("spark", e.x, e.y, 0.8, random.uniform(-3, 3), random.uniform(-3, 3), 1, 0.25, (80, 255, 220), 2))

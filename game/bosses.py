@@ -248,6 +248,8 @@ class Boss:
     def __init__(self, kind, x, y, depth):
         sp = BE.BOSSES[kind]
         self.kind, self.sp, self.title = kind, sp, sp["title"]
+        import damage as DM
+        self.cat = DM.BOSS_CATEGORY.get(kind, "demon")
         self.maxhp = self.hp = 450 + 170 * depth
         self.x, self.y = x, y
         self.r = sp["r"]
