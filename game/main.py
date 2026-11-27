@@ -544,6 +544,7 @@ class Game:
             pass
         self.minimap = None
         self._mouse_was = False
+        self._mouse_pos = None
         self.net = None                     # net play: a HostSession, GuestSession or JoinScreen
         self.menu_i = 0                     # title menu: 0 play, 1 host, 2 join
         self.title_msg = ("", 0.0)
@@ -763,8 +764,18 @@ class Game:
             if self.any_pressed("nav_up") or self.any_pressed("nav_down"):
                 self.menu_i = (self.menu_i + (1 if self.any_pressed("nav_down") else -1)) % len(self.TITLE_MENU)
                 sfx.play("tink", 0.5)
-            clicked = self.inputs[0].keyboard and pygame.mouse.get_pressed()[0] and not self._mouse_was
-            self._mouse_was = self.inputs[0].keyboard and pygame.mouse.get_pressed()[0]
+            clicked = False
+            if self.inputs[0].keyboard:           # the mouse: pointing at a box picks it, clicking it goes
+                down = pygame.mouse.get_pressed()[0]
+                pos = pygame.mouse.get_pos()
+                over = next((i for i, r in enumerate(self.title_menu_rects()) if r.collidepoint(pos)), None)
+                if over is not None and pos != self._mouse_pos:
+                    self.menu_i = over
+                self._mouse_pos = pos
+                clicked = down and not self._mouse_was and over is not None
+                if clicked:
+                    self.menu_i = over
+                self._mouse_was = down
             if clicked or any(("start" in i.pressed or "a" in i.pressed) for i in self.inputs):
                 sfx.play("start")
                 if self.menu_i == 0:
@@ -2790,6 +2801,10 @@ class Game:
             pygame.draw.circle(s, c if pl.alive else (90, 90, 90), mpos(pl.x, pl.y), sc(2.5))
 
     # ------------------------------------------------------------ title
+    def title_menu_rects(self):
+        mx = W / 2 - sc(330)
+        return [pygame.Rect(int(mx + i * sc(230)), int(H - sc(98)), sc(200), sc(38)) for i in range(len(self.TITLE_MENU))]
+
     def draw_title_bg(self, s, vig=True):
         """The scrolling floor behind the title / lobby screens."""
         s.fill((12, 10, 18))
@@ -2864,10 +2879,8 @@ class Game:
         dn = self.font.render("[Q / Y]  Damage numbers: %s" % ("ON" if self.damage_numbers else "OFF"), True,
                               (255, 220, 120) if self.damage_numbers else (150, 160, 180))
         s.blit(dn, (W - dn.get_width() - sc(16), sc(14)))
-        mx = W / 2 - sc(330)
-        for i, item in enumerate(self.TITLE_MENU):
+        for i, (item, r) in enumerate(zip(self.TITLE_MENU, self.title_menu_rects())):
             on = i == self.menu_i
-            r = pygame.Rect(int(mx + i * sc(230)), int(H - sc(98)), sc(200), sc(38))
             self.panel(s, r, 210 if on else 120)
             if on:
                 pygame.draw.rect(s, (255, 230, 120), r, max(2, sc(3)))
