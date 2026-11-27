@@ -226,6 +226,59 @@ for k in range(3):
 g.draw()
 pygame.image.save(g.screen, os.path.join(out, "casings.png"))
 
+# card DPS / RATE match what actually happens when you hold the trigger for 36 seconds
+print("held trigger vs card")
+for a in ("shotgun", "auto_shotgun", "shotgun_2", "shotgun_4", "assault", "revolver"):
+    wp = WP.generate(1, random.Random(7), arch=a, rarity=0)
+    p.weapons[p.cur] = wp
+    wp.cd = wp.reload_t = 0
+    wp.ammo = wp.st["mag"]
+    w.enemies, w.projs, w.particles = [], [], []
+    shots = 0
+    bot.aim, bot.fire = AIM, True
+    for _ in range(36 * 60):
+        cd0 = wp.cd
+        g.update(1 / 60)
+        if wp.cd > cd0:                   # the cooldown restarts on every shot (a break-action refills and fires in one frame)
+            shots += 1
+    bot.fire = False
+    measured = shots / 36.0
+    card = dict(wp.card_lines())
+    print("    %-12s %5.2f shots/s measured, card RATE %s DPS %s  (model %.2f shots/s)" % (a, measured, card["RATE"], card["DPS"],
+                                                                                         wp.shots_per_sec()))
+    check(abs(measured - wp.shots_per_sec()) / wp.shots_per_sec() < 0.12, "%s card fire rate matches the gun (%.2f vs %.2f)"
+          % (a, measured, wp.shots_per_sec()))
+
+# tower shields stop buckshot and dum-dums, but not penetrating cores or sabots
+print("shieldbearer, shot from the front")
+for arch, shell, force_pen in (("shotgun", None, False), ("shotgun", "dumdum", False), ("shotgun", "sabot", False),
+                               ("carbine", None, True), ("carbine", None, False)):
+    wp = make(arch, shell) if arch == "shotgun" else WP.generate(1, random.Random(3), arch=arch, rarity=0)
+    if arch == "shotgun" and not shell:
+        wp.st["ammo"] = None              # plain buckshot (a Penetrating roll would rightly go through)
+    if arch == "carbine":
+        wp.st["ammo"] = "pen" if force_pen else None
+    p.weapons[p.cur] = wp
+    p.x, p.y = x0 + 0.5, y0 + 0.5
+    w.projs, w.particles = [], []
+    e = Enemy("shieldbearer", x0 + 4.5, y0 + 0.5, awake=True, depth=1)
+    e.hp = 1e6
+    e.speed = 0
+    e.target = p
+    w.enemies = [e]
+    wp.cd = wp.reload_t = 0
+    wp.ammo = wp.st["mag"]
+    bot.aim, bot.fire = AIM, True
+    g.update(1 / 60)
+    bot.fire = False
+    for _ in range(40):
+        g.update(1 / 60)
+    dealt = 1e6 - e.hp
+    label = "%s %s" % (arch, shell or ("penetrating" if force_pen else "standard"))
+    through = shell == "sabot" or force_pen
+    print("    %-22s damage behind the shield %.1f" % (label, dealt))
+    check((dealt > 0) == through, "%s %s the shield" % (label, "goes through" if through else "is stopped by"))
+
 # weapon cards
 for a, shell in (("shotgun_3", "sabot"), ("auto_shotgun", "dumdum")):
     p.weapons[p.cur] = make(a, shell)

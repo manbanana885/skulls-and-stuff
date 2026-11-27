@@ -3220,7 +3220,9 @@ class World:
                                 a = rnd.random() * math.tau
                                 self.add(Particle("spark", b.x, b.y, b.z, math.cos(a) * 4, math.sin(a) * 4, rnd.uniform(1, 3), 0.25, (255, 230, 160), 2))
                             self.snd("hit_metal", b.x, b.y, 0.6)
-                            return False      # deflected by the tower shield
+                            if not (b.ammo == "pen" or b.effect == "sabot" or k == "rail"):
+                                return False      # deflected by the tower shield
+                            # penetrating cores, sabots and rails punch straight through the shield into whoever holds it
                     if k in ("grenade", "rocket", "nuke", "missile"):
                         self.impact(b, b.x, b.y)
                         return False

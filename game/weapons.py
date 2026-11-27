@@ -476,13 +476,22 @@ class Weapon:
             per_shot *= 1 + st["cluster"] * 0.45
         if st["proj"] == "wave":
             per_shot *= 2.0
-        cycle = st["mag"] / st["rate"] + st["reload"]
-        return per_shot * st["mag"] / cycle
+        return per_shot * st["mag"] / self.cycle()
+
+    def cycle(self):
+        """Seconds to empty the magazine and be ready again. The reload starts the moment the last shot goes,
+        so it overlaps that shot's cooldown (a break-action is ready after its reload, not cooldown + reload)."""
+        st = self.st
+        return (st["mag"] - 1) / st["rate"] + max(1.0 / st["rate"], st["reload"])
+
+    def shots_per_sec(self):
+        return self.st["mag"] / self.cycle()
 
     def card_lines(self):
         st = self.st
         dmg = "%.1f" % st["dmg"] + (" x%d" % self.projectiles_per_shot() if self.projectiles_per_shot() > 1 else "")
-        lines = [("DMG", dmg), ("RATE", "%.1f/s" % st["rate"]), ("MAG", "%d" % st["mag"]),
+        rate = self.shots_per_sec() if st["barrels"] else st["rate"]      # break-actions: one shot per reload
+        lines = [("DMG", dmg), ("RATE", "%.2f/s" % rate if rate < 1 else "%.1f/s" % rate), ("MAG", "%d" % st["mag"]),
                  ("RELOAD", "%.1fs" % st["reload"]), ("DPS", "%.0f" % self.dps())]
         return lines
 
