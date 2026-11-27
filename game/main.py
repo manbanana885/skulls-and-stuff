@@ -2179,7 +2179,7 @@ class Game:
             pygame.draw.rect(s, c, (x - sc(1), y - sc(1), sc(2), sc(2)))
 
     # ------------------------------------------------------------ HUD
-    def panel(self, s, rect, alpha=170):
+    def panel(self, s, rect, alpha=125):
         bg = pygame.Surface(rect.size, pygame.SRCALPHA)
         bg.fill((8, 8, 14, alpha))
         s.blit(bg, rect.topleft)
@@ -2283,19 +2283,25 @@ class Game:
                 im_ = self.small.render(st_txt, True, st_col)
                 s.blit(im_, (x + bw - im_.get_width(), by))
             by += sc(22)
-        # weapon panel
+        # always-on weapon readout: name, ammo, stowed gun. The full card only fades in after a swap / pickup.
         wp = p.weapon
-        rect = self.weapon_card(s, wp, sc(16), H * 3)          # measure off-screen
-        cx_ = W - sc(16) - rect.width if right else sc(16)
-        rect = self.weapon_card(s, wp, cx_, H - sc(16) - rect.height)
-        if len(w.players) > 1:      # co-op: ammo sits above each player's own card
-            ax = rect.right - sc(170) if right else rect.left
-            ay = rect.top - sc(62)
-            oy_ = rect.top - sc(16)
-        else:
-            ax = rect.right + sc(14)
-            ay = rect.bottom - sc(56)
-            oy_ = rect.bottom - sc(18)
+        name_img = self.mid.render(wp.name, True, wp.color)
+        bx = W - sc(16) - max(sc(220), name_img.get_width()) if right else sc(16)
+        top = H - sc(108)
+        s.blit(name_img, (bx, top))
+        ax, ay = bx, top + sc(34)
+        oy_ = top + sc(80)
+        if p.card_t > 0:
+            fade = min(1.0, p.card_t / 0.5, (3.0 - p.card_t) / 0.15 + 0.2)
+            card = self._card_surf if getattr(self, "_card_surf", None) is not None else None
+            if card is None:
+                card = self._card_surf = pygame.Surface((sc(400), sc(330)), pygame.SRCALPHA)
+            card.fill((0, 0, 0, 0))
+            r_ = self.weapon_card(card, wp, 0, 0)
+            card.set_alpha(int(255 * max(0.0, min(1.0, fade))))
+            cx_ = W - sc(16) - r_.width if right else sc(16)
+            s.blit(card, (cx_, top - sc(10) - r_.height), r_)
+            card.set_alpha(None)
         if wp.reload_t > 0:
             k = 1 - wp.reload_t / wp.st["reload"]
             s.blit(self.mid.render("RELOADING", True, (255, 200, 90)), (ax, ay))

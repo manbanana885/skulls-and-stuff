@@ -294,6 +294,7 @@ class Player:
         self.gear = [None] * GEAR_SLOTS    # equipped accessories (support.Support)
         self.pack = []                      # spare accessories, up to PACK_SIZE
         self.inv_cur = (0, 0)               # pause-menu cursor (column, row)
+        self.card_t = 0.0                   # seconds left to show the weapon card (after a swap / pickup)
         self.salvo_q = 0           # barrage missiles still to ripple out
         self.salvo_t = 0.0
         self.salvo_n = 0
@@ -419,9 +420,11 @@ class Player:
                 self.salvo_q -= 1
                 self.salvo_n += 1
         pressed = getattr(inp, "pressed", ())
+        self.card_t = max(0.0, self.card_t - dt)
         if "swap" in pressed:
             self.weapon.reload_t = 0.0
             self.cur = 1 - self.cur
+            self.card_t = 3.0
             sfx.play("swap")
         if "reload" in pressed and self.weapon.start_reload():
             sfx.play("reload")
@@ -1633,6 +1636,7 @@ class World:
         new = lt.item
         new.reload_t, new.cd = 0.0, 0.2
         p.weapons[p.cur] = new
+        p.card_t = 3.0
         old.reload_t = 0.0
         lt.item = old
         lt.vz, lt.z = 3.0, 0.0

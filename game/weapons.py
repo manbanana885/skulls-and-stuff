@@ -159,7 +159,7 @@ MODS = [
     _m("seeking", "Seeking", "Projectiles home in", _add(homing=1), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail", "arc", "wave"}),
     _m("velocity", "High-Velocity", "+50% projectile speed", _mul(speed=1.5), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "arc"}),
     _m("cryo", "Cryo", "Chills and slows targets", _add(slow=1)),
-    _m("acid", "Acid-Augmented", "Acid-augmented projectiles: hits leave corrosive puddles", _add(acid=1),
+    _m("acid", "Acid-Augmented", "Hits leave corrosive puddles", _add(acid=1),
        lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "slug", "bolt", "rocket", "grenade", "missile", "saw", "plasma", "rail")),
 ]
 MOD_BY_KEY = {m["key"]: m for m in MODS}
