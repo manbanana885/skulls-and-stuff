@@ -15,11 +15,12 @@ import weapons as WP  # noqa: E402
 from biomes import BIOMES, biome_for  # noqa: E402
 from bosses import eel_points  # noqa: E402
 import sfx  # noqa: E402
+import netplay as NP  # noqa: E402
 
 S = A.S
 W, H = int(960 * S), int(540 * S)
 HW, HH = A.HALF_W, A.HALF_H
-SAVE = os.path.join(ROOT, "save.json")
+SAVE = os.environ.get("SKULLS_SAVE") or os.path.join(ROOT, "save.json")   # tests point this somewhere harmless
 rnd = random.Random()
 
 
@@ -529,15 +530,27 @@ class Game:
         self.best = 0
         self.damage_numbers = False         # option: coloured damage numbers (off by default)
         self.chars = ["skelebot", "canbot"]  # character picked by P1 / P2 on the title screen
+        self.last_host = ""                 # last address typed on the join screen
+        self.last_name = ""                 # ... and the game name
+        self.player_name = ""               # your name in net games
         try:
             with open(SAVE) as fh:
                 data = json.load(fh)
                 self.best = data.get("best", 0)
                 self.damage_numbers = bool(data.get("damage_numbers", False))
                 self.chars = [c if c in CH.CHARS else d for c, d in zip(data.get("chars", self.chars), self.chars)]
+                self.last_host = str(data.get("last_host", ""))[:60]
+                self.last_name = str(data.get("last_name", ""))[:40]
+                self.player_name = str(data.get("player_name", ""))[:14]
         except Exception:
             pass
         self.minimap = None
+        self._mouse_was = False
+        self._mouse_pos = None
+        self.net = None                     # net play: a HostSession, GuestSession or JoinScreen
+        self.menu_i = 0                     # title menu: 0 play, 1 host, 2 join
+        self.title_msg = ("", 0.0)
+        self.W, self.H = W, H
         sfx.music("requiem")
 
     # ------------------------------------------------------------ input devices / co-op
@@ -569,7 +582,7 @@ class Game:
 
     def try_join(self):
         """Second player: BACK/SELECT (or START) on a free pad. With a single pad, P1 keeps the keyboard and P2 takes the pad."""
-        if len(self.inputs) >= 2 or self.state not in ("play", "title"):
+        if len(self.inputs) >= 2 or self.state not in ("play", "title") or self.net is not None:
             return
         dev = None
         for inp in self.spare.values():
@@ -620,9 +633,14 @@ class Game:
         if depth == 1:
             self.run_seed = random.randrange(1 << 30)
         self.biome = biome_for(depth, self.run_seed)
-        B = BIOMES[self.biome]
         self.world = World(depth, player, score, biome=self.biome)
         self.world.show_numbers = self.damage_numbers
+        self.setup_view()
+
+    def setup_view(self):
+        """Biome look, floor / splat caches, camera, minimap and banner for the current world."""
+        B = BIOMES[self.world.biome]
+        depth = self.world.depth
         self.vig_biome = self.vig.copy()
         self.vig_biome.fill(B["tint"], special_flags=pygame.BLEND_MULT)
         self.ambient = Ambient(B["ambient"])
@@ -634,6 +652,36 @@ class Game:
         self.banner = ("SECTOR %d  -  %s" % (depth, B["title"]), 3.0)
         sfx.music(B["music"], 2000)
 
+    sc = staticmethod(sc)
+
+    def local_players(self):
+        """The players sitting at this machine (all of them, unless this is a net game)."""
+        w = self.world
+        if w is None:
+            return []
+        if self.net is None or not getattr(self.net, "local", None):
+            return w.players
+        return [p for p in w.players if p.idx in self.net.local] or w.players[:1]
+
+    @staticmethod
+    def pname(p):
+        """A player's display name: what they typed, else P1..P4."""
+        return getattr(p, "name", "") or "P%d" % (p.idx + 1)
+
+    def leave_net(self):
+        if self.net is not None:
+            self.net.leave(self)
+        self.net = None
+        self.world = None
+        self.transition = 0.0
+        self.state = "title"
+        sfx.stop_loops()
+        sfx.music("requiem")
+
+    def net_error(self, msg):
+        self.leave_net()
+        self.title_msg = (msg, 8.0)
+
     def save_best(self):
         if self.world and self.world.score > self.best:
             self.best = self.world.score
@@ -642,7 +690,9 @@ class Game:
     def save_settings(self):
         try:
             with open(SAVE, "w") as fh:
-                json.dump({"best": self.best, "damage_numbers": self.damage_numbers, "chars": self.chars}, fh)
+                json.dump({"best": self.best, "damage_numbers": self.damage_numbers, "chars": self.chars,
+                           "last_host": self.last_host, "last_name": self.last_name,
+                           "player_name": self.player_name}, fh)
         except Exception:
             pass
 
@@ -672,6 +722,13 @@ class Game:
                 if ev.type == pygame.KEYDOWN:
                     if ev.key == pygame.K_F11:
                         pygame.display.toggle_fullscreen()
+                    elif self.net is not None and hasattr(self.net, "key") and self.net.key(self, ev):
+                        pass                          # typed into a lobby / join screen box
+                    elif ev.key == pygame.K_ESCAPE and self.net is not None:
+                        if self.state == "play":      # Esc in a net game: menu first, then leave the game
+                            self.state = "pause"
+                        else:
+                            self.leave_net()
                     elif ev.key == pygame.K_ESCAPE:
                         # Esc pauses; Esc again (or on title / game over) quits
                         if self.state == "play":
@@ -689,14 +746,21 @@ class Game:
             pygame.display.flip()
 
     def player_on_screen(self, i=0):
-        if not self.world or i >= len(self.world.players):
+        mine = self.local_players()
+        if i >= len(mine):
             return (W / 2, H / 2)
-        p = self.world.players[i]
+        p = mine[i]
         sx, sy = to_screen(p.x, p.y, 1.1)
         return (sx - self.cam[0] + W / 2, sy - self.cam[1] + H / 2)
 
+    TITLE_MENU = ("PLAY", "HOST NET GAME", "JOIN NET GAME")
+
     def update(self, dt):
         inp = self.inputs
+        self.title_msg = (self.title_msg[0], self.title_msg[1] - dt)
+        if self.net is not None:
+            self.net.update(self, dt)
+            return
         if self.state != "play" or self.transition > 0:
             sfx.stop_loops()
         if self.state == "title":
@@ -705,11 +769,34 @@ class Game:
                 return
             for i, inp_ in enumerate(self.inputs[:2]):
                 self.pick_char(i, inp_)
-            if self.inputs[0].keyboard and pygame.mouse.get_pressed()[0] or any(
-                    ("start" in i.pressed or "a" in i.pressed) for i in self.inputs):
+            if self.any_pressed("nav_up") or self.any_pressed("nav_down"):
+                self.menu_i = (self.menu_i + (1 if self.any_pressed("nav_down") else -1)) % len(self.TITLE_MENU)
+                sfx.play("tink", 0.5)
+            clicked = False
+            if self.inputs[0].keyboard:           # the mouse: pointing at a box picks it, clicking it goes
+                down = pygame.mouse.get_pressed()[0]
+                pos = pygame.mouse.get_pos()
+                over = next((i for i, r in enumerate(self.title_menu_rects()) if r.collidepoint(pos)), None)
+                if over is not None and pos != self._mouse_pos:
+                    self.menu_i = over
+                self._mouse_pos = pos
+                clicked = down and not self._mouse_was and over is not None
+                if clicked:
+                    self.menu_i = over
+                self._mouse_was = down
+            if clicked or any(("start" in i.pressed or "a" in i.pressed) for i in self.inputs):
                 sfx.play("start")
-                self.new_world(1)
-                self.state = "play"
+                if self.menu_i == 0:
+                    self.new_world(1)
+                    self.state = "play"
+                elif self.menu_i == 1:
+                    try:
+                        self.net = NP.HostSession(self)
+                    except OSError as ex:
+                        self.net = None
+                        self.title_msg = ("Can't host a game here: %s" % (ex.strerror or ex), 8.0)
+                else:
+                    self.net = NP.JoinScreen(self)
             return
         if self.state == "join":
             p2 = self.inputs[1]
@@ -762,8 +849,8 @@ class Game:
 
     def cam_target(self):
         """Frame every living player; aim look-ahead only when playing solo."""
-        w = self.world
-        alive = [p for p in w.players if p.alive] or w.players[:1]
+        mine = self.local_players()
+        alive = [p for p in mine if p.alive] or mine[:1]
         pts = [to_screen(p.x, p.y, 0.8) for p in alive]
         tx = sum(a for a, _ in pts) / len(pts)
         ty = sum(b for _, b in pts) / len(pts)
@@ -782,7 +869,9 @@ class Game:
     # ------------------------------------------------------------ rendering
     def draw(self):
         s = self.screen
-        if self.state == "title":
+        if self.net is not None and self.net.draw(self, s):
+            return
+        if self.state == "title" or self.world is None:
             self.draw_title(s)
             return
         self.draw_world(s)
@@ -803,10 +892,17 @@ class Game:
                 w = self.world
                 self.center_text(s, self.mid, "Score %d   -   Sector %d   -   %d kills" % (w.score, w.depth, w.kills), H / 2, (230, 230, 230))
                 self.center_text(s, self.font, "Best %d" % self.best, H / 2 + sc(34), (170, 180, 200))
-                if self.time > self.dead_at + 1.5:
+                if self.net is not None and not self.net.is_host:
+                    self.center_text(s, self.font, "Waiting for the host to reboot", H / 2 + sc(70), (120, 230, 255))
+                elif self.time > self.dead_at + 1.5:
                     self.center_text(s, self.font, "Press START / ENTER to reboot", H / 2 + sc(70), (120, 230, 255))
         if self.transition > 0:
             self.overlay(s, int(255 * (1 - self.transition / 0.9)), (200, 240, 255))
+        if self.net is not None:
+            st = self.net.status_line(self)
+            if st:
+                img = self.small.render(st, True, (120, 200, 220))
+                s.blit(img, (W - img.get_width() - sc(12), H - sc(20)))
 
     # ------------------------------------------------------------ pause menu: gear + backpack
     INV_COLS, INV_ROWS = 4, 4          # row 0 = your two guns, row 1 = the 4 module slots (D-pad), rows 2-3 = the 8 backpack slots
@@ -861,20 +957,24 @@ class Game:
 
     def draw_inventory(self, s):
         self.overlay(s, 220)
-        w = self.world
-        coop = len(w.players) > 1
-        self.center_text(s, self.big, "PAUSED", sc(40), (230, 235, 255))
-        self.center_text(s, self.font, "START / ENTER resume   -   ESC quit   -   [Q / Y] damage numbers: %s"
+        mine = self.local_players()
+        coop = len(mine) > 1
+        netg = self.net is not None
+        self.center_text(s, self.big, "MENU" if netg else "PAUSED", sc(40), (230, 235, 255))
+        self.center_text(s, self.font, ("START / ENTER back to the game   -   ESC leave the net game" if netg else
+                                        "START / ENTER resume   -   ESC quit") + "   -   [Q / Y] damage numbers: %s"
                          % ("ON" if self.damage_numbers else "OFF"), sc(78), (150, 160, 180))
+        if netg:
+            self.center_text(s, self.small, "The game keeps running for everyone while you're in here", sc(96), (255, 170, 130))
         if not coop:      # grid on the left, card beside it
             box, gap, card = sc(62), sc(10), sc(370)
             gw = box * self.INV_COLS + gap * (self.INV_COLS - 1)
             x0 = int(W / 2 - (gw + sc(30) + card) / 2)
-            self.draw_gear_panel(s, w.players[0], x0, sc(104), box, gap, (x0 + gw + sc(30), sc(140)), card)
+            self.draw_gear_panel(s, mine[0], x0, sc(104), box, gap, (x0 + gw + sc(30), sc(140)), card)
         else:             # one column per player, card under the grid
             box, gap, card = sc(46), sc(8), sc(370)
             x0 = W / 2 - (card * 2 + sc(80)) / 2
-            for i, p in enumerate(w.players):
+            for i, p in enumerate(mine):
                 x = int(x0 + i * (card + sc(80)))
                 gw = box * self.INV_COLS + gap * (self.INV_COLS - 1)
                 self.draw_gear_panel(s, p, x + (card - gw) // 2, sc(100), box, gap, None, card)
@@ -892,12 +992,12 @@ class Game:
     def draw_gear_panel(self, s, p, x, y, box, gap, card_at, card_w):
         w = self.world
         coop = len(w.players) > 1
-        col = self.PLAYER_COLORS[p.idx % 2] if coop else (150, 210, 230)
+        col = self.PLAYER_COLORS[p.idx % 4] if coop else (150, 210, 230)
         gw = box * self.INV_COLS + gap * (self.INV_COLS - 1)
         cur = p.inv_cur
         cy = y
         for row in range(self.INV_ROWS):
-            label = {0: ("P%d  " % (p.idx + 1) if coop else "") + "WEAPONS", 1: "MODULES", 2: "BACKPACK"}.get(row)
+            label = {0: (self.pname(p) + "  " if coop else "") + "WEAPONS", 1: "MODULES", 2: "BACKPACK"}.get(row)
             if label:
                 f_ = self.mid if row < 2 else self.small
                 s.blit(f_.render(label, True, col if row < 2 else (140, 145, 160)), (x, cy))
@@ -993,14 +1093,15 @@ class Game:
     def draw_world(self, surf):
         w = self.world
         L = w.level
-        p = w.player
+        mine = self.local_players()
+        p = next((q for q in mine if q.alive), None) or (mine[0] if mine else w.player)
         spr = self.spr
         shx = rnd.uniform(-1, 1) * w.shake * S
         shy = rnd.uniform(-1, 1) * w.shake * S
         ox = W / 2 - self.cam[0] + shx
         oy = H / 2 - self.cam[1] + shy
         surf.fill((9, 8, 13))
-        alive = [q for q in w.players if q.alive] or [p]
+        alive = [q for q in mine if q.alive] or [p]
         pcx = int(sum(q.x for q in alive) / len(alive))
         pcy = int(sum(q.y for q in alive) / len(alive))
         pscr = [(to_screen(q.x, q.y)[0] + ox, to_screen(q.x, q.y)[1] + oy, q.x + q.y) for q in alive if q.alive]
@@ -1245,8 +1346,8 @@ class Game:
                     limg = legs.get("idle", pl.legs_dir, 0)
                     bob = 0
                 timg = torso.get("idle", dir_index(pl.aim[0], pl.aim[1], 16))
-                if pl.idx == 1:
-                    limg, timg = self.p2_colors(limg), self.p2_colors(timg)
+                if pl.idx % 4:
+                    limg, timg = self.player_colors(limg, pl.idx), self.player_colors(timg, pl.idx)
                 if "chill" in pl.status:
                     timg = self.tinted(timg, (160, 210, 255))
                     limg = self.tinted(limg, (160, 210, 255))
@@ -1649,11 +1750,13 @@ class Game:
                 pygame.draw.lines(s, c, False, pts, max(1, wd))
             self.add_glow(gx, gy, sc(90), (90, 80, 140))
 
-    PLAYER_COLORS = ((255, 90, 70), (70, 230, 230))
+    PLAYER_COLORS = ((255, 90, 70), (70, 230, 230), (255, 210, 70), (180, 120, 255))
+    PALETTE = {1: (0.15, 0.85, 0.95), 2: (0.95, 0.8, 0.15), 3: (0.6, 0.35, 1.0)}    # red armour -> teal / gold / violet
 
-    def p2_colors(self, img):
-        """Player 2: the red armour (and red glows) palette-swapped to teal."""
-        key = id(img)
+    def player_colors(self, img, idx):
+        """Players 2-4: the red armour (and red glows) palette-swapped to their colour."""
+        key = (id(img), idx)
+        kr, kg, kb = self.PALETTE[idx % 4]
         out = self._p2.get(key)
         if out is None:
             import numpy as np
@@ -1663,22 +1766,22 @@ class Game:
             g = rgb[:, :, 1].astype(np.int32)
             b = rgb[:, :, 2].astype(np.int32)
             m = (r > g * 1.5) & (r > b * 1.5) & (r > 50)
-            rgb[:, :, 0][m] = (r[m] * 0.15).astype(np.uint8)
-            rgb[:, :, 1][m] = np.minimum(255, r[m] * 0.85).astype(np.uint8)
-            rgb[:, :, 2][m] = np.minimum(255, r[m] * 0.95).astype(np.uint8)
+            rgb[:, :, 0][m] = np.minimum(255, r[m] * kr).astype(np.uint8)
+            rgb[:, :, 1][m] = np.minimum(255, r[m] * kg).astype(np.uint8)
+            rgb[:, :, 2][m] = np.minimum(255, r[m] * kb).astype(np.uint8)
             del rgb
             self._p2[key] = out
         return out
 
     def draw_tag(self, pl, x, y):
-        c = self.PLAYER_COLORS[pl.idx % 2]
+        c = self.PLAYER_COLORS[pl.idx % 4]
         tip = (x, y - sc(84))
         pygame.draw.polygon(self.screen, c, [(tip[0] - sc(7), tip[1] - sc(10)), (tip[0] + sc(7), tip[1] - sc(10)), tip])
-        lbl = self.small.render("P%d" % (pl.idx + 1), True, c)
+        lbl = self.small.render(self.pname(pl), True, c)
         self.screen.blit(lbl, (x - lbl.get_width() / 2, tip[1] - sc(28)))
 
     def draw_revive(self, pl, x, y):
-        c = self.PLAYER_COLORS[pl.idx % 2]
+        c = self.PLAYER_COLORS[pl.idx % 4]
         r = sc(26)
         rect = pygame.Rect(0, 0, r * 2, r)
         rect.center = (x, y)
@@ -1686,7 +1789,7 @@ class Game:
         if pl.revive_t > 0:
             pygame.draw.arc(self.screen, c, rect.inflate(sc(6), sc(4)), 0, math.tau * min(1.0, pl.revive_t / 2.5), max(2, sc(4)))
         if int(self.time * 3) % 2:
-            lbl = self.small.render("P%d DOWN" % (pl.idx + 1), True, c)
+            lbl = self.small.render("%s DOWN" % self.pname(pl), True, c)
             self.screen.blit(lbl, (x - lbl.get_width() / 2, y - sc(60)))
 
     def draw_eels(self, e, ox, oy):
@@ -2465,15 +2568,15 @@ class Game:
     def draw_player_hud(self, s, p, right=False):
         w = self.world
         bw = sc(180)
-        c = self.PLAYER_COLORS[p.idx % 2] if len(w.players) > 1 else (150, 210, 230)
-        tag = ("P%d  " % (p.idx + 1)) if len(w.players) > 1 else ""
+        c = self.PLAYER_COLORS[p.idx % 4] if len(w.players) > 1 else (150, 210, 230)
+        tag = (self.pname(p) + "  ") if len(w.players) > 1 else ""
         label = self.font.render("%sINTEGRITY  %d / %d" % (tag, max(0, p.hp), p.max_hp) if p.alive else "%sDOWN" % tag, True, c)
         x = W - sc(16) - max(bw + sc(4), label.get_width()) if right else sc(16)
         y = sc(260) if right else sc(14)
         s.blit(label, (x, y))
         pygame.draw.rect(s, (20, 20, 28), (x, y + sc(18), bw + sc(4), sc(14)))
         frac = max(0.0, p.hp / p.max_hp)
-        col = ((60, 220, 255) if p.idx == 0 else (70, 240, 200)) if frac > 0.35 else (255, 70, 50)
+        col = ((60, 220, 255), (70, 240, 200), (255, 215, 90), (190, 140, 255))[p.idx % 4] if frac > 0.35 else (255, 70, 50)
         pygame.draw.rect(s, col, (x + sc(2), y + sc(20), int(bw * frac), sc(10)))
         by = y + sc(40)
         for kind, (mag, left) in sorted(p.buffs.items()):
@@ -2565,7 +2668,7 @@ class Game:
             cx = min(max(sc(10), cx), W - sc(385))
             cy = min(max(sc(70), cy), H - sc(260))
             key = "[E / A]" if p.idx == 0 else "[A]"
-            who = ("P%d " % (p.idx + 1)) if len(w.players) > 1 else ""
+            who = (self.pname(p) + " ") if len(w.players) > 1 else ""
             if lt.kind == "support":
                 free = next((i for i, g in enumerate(p.gear) if g is None), None)
                 if free is not None:
@@ -2584,6 +2687,19 @@ class Game:
                 cx = min(max(sc(10), cx), W - r_.width - sc(10))
                 cy = min(max(sc(70), cy), H - r_.height - sc(10))
                 self.weapon_card(s, lt.item, int(cx), int(cy), compare=wp, title=ttl)
+
+    def draw_team(self, s, others):
+        """Net play: a slim integrity bar for each of the other players, under your own."""
+        y = sc(54)
+        for p in others:
+            c = self.PLAYER_COLORS[p.idx % 4]
+            txt = "%s  %s" % (self.pname(p), CH.CHARS[p.char]["name"]) + ("" if p.alive else "  -  DOWN")
+            img = self.small.render(txt, True, c)
+            s.blit(img, (sc(16), y))
+            frac = max(0.0, p.hp / p.max_hp) if p.alive else 0.0
+            pygame.draw.rect(s, (20, 20, 28), (sc(16), y + sc(14), sc(120), sc(6)))
+            pygame.draw.rect(s, c, (sc(17), y + sc(15), int(sc(118) * frac), sc(4)))
+            y += sc(26)
 
     def draw_dpad_faded(self, s, p, cx, cy):
         """The D-pad cross, shown after a D-pad press and faded out over its last half second."""
@@ -2642,11 +2758,14 @@ class Game:
 
     def draw_hud(self, s):
         w = self.world
-        for p in w.players:
-            self.draw_player_hud(s, p, right=p.idx == 1)
-        for p in w.players:
+        mine = self.local_players()
+        for k, p in enumerate(mine):
+            self.draw_player_hud(s, p, right=k == 1)
+        if self.net is not None:
+            self.draw_team(s, [p for p in w.players if p not in mine])
+        for p in mine:
             if p.alive and any(p.gear) and p.dpad_t > 0:
-                if len(w.players) > 1:
+                if len(mine) > 1:
                     self.draw_dpad_faded(s, p, W / 2 + (-sc(150) if p.idx == 0 else sc(150)), H - sc(90))
                 else:
                     self.draw_dpad_faded(s, p, W - sc(90), H - sc(110))
@@ -2655,7 +2774,7 @@ class Game:
         info = self.font.render("SECTOR %d   -   HIVES %d   -   find the exit portal" % (w.depth, len(w.spawners)), True, (160, 170, 190))
         s.blit(info, (W / 2 - info.get_width() / 2, sc(38)))
         self.draw_minimap(s)
-        if len(w.players) == 1 and self.state == "play" and int(self.time * 0.5) % 2 == 0:
+        if len(w.players) == 1 and self.state == "play" and self.net is None and int(self.time * 0.5) % 2 == 0:
             hint = self.small.render("P2: press BACK / SELECT on a controller to pick a body and join", True, (90, 200, 200))
             s.blit(hint, (W / 2 - hint.get_width() / 2, H - sc(22)))
         # messages
@@ -2713,11 +2832,16 @@ class Game:
             if w.explored[L.i(int(sp.x), int(sp.y))]:
                 pygame.draw.circle(s, (150, 255, 80), mpos(sp.x, sp.y), sc(2))
         for pl in w.players:
-            c = (255, 255, 255) if len(w.players) == 1 else self.PLAYER_COLORS[pl.idx % 2]
+            c = (255, 255, 255) if len(w.players) == 1 else self.PLAYER_COLORS[pl.idx % 4]
             pygame.draw.circle(s, c if pl.alive else (90, 90, 90), mpos(pl.x, pl.y), sc(2.5))
 
     # ------------------------------------------------------------ title
-    def draw_title(self, s):
+    def title_menu_rects(self):
+        mx = W / 2 - sc(330)
+        return [pygame.Rect(int(mx + i * sc(230)), int(H - sc(98)), sc(200), sc(38)) for i in range(len(self.TITLE_MENU))]
+
+    def draw_title_bg(self, s, vig=True):
+        """The scrolling floor behind the title / lobby screens."""
         s.fill((12, 10, 18))
         t = self.time
         fl = self.spr["floor_metal"].get("idle", 0)
@@ -2730,20 +2854,24 @@ class Game:
                 if -sc(40) < sx < W + sc(40) and -sc(20) < sy < H + sc(40):
                     h = (cx * 7 + cy * 13) % 11
                     s.blit(alt[h % 4] if h < 4 else fl, (sx - fax, sy - fay))
-        self.draw_char_row(s, list(range(min(2, len(self.inputs)))), H / 2 + sc(110))
-        self.center_text(s, self.font, "LEFT / RIGHT to choose a body" + ("  (each player on their own controller)" if len(self.inputs) > 1 else ""),
-                         H / 2 + sc(196), (255, 220, 120))
+        if vig:
+            s.blit(self.vig, (0, 0), special_flags=pygame.BLEND_MULT)
+
+    def draw_title(self, s):
+        self.draw_title_bg(s, vig=False)
+        self.draw_char_row(s, list(range(min(2, len(self.inputs)))), H / 2 + sc(100))
         self.draw_title_text(s)
 
-    def draw_char_row(self, s, who, row_y):
+    def draw_char_row(self, s, who, row_y, chars=None):
         """Character select: three bodies walking in place, tops spinning; a P1 / P2 tag over each player's pick."""
+        chars = self.chars if chars is None else chars
         t = self.time
         guns = ("carbine", "shotgun_2", "rocket", "flamer", "sniper", "auto_shotgun", "plasma", "chaingun", "coil_rifle", "shotgun_4")
         arch = guns[int(t / 2.5) % len(guns)]
         for i, ch in enumerate(CH.ORDER):
             C = CH.CHARS[ch]
             legs, torso = self.spr[C["legs"]], self.spr[C["torso"] + arch]
-            picked = [k for k in who if self.chars[k] == ch]
+            picked = [k for k in who if chars[k] == ch]
             z = 1.5 if picked else 1.15
             big_l = pygame.transform.scale_by(legs.get("walk", 1, t * 10), z)
             big_t = pygame.transform.scale_by(torso.get("idle", int(-t * 4 + i * 5) % 16), z)
@@ -2775,10 +2903,10 @@ class Game:
         self.center_text(s, self.font, "an isometric twin-stick shooter  -  procedurally generated sectors", sc(112), (150, 170, 200))
         dev = self.input.device_name
         lines = [
-            "Gamepad: L-STICK move  -  R-STICK aim & fire  -  RT fire  -  A pick up  -  X reload  -  Y swap  -  LB dash  -  D-PAD select module  -  B/RB use it  -  START pause",
-            "Keyboard: WASD move  -  MOUSE aim  -  CLICK fire  -  E pick up  -  R reload  -  Q/wheel swap  -  SHIFT dash  -  1-4 select module  -  F use it  -  ENTER pause",
+            "Pad: L-STICK move - R-STICK aim - RT fire - A pick up - X reload - Y swap - LB dash - D-PAD module - B/RB use - START menu",
+            "Keys: WASD move - MOUSE aim - CLICK fire - E pick up - R reload - Q swap - SHIFT dash - 1-4 module - F use - ENTER menu",
             ("Controller detected: %s" % dev) if dev else "No controller detected (plug one in any time)",
-            "CO-OP: player 2 presses BACK / SELECT on a controller to join and picks a body - here or any time in game"
+            "CO-OP: a 2nd controller presses BACK / SELECT to join on this screen  -  or HOST / JOIN a net game for up to 4"
             + ("   (P2 READY)" if len(self.inputs) > 1 else ""),
         ]
         for i, ln in enumerate(lines):
@@ -2786,8 +2914,18 @@ class Game:
         dn = self.font.render("[Q / Y]  Damage numbers: %s" % ("ON" if self.damage_numbers else "OFF"), True,
                               (255, 220, 120) if self.damage_numbers else (150, 160, 180))
         s.blit(dn, (W - dn.get_width() - sc(16), sc(14)))
+        for i, (item, r) in enumerate(zip(self.TITLE_MENU, self.title_menu_rects())):
+            on = i == self.menu_i
+            self.panel(s, r, 210 if on else 120)
+            if on:
+                pygame.draw.rect(s, (255, 230, 120), r, max(2, sc(3)))
+            img = self.font.render(item, True, (255, 255, 255) if on else (150, 155, 170))
+            s.blit(img, img.get_rect(center=r.center))
         if int(t * 2) % 2 == 0:
-            self.center_text(s, self.mid, "PRESS START / ENTER", H - sc(40), (255, 220, 120))
+            self.center_text(s, self.font, "LEFT / RIGHT your body" + (" (each player on their own controller)" if len(self.inputs) > 1 else "")
+                             + "   -   UP / DOWN choose   -   START / ENTER / A go", H - sc(40), (255, 220, 120))
+        if self.title_msg[1] > 0:
+            self.center_text(s, self.mid, self.title_msg[0], sc(246), (255, 140, 120))
         if self.best:
             self.center_text(s, self.font, "Best %d" % self.best, H - sc(14), (140, 150, 170))
 

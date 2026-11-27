@@ -1,7 +1,7 @@
 """Chemical jets (napalm / cryo / rad-waste): stream, spatter, puddles that hurt monsters and players.
 python tools/jet_test.py <outdir>"""
 import os,sys,random
-os.environ["SDL_VIDEODRIVER"]="dummy"; os.environ["SDL_AUDIODRIVER"]="dummy"
+os.environ["SDL_VIDEODRIVER"]="dummy"; os.environ["SDL_AUDIODRIVER"]="dummy"; os.environ["SKULLS_SAVE"]=os.devnull
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "game"))
 import main, pygame, weapons as WP
 from world import Enemy
