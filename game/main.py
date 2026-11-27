@@ -776,12 +776,14 @@ class Game:
             self.overlay(s, int(255 * (1 - self.transition / 0.9)), (200, 240, 255))
 
     # ------------------------------------------------------------ pause menu: gear + backpack
-    INV_COLS, INV_ROWS = 3, 3          # row 0 = the 3 gear slots, rows 1-2 = the 6 backpack slots
+    INV_COLS, INV_ROWS = 3, 4          # row 0 = your two guns, row 1 = the 3 module slots, rows 2-3 = the 6 backpack slots
 
     def inv_item(self, p, col, row):
         if row == 0:
+            return p.weapons[col] if col < 2 else None
+        if row == 1:
             return p.gear[col]
-        k = (row - 1) * self.INV_COLS + col
+        k = (row - 2) * self.INV_COLS + col
         return p.pack[k] if k < len(p.pack) else None
 
     def inventory_input(self, p, inp):
@@ -791,26 +793,35 @@ class Game:
         moved = False
         for name, dc, dr in (("nav_left", -1, 0), ("nav_right", 1, 0), ("nav_up", 0, -1), ("nav_down", 0, 1)):
             if name in pr:
-                c, r = (c + dc) % self.INV_COLS, (r + dr) % self.INV_ROWS
+                r = (r + dr) % self.INV_ROWS
+                c = (c + dc) % (2 if r == 0 else self.INV_COLS)
                 moved = True
+        if r == 0:
+            c = min(c, 1)
         if moved:
             p.inv_cur = (c, r)
             sfx.play("swap", 0.4)
         item = self.inv_item(p, c, r)
+        if r == 0:                                   # guns: confirm takes the highlighted gun in hand
+            if "confirm" in pr and c != p.cur:
+                p.weapon.reload_t = 0.0
+                p.cur = c
+                sfx.play("swap")
+            return
         if "confirm" in pr and item is not None:
-            if r == 0:
+            if r == 1:
                 if p.unequip(c):
                     sfx.play("reload", 0.6)
                 else:
                     self.world.message("Backpack full - drop something first", (255, 140, 120))
             else:
-                p.equip_from_pack((r - 1) * self.INV_COLS + c, c)
+                p.equip_from_pack((r - 2) * self.INV_COLS + c, c)
                 sfx.play("power", 0.6)
-        if "reload" in pr and item is not None:          # X / R drops the highlighted item
-            if r == 0:
+        if "reload" in pr and item is not None:          # X / R drops the highlighted module
+            if r == 1:
                 p.gear[c] = None
             else:
-                p.pack.pop((r - 1) * self.INV_COLS + c)
+                p.pack.pop((r - 2) * self.INV_COLS + c)
             self.world.drop_item(p, item)
             sfx.play("weapon_pickup", 0.6)
         assert len(p.pack) <= WD.PACK_SIZE
@@ -819,69 +830,114 @@ class Game:
         self.overlay(s, 220)
         w = self.world
         coop = len(w.players) > 1
-        self.center_text(s, self.big, "PAUSED", sc(46), (230, 235, 255))
+        self.center_text(s, self.big, "PAUSED", sc(40), (230, 235, 255))
         self.center_text(s, self.font, "START / ENTER resume   -   ESC quit   -   [Q / Y] damage numbers: %s"
-                         % ("ON" if self.damage_numbers else "OFF"), sc(86), (150, 160, 180))
-        if not coop:      # grid on the left, stat card beside it
-            box, gap, card = sc(80), sc(12), sc(370)
+                         % ("ON" if self.damage_numbers else "OFF"), sc(78), (150, 160, 180))
+        if not coop:      # grid on the left, card beside it
+            box, gap, card = sc(62), sc(10), sc(370)
             gw = box * 3 + gap * 2
             x0 = int(W / 2 - (gw + sc(30) + card) / 2)
-            self.draw_gear_panel(s, w.players[0], x0, sc(150), box, gap, (x0 + gw + sc(30), sc(194)), card)
+            self.draw_gear_panel(s, w.players[0], x0, sc(104), box, gap, (x0 + gw + sc(30), sc(140)), card)
         else:             # one column per player, card under the grid
-            box, gap, card = sc(54), sc(10), sc(370)
+            box, gap, card = sc(46), sc(8), sc(370)
             x0 = W / 2 - (card * 2 + sc(80)) / 2
             for i, p in enumerate(w.players):
                 x = int(x0 + i * (card + sc(80)))
                 gw = box * 3 + gap * 2
-                self.draw_gear_panel(s, p, x + (card - gw) // 2, sc(118), box, gap, None, card)
+                self.draw_gear_panel(s, p, x + (card - gw) // 2, sc(100), box, gap, None, card)
+
+    def inv_icon(self, img, w_, h_):
+        key = ("icon", id(img), w_, h_)
+        icon = self._tint.get(key)
+        if icon is None:              # crop the sprite's empty margins so it fills the box
+            bb = img.get_bounding_rect()
+            sub = img.subsurface(bb)
+            k = min(w_ * 0.85 / max(1, bb.width), h_ * 0.8 / max(1, bb.height))
+            icon = self._tint[key] = pygame.transform.smoothscale(sub, (max(1, int(bb.width * k)), max(1, int(bb.height * k))))
+        return icon
 
     def draw_gear_panel(self, s, p, x, y, box, gap, card_at, card_w):
         w = self.world
         coop = len(w.players) > 1
         col = self.PLAYER_COLORS[p.idx % 2] if coop else (150, 210, 230)
-        s.blit(self.mid.render(("P%d  " % (p.idx + 1) if coop else "") + "MODULES", True, col), (x, y))
-        cy = y + sc(40)
+        gw = box * 3 + gap * 2
         cur = p.inv_cur
+        cy = y
         for row in range(self.INV_ROWS):
-            if row == 1:
-                cy += sc(22)
-                s.blit(self.small.render("BACKPACK", True, (140, 145, 160)), (x, cy - sc(20)))
+            label = {0: ("P%d  " % (p.idx + 1) if coop else "") + "WEAPONS", 1: "MODULES", 2: "BACKPACK"}.get(row)
+            if label:
+                f_ = self.mid if row < 2 else self.small
+                s.blit(f_.render(label, True, col if row < 2 else (140, 145, 160)), (x, cy))
+                cy += f_.get_height() + sc(4)
+            if row == 0:                            # two wide gun slots
+                ww = (gw - gap) // 2
+                for c in range(2):
+                    rect = pygame.Rect(x + c * (ww + gap), cy, ww, box)
+                    wp = p.weapons[c]
+                    self.panel(s, rect, 230)
+                    pygame.draw.rect(s, wp.color, rect.inflate(-sc(4), -sc(4)), max(1, sc(2)))
+                    gsp = self.spr.get("gun_" + wp.arch)
+                    if gsp:
+                        if (c, 0) == cur:
+                            img = gsp.get("idle", 0, self.time * 8)
+                        else:                      # resting: the spin frame that shows the gun most side-on
+                            bf = self._tint.get(("sideon", wp.arch))
+                            if bf is None:
+                                bf = self._tint[("sideon", wp.arch)] = max(range(len(gsp.frames["idle"][0])),
+                                                                           key=lambda f_: gsp.get("idle", 0, f_).get_bounding_rect().width)
+                            img = gsp.get("idle", 0, bf)
+                        icon = self.inv_icon(img, ww, box)
+                        s.blit(icon, icon.get_rect(center=rect.center))
+                    if c == p.cur:
+                        t_ = self.small.render("IN HAND", True, (255, 220, 120))
+                        t_ = self.scaled(t_, 0.8)
+                        s.blit(t_, (rect.x + sc(5), rect.bottom - t_.get_height() - sc(3)))
+                    if (c, 0) == cur:
+                        pygame.draw.rect(s, (255, 230, 120), rect.inflate(sc(6), sc(6)), max(2, sc(3)))
+                cy += box + gap + sc(6)
+                continue
             for c in range(self.INV_COLS):
                 bx = x + c * (box + gap)
                 rect = pygame.Rect(bx, cy, box, box)
                 item = self.inv_item(p, c, row)
-                self.panel(s, rect, 230 if row == 0 else 190)
+                self.panel(s, rect, 230 if row == 1 else 190)
                 if item is not None:
                     pygame.draw.rect(s, item.color, rect.inflate(-sc(4), -sc(4)), max(1, sc(2)))
                     sp = self.spr["sup_" + item.kind]
                     img = sp.get(sp.first_anim, 0, self.time * 8 if (c, row) == cur else 0)
-                    key = ("icon", id(img), box)
-                    icon = self._tint.get(key)
-                    if icon is None:              # crop the sprite's empty margins so the robot fills the box
-                        bb = img.get_bounding_rect()
-                        sub = img.subsurface(bb)
-                        k = box * 0.78 / max(bb.width, bb.height)
-                        icon = self._tint[key] = pygame.transform.smoothscale(sub, (max(1, int(bb.width * k)), max(1, int(bb.height * k))))
+                    icon = self.inv_icon(img, box, box)
                     s.blit(icon, icon.get_rect(center=rect.center))
-                elif row == 0:
+                elif row == 1:
                     t = self.small.render("SLOT %d" % (c + 1), True, (90, 95, 110))
                     s.blit(t, t.get_rect(center=rect.center))
                 if (c, row) == cur:
                     pygame.draw.rect(s, (255, 230, 120), rect.inflate(sc(6), sc(6)), max(2, sc(3)))
             cy += box + gap
         item = self.inv_item(p, *cur)
-        cx, cy = card_at if card_at else ((x + (box * 3 + gap * 2) // 2) - card_w // 2, cy + sc(30))
+        cx, cy = card_at if card_at else ((x + gw // 2) - card_w // 2, cy + sc(30))
         keyboard = p.idx == 0 and self.inputs[0].keyboard
-        if item is not None:
-            act = "unequip" if cur[1] == 0 else "equip"
+        if cur[1] == 0:
+            wp = item
+            other = p.weapons[1 - cur[0]]
+            hint = "in hand" if cur[0] == p.cur else (("[E]" if keyboard else "[A]") + " take in hand")
+            if getattr(self, "_measure", None) is None:
+                self._measure = pygame.Surface((sc(800), sc(700)), pygame.SRCALPHA)
+            r_ = self.weapon_card(self._measure, wp, 0, 0, compare=other, alpha=245)
+            cy = min(cy, H - r_.height - sc(10))
+            if cx + r_.width > W - sc(10):
+                cx = W - sc(10) - r_.width
+            s.blit(self.small.render(hint, True, (255, 220, 120)), (cx, cy - sc(24)))
+            self.weapon_card(s, wp, cx, cy, compare=other, alpha=245)
+        elif item is not None:
+            act = "unequip" if cur[1] == 1 else "equip"
             keys = ("[E] %s   [R] drop" if keyboard else "[A] %s   [X] drop") % act
             s.blit(self.small.render(keys, True, (255, 220, 120)), (cx, cy - sc(24)))
             other = None
-            if cur[1] > 0 and p.gear[cur[0]] is not None and p.gear[cur[0]].kind == item.kind:
+            if cur[1] > 1 and p.gear[cur[0]] is not None and p.gear[cur[0]].kind == item.kind:
                 other = p.gear[cur[0]]
             self.support_card(s, item, cx, cy, compare=other, width=card_w, alpha=245)
         else:
-            s.blit(self.small.render("empty slot" if cur[1] == 0 else "empty", True, (110, 115, 130)), (cx, cy))
+            s.blit(self.small.render("empty slot" if cur[1] == 1 else "empty", True, (110, 115, 130)), (cx, cy))
 
     def overlay(self, s, alpha, color=(0, 0, 0)):
         o = pygame.Surface((W, H))
@@ -2232,7 +2288,7 @@ class Game:
         bg.fill((8, 8, 14, alpha))
         s.blit(bg, rect.topleft)
 
-    def weapon_card(self, s, wp, x, y, compare=None, title=None):
+    def weapon_card(self, s, wp, x, y, compare=None, title=None, alpha=None):
         B = WP.BRANDS[wp.brand]
         lines = [(self.mid, wp.name, ("tier", wp.rarity, wp.color)),
                  (self.small, "%s %s  -  LVL %d" % (wp.rarity_name, wp.st["label"], wp.level), (170, 175, 190)),
@@ -2278,7 +2334,7 @@ class Game:
             widest = max(widest, self.small.size(title)[0])
         wdt = max(sc(370), widest + sc(24))          # cards grow to fit long lines instead of spilling over
         rect = pygame.Rect(x, y, wdt, h)
-        self.panel(s, rect)
+        self.panel(s, rect, alpha or 125)
         pygame.draw.rect(s, wp.color, (x, y, sc(4), h))
         cy = y + sc(6)
         if title:

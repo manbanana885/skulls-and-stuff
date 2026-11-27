@@ -53,8 +53,8 @@ It clashes with `pygame-ce`.
 ## Controls
 
 WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). E / A picks things up, Q / Y swaps guns,
-SHIFT / LB dashes (with Jump Jets equipped), F / B deploys or packs up a turret module. ENTER / START pauses and opens the Modules screen:
-arrows / D-pad to move, E / A to equip or unequip, R / X to drop.
+SHIFT / LB dashes (with Jump Jets equipped), F / B deploys or packs up a turret module. ENTER / START pauses: the pause screen shows your two guns (E / A takes the
+highlighted one in hand) and your modules (arrows / D-pad to move, E / A to equip or unequip, R / X to drop).
 Player 2 joins any time by pressing BACK / SELECT on a second controller.
 
 ## Rebuild assets
