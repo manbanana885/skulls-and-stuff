@@ -948,6 +948,10 @@ class Wind(Trap):
 
 
 # ---------------------------------------------------------------- strikes from above (level-wide)
+STRIKE_WARN = 2.2        # seconds between the target marker appearing and impact
+STRIKE_FALL = 0.8        # the falling object is visible for the last this-many seconds
+
+
 class Strikes(Trap):
     def __init__(self, style, depth):
         super().__init__("strike", style, 0, 0)
@@ -972,9 +976,10 @@ class Strikes(Trap):
                 a, d = rnd.random() * math.tau, rnd.uniform(0.0, 2.5)
                 x, y = p.x + math.cos(a) * d, p.y + math.sin(a) * d
                 if not L.is_solid(int(x), int(y)):
-                    T = 1.2
+                    T = STRIKE_WARN
                     self.pending.append([x, y, T])
-                    w.warnings.append([x, y, 0.9, T, T, self.col])
+                    w.warnings.append([x, y, 0.95, T, T, self.col])
+                    w.snd({"icicle": "crumble", "lightning": "zap", "meteor": "fireball"}[self.style], x, y, 0.35)
                     break
         keep = []
         for s in self.pending:
@@ -1025,7 +1030,7 @@ class Strikes(Trap):
 
     def falling(self):
         """Things currently falling: (x, y, height 0..1) for the renderer."""
-        return [(s[0], s[1], s[2] / 1.2) for s in self.pending if s[2] < 0.45]
+        return [(s[0], s[1], s[2] / STRIKE_FALL) for s in self.pending if s[2] < STRIKE_FALL]
 
 
 # ================================================================ placement

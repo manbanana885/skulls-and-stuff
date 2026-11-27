@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import assets as A  # noqa: E402
 from assets import load_all, to_screen, dir_index, glow, shadow, vignette, ROOT  # noqa: E402
 from world import World  # noqa: E402
+import characters as CH  # noqa: E402
 import weapons as WP  # noqa: E402
 from biomes import BIOMES, biome_for  # noqa: E402
 from bosses import eel_points  # noqa: E402
@@ -158,6 +159,15 @@ class Input:
         self.edge("reload", bool(bx) or keys[pygame.K_r])
         self.edge("swap", bool(by or rb) or keys[pygame.K_q])
         self.edge("dash", bool(lb) or keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT])
+        bb = False
+        try:
+            if self.pad:
+                bb = self.pad.get_button(pygame.CONTROLLER_BUTTON_B)
+            elif self.joy:
+                bb = self.joy.get_numbuttons() > 1 and self.joy.get_button(1)
+        except Exception:
+            pass
+        self.edge("deploy", bool(bb) or keys[pygame.K_f])
         self.edge("interact", bool(a) or keys[pygame.K_e])
         self.edge("back", bool(back))
         up = dn = lf = rg = False
@@ -515,11 +525,13 @@ class Game:
         self.transition = 0.0
         self.best = 0
         self.damage_numbers = False         # option: coloured damage numbers (off by default)
+        self.chars = ["skelebot", "canbot"]  # character picked by P1 / P2 on the title screen
         try:
             with open(SAVE) as fh:
                 data = json.load(fh)
                 self.best = data.get("best", 0)
                 self.damage_numbers = bool(data.get("damage_numbers", False))
+                self.chars = [c if c in CH.CHARS else d for c, d in zip(data.get("chars", self.chars), self.chars)]
         except Exception:
             pass
         self.minimap = None
@@ -570,7 +582,7 @@ class Game:
         self.inputs.append(Input(False, dev))
         self.refresh_spares()
         if self.world and self.state == "play":
-            self.world.add_player()
+            self.world.add_player(self.chars[1] if self.chars[1] != self.world.player.char else None)
         else:
             sfx.play("weapon_pickup")
 
@@ -581,7 +593,7 @@ class Game:
     def new_world(self, depth, player=None, score=0):
         if player is None:
             from world import Player
-            player = [Player(0, 0, i) for i in range(len(self.inputs))]
+            player = [Player(0, 0, i, self.chars[min(i, 1)]) for i in range(len(self.inputs))]
         if depth == 1:
             self.run_seed = random.randrange(1 << 30)
         self.biome = biome_for(depth, self.run_seed)
@@ -607,7 +619,7 @@ class Game:
     def save_settings(self):
         try:
             with open(SAVE, "w") as fh:
-                json.dump({"best": self.best, "damage_numbers": self.damage_numbers}, fh)
+                json.dump({"best": self.best, "damage_numbers": self.damage_numbers, "chars": self.chars}, fh)
         except Exception:
             pass
 
@@ -668,6 +680,13 @@ class Game:
             if self.any_pressed("swap"):
                 self.toggle_numbers()
                 return
+            for i, inp_ in enumerate(self.inputs[:2]):
+                for name, d in (("nav_left", -1), ("nav_right", 1)):
+                    if name in inp_.pressed:
+                        k = (CH.ORDER.index(self.chars[i]) + d) % len(CH.ORDER)
+                        self.chars[i] = CH.ORDER[k]
+                        sfx.play("swap", 0.6)
+                        self.save_settings()
             if self.inputs[0].keyboard and pygame.mouse.get_pressed()[0] or any(
                     ("start" in i.pressed or "a" in i.pressed) for i in self.inputs):
                 sfx.play("start")
@@ -949,13 +968,27 @@ class Game:
             gx, gy = ground(wn[0], wn[1])
             if on_screen(gx, gy):
                 k_ = 1 - wn[3] / wn[4]
-                rx = int(wn[2] * HW)
+                rx = int(wn[2] * HW * 1.414)
                 rect = pygame.Rect(0, 0, rx * 2, rx)
                 rect.center = (gx, gy)
                 c = wn[5]
-                pygame.draw.ellipse(surf, (c[0] // 2, c[1] // 3, c[2] // 3), rect, max(1, sc(2)))
+                # growing shadow of what's coming down
+                shade = self._tint.get(("warnshadow", rx))
+                if shade is None:
+                    shade = self._tint[("warnshadow", rx)] = pygame.Surface((rx * 2, rx), pygame.SRCALPHA)
+                    pygame.draw.ellipse(shade, (0, 0, 0, 255), shade.get_rect())
+                sh_ = shade.copy()
+                sh_.set_alpha(int(40 + 120 * k_))
+                sr = rect.inflate(-rx * 2 * (1 - k_) * 0.7, -rx * (1 - k_) * 0.7)
+                surf.blit(pygame.transform.scale(sh_, sr.size), sr.topleft)
+                # bright outer ring + an inner ring closing in; flashes faster as impact nears
+                blink = (int(self.time * (6 + 18 * k_)) % 2 == 0)
+                ring_c = (255, 255, 255) if (k_ > 0.75 and blink) else c
+                pygame.draw.ellipse(surf, ring_c, rect, max(2, sc(3)))
                 inner = rect.inflate(-rx * 2 * (1 - k_), -rx * (1 - k_))
-                pygame.draw.ellipse(surf, (min(255, c[0]), c[1] // 2, c[2] // 2), inner, max(1, sc(2)))
+                if inner.width > 2:
+                    pygame.draw.ellipse(surf, (min(255, c[0]), min(255, c[1]), min(255, c[2])), inner, max(1, sc(2)))
+                self.add_glow(gx, gy, int(rx * 0.8), (c[0] // 6, c[1] // 6, c[2] // 6))
         for hz in w.hazards:
             gx, gy = ground(hz[0], hz[1])
             if on_screen(gx, gy):
@@ -1093,7 +1126,7 @@ class Game:
             plkey = pl.x + pl.y
             if not pl.alive:      # downed: bones to stand on, with a revive ring
                 if len(w.players) > 1:
-                    gsp = spr["gib_skull"]
+                    gsp = spr["gib_skull" if pl.char == "skelebot" else ("gib_gear" if pl.char == "canbot" else "gib_meat")]
                     n += 1
                     items.append((plkey, n, gsp.get("spin", 0, 0), plx - gsp.ax, ply - gsp.ay))
                     n += 1
@@ -1102,8 +1135,9 @@ class Game:
             surf.blit(shadow(sc(14)), (plx - sc(14), ply - sc(7)))
             blink = pl.invuln > 0 and int(self.time * 24) % 2 == 0
             if not blink:
-                legs, torso = spr["player_legs"], spr["torso_" + pl.weapon.arch]
-                stride = 1.1
+                C = CH.CHARS[pl.char]
+                legs, torso = spr[C["legs"]], spr[C["torso"] + pl.weapon.arch]
+                stride = C["stride"]
                 if pl.moving:
                     limg = legs.get("walk", pl.legs_dir, pl.walk / stride * 8)
                     bob = -abs(math.sin(pl.walk / stride * math.tau)) * sc(2)
@@ -1761,6 +1795,25 @@ class Game:
         """Every equipped module: its body (sprite at its own hover point) plus whatever it projects into the world."""
         spr = self.spr
         t = self.time
+        for tr in w.turrets:                    # deployed turrets
+            gx, gy = ground(tr.x, tr.y)
+            if on_screen(gx, gy):
+                sp = spr["dep_" + tr.kind]
+                img = sp.get("idle", dir_index(tr.aim[0], tr.aim[1], 16))
+                n += 1
+                items.append((tr.x + tr.y - 0.3, n, None, lambda gx=gx, gy=gy: self.screen.blit(shadow(sc(14)), (gx - sc(14), gy - sc(7))), 0))
+                n += 1
+                items.append((tr.x + tr.y, n, img, gx - sp.ax, gy - sp.ay))
+                if tr.flash > 0:
+                    n += 1
+                    items.append((tr.x + tr.y, n, sp.flash(img), gx - sp.ax, gy - sp.ay))
+                if tr.muzzle > 0:
+                    mx_, my_ = ground(tr.x + tr.aim[0] * 0.55, tr.y + tr.aim[1] * 0.55, 0.55 if tr.kind == "mgturret" else 0.8)
+                    n += 1
+                    items.append((tr.x + tr.y + 0.01, n, None, lambda mx_=mx_, my_=my_: self.add_glow(mx_, my_, sc(20), (140, 90, 30)), 0))
+                if tr.hp < tr.max_hp:
+                    n += 1
+                    items.append((tr.x + tr.y + 0.02, n, None, lambda tr=tr, gx=gx, gy=gy: self.draw_turret_bar(tr, gx, gy), 0))
         for d in w.decoys:                      # decoy holograms
             gx, gy = ground(d.x, d.y)
             if on_screen(gx, gy):
@@ -1859,6 +1912,14 @@ class Game:
                 n += 1
                 items.append((key + 0.01, n, None, lambda hx=hx, hy=hy: self.add_glow(hx, hy + sc(14), sc(30), (120, 60, 10)), 0))
         return n
+
+    def draw_turret_bar(self, tr, gx, gy):
+        bw = sc(40)
+        k = max(0.0, tr.hp / max(1, tr.max_hp))
+        y = gy - sc(70)
+        pygame.draw.rect(self.screen, (20, 20, 24), (gx - bw // 2 - 1, y - 1, bw + 2, sc(5) + 2))
+        col = (120, 220, 90) if k > 0.5 else ((240, 200, 60) if k > 0.25 else (255, 70, 50))
+        pygame.draw.rect(self.screen, col, (gx - bw // 2, y, int(bw * k), sc(5)))
 
     def draw_gun_arm(self, su, pl, ground):
         """Pipe arm bolted to the backpack: mount -> raised elbow -> wrist, holding the stowed gun's floor sprite."""
@@ -2212,6 +2273,15 @@ class Game:
                 pygame.draw.rect(s, (90, 90, 120) if su.down > 0 else (110, 200, 255), (x, by + sc(16), int(bw * k), sc(4)))
             elif su.kind == "medbot" and su.healing:
                 s.blit(self.small.render("+%.1f/s" % su.p["heal"], True, (120, 255, 150)), (x + bw - sc(40), by))
+            elif su.kind in ("mgturret", "mortar"):
+                if su.rebuild_t > 0:
+                    st_txt, st_col = "REBUILD %.0fs" % su.rebuild_t, (255, 140, 90)
+                elif su.deployed is not None:
+                    st_txt, st_col = "DEPLOYED %d/%d" % (max(0, su.deployed.hp), su.p["hp"]), (170, 220, 120)
+                else:
+                    st_txt, st_col = "[F / B] DEPLOY", (200, 200, 160)
+                im_ = self.small.render(st_txt, True, st_col)
+                s.blit(im_, (x + bw - im_.get_width(), by))
             by += sc(22)
         # weapon panel
         wp = p.weapon
@@ -2345,32 +2415,53 @@ class Game:
                 if -sc(40) < sx < W + sc(40) and -sc(20) < sy < H + sc(40):
                     h = (cx * 7 + cy * 13) % 11
                     s.blit(alt[h % 4] if h < 4 else fl, (sx - fax, sy - fay))
-        # showcase: legs walk one way, torso spins the other
-        legs, torso = self.spr["player_legs"], self.spr["torso_" + ("carbine", "shotgun", "rocket", "flamer", "sniper", "plasma")[int(t / 2.5) % 6]]
-        z = 1.5
-        big_l = pygame.transform.scale_by(legs.get("walk", 1, t * 10), z)
-        big_t = pygame.transform.scale_by(torso.get("idle", int(-t * 4) % 16), z)
-        bob = -abs(math.sin(t * 10 / 8 * math.tau)) * sc(3) * z
-        cx, cy = W / 2, H / 2 + sc(150)
-        sh = pygame.transform.scale_by(shadow(sc(14)), z)
-        s.blit(sh, (cx - sh.get_width() / 2, cy - sh.get_height() / 2))
-        s.blit(big_l, (cx - legs.ax * z, cy - legs.ay * z))
-        s.blit(big_t, (cx - torso.ax * z, cy - torso.ay * z + bob))
+        # character select: three bodies walking in place, tops spinning; P1 (and P2) cursors underneath
+        guns = ("carbine", "shotgun", "rocket", "flamer", "sniper", "plasma", "chaingun", "coil_rifle")
+        arch = guns[int(t / 2.5) % len(guns)]
+        for i, ch in enumerate(CH.ORDER):
+            C = CH.CHARS[ch]
+            legs, torso = self.spr[C["legs"]], self.spr[C["torso"] + arch]
+            picked = [k for k in range(min(2, len(self.inputs))) if self.chars[k] == ch]
+            z = 1.5 if picked else 1.15
+            big_l = pygame.transform.scale_by(legs.get("walk", 1, t * 10), z)
+            big_t = pygame.transform.scale_by(torso.get("idle", int(-t * 4 + i * 5) % 16), z)
+            bob = -abs(math.sin(t * 10 / 8 * math.tau)) * sc(3) * z
+            cx, cy = W / 2 + (i - 1) * sc(300), H / 2 + sc(110)
+            sh = pygame.transform.scale_by(shadow(sc(14)), z)
+            s.blit(sh, (cx - sh.get_width() / 2, cy - sh.get_height() / 2))
+            if not picked:
+                big_l.set_alpha(150)
+                big_t.set_alpha(150)
+            s.blit(big_l, (cx - legs.ax * z, cy - legs.ay * z))
+            s.blit(big_t, (cx - torso.ax * z, cy - torso.ay * z + bob))
+            col = (235, 240, 255) if picked else (130, 135, 150)
+            nm = self.mid.render(C["name"], True, col)
+            s.blit(nm, (cx - nm.get_width() / 2, cy + sc(18)))
+            info = "%s  -  %s" % (C["cat"].upper(), "   ".join(CH.stat_lines(ch)))
+            im = self.small.render(info, True, (170, 180, 200) if picked else (100, 105, 120))
+            s.blit(im, (cx - im.get_width() / 2, cy + sc(44)))
+            de = self.small.render(C["desc"], True, (150, 160, 180) if picked else (90, 95, 110))
+            s.blit(de, (cx - de.get_width() / 2, cy + sc(60)))
+            for k in picked:
+                tag = self.mid.render("P%d" % (k + 1), True, self.PLAYER_COLORS[k])
+                s.blit(tag, (cx - tag.get_width() / 2 + (k - (len(picked) - 1) / 2) * sc(40), cy - sc(128)))
+        self.center_text(s, self.font, "LEFT / RIGHT to choose a body", H / 2 + sc(196), (255, 220, 120))
         s.blit(self.vig, (0, 0), special_flags=pygame.BLEND_MULT)
         self.center_text(s, self.big, "SKULLS & STUFF", sc(70), (235, 240, 255))
         self.center_text(s, self.font, "an isometric twin-stick shooter  -  procedurally generated sectors", sc(112), (150, 170, 200))
         dev = self.input.device_name
         lines = [
-            "Gamepad: L-STICK move  -  R-STICK aim & fire  -  RT fire  -  A take  -  X reload  -  Y/RB swap  -  LB dash  -  START pause / modules",
-            "Keyboard: WASD move  -  MOUSE aim  -  CLICK fire  -  E take  -  R reload  -  Q/wheel swap  -  SHIFT dash  -  ENTER pause / modules",
+            "Gamepad: L-STICK move  -  R-STICK aim & fire  -  RT fire  -  A take  -  X reload  -  Y/RB swap  -  LB dash  -  B turret  -  START pause",
+            "Keyboard: WASD move  -  MOUSE aim  -  CLICK fire  -  E take  -  R reload  -  Q/wheel swap  -  SHIFT dash  -  F turret  -  ENTER pause",
             ("Controller detected: %s" % dev) if dev else "No controller detected (plug one in any time)",
             "CO-OP: player 2 presses BACK / SELECT on a controller to join - any time"
             + ("   (P2 READY)" if len(self.inputs) > 1 else ""),
         ]
         for i, ln in enumerate(lines):
             self.center_text(s, self.font, ln, sc(150 + i * 22), (190, 195, 210) if i < 2 else ((120, 230, 255) if i == 2 else (90, 230, 210)))
-        self.center_text(s, self.font, "[Q / Y]  Damage numbers: %s" % ("ON" if self.damage_numbers else "OFF"), H - sc(78),
-                         (255, 220, 120) if self.damage_numbers else (150, 160, 180))
+        dn = self.font.render("[Q / Y]  Damage numbers: %s" % ("ON" if self.damage_numbers else "OFF"), True,
+                              (255, 220, 120) if self.damage_numbers else (150, 160, 180))
+        s.blit(dn, (W - dn.get_width() - sc(16), sc(14)))
         if int(t * 2) % 2 == 0:
             self.center_text(s, self.mid, "PRESS START / ENTER", H - sc(40), (255, 220, 120))
         if self.best:

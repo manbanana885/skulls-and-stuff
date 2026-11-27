@@ -12,6 +12,9 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - Damage types (Kinetic, Explosive, Fire, Chemical, Cryo, Radiation, Electrical) against enemy categories
   (Undead, Robot, Demon, Construct, Mutant): bring the right gun. Kinetic guns can roll Penetrating Core or
   Expanding rounds; optional colour-coded damage numbers ([Q / Y] on the title or pause screen)
+- Three playable bodies, picked on the title screen: Skelebot (undead, balanced), CanBot (robot drum on tank
+  treads, +20% integrity / -20% speed) and Super Mutant (mutant, +20% speed / -20% integrity)
+- Deployable MG and mortar turret modules (F / B) that draw monsters, take damage, and go up like a tactical nuke
 - Drop-in local co-op for 2 players
 
 ## How to play (Windows, no Python experience needed)
@@ -48,7 +51,7 @@ It clashes with `pygame-ce`.
 ## Controls
 
 WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). E / A picks things up, Q / Y swaps guns,
-SHIFT / LB dashes (with Jump Jets equipped). ENTER / START pauses and opens the Modules screen:
+SHIFT / LB dashes (with Jump Jets equipped), F / B deploys or packs up a turret module. ENTER / START pauses and opens the Modules screen:
 arrows / D-pad to move, E / A to equip or unequip, R / X to drop.
 Player 2 joins any time by pressing BACK / SELECT on a second controller.
 

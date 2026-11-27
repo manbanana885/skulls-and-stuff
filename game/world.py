@@ -6,6 +6,7 @@ from level import Level
 import weapons as WP
 import support as SU
 import damage as DM
+import characters as CH
 import bestiary as BE
 import sfx
 
@@ -265,13 +266,15 @@ class Player:
     R = 0.28
     SPEED = 4.4
 
-    def __init__(self, x, y, idx=0):
+    def __init__(self, x, y, idx=0, char="skelebot"):
         self.idx = idx
+        self.char = char if char in CH.CHARS else "skelebot"
+        self.cat = CH.CHARS[self.char]["cat"]
         self.spraying = None
         self.revive_t = 0.0
         self.spin = 0.0
         self.x, self.y = x, y
-        self.max_hp = 100
+        self.max_hp = int(round(100 * CH.CHARS[self.char]["hp"]))
         self.hp = self.max_hp
         self.legs_dir = 1
         self.aim = (math.sqrt(0.5), math.sqrt(0.5))
@@ -326,9 +329,32 @@ class Player:
         if old is not None:
             self.pack.insert(k, old)
 
+    def toggle_turret(self, w):
+        """F / B: deploy the next packed turret module; with none left to deploy, pack up the nearest one in reach."""
+        mods = [g for g in self.equipped() if g.kind in SU.TURRETS]
+        if not mods:
+            return
+        ready = next((g for g in mods if g.can_deploy()), None)
+        if ready is not None:
+            ready.deploy(w, self)
+            return
+        out = [g for g in mods if g.deployed is not None]
+        if out:
+            g = min(out, key=lambda m_: math.hypot(m_.deployed.x - self.x, m_.deployed.y - self.y))
+            if math.hypot(g.deployed.x - self.x, g.deployed.y - self.y) < 2.5:
+                g.pack_up(w)
+            else:
+                w.message("Walk back to your turret to pack it up", (200, 200, 160))
+        else:
+            left = min(g.rebuild_t for g in mods)
+            w.message("Turret rebuilding - %.0fs" % left, (200, 200, 160))
+
     def unequip(self, i):
         if self.gear[i] is None or len(self.pack) >= PACK_SIZE:
             return False
+        if getattr(self.gear[i], "deployed", None) is not None:
+            self.gear[i].deployed.alive = False
+            self.gear[i].deployed = None
         self.pack.append(self.gear[i])
         self.gear[i] = None
         return True
@@ -353,7 +379,7 @@ class Player:
         dx = dy = 0.0
         if self.moving:
             wx, wy = screen_to_world_dir(mx, my)
-            spd = self.SPEED * mag * self.mult("haste") * self.weapon.st.get("heavy", 1.0)
+            spd = self.SPEED * CH.CHARS[self.char]["speed"] * mag * self.mult("haste") * self.weapon.st.get("heavy", 1.0)
             dx, dy = wx * spd * dt, wy * spd * dt
             self.legs_dir = dir_index(wx, wy, 8)
             if inp.aim is None:
@@ -399,6 +425,8 @@ class Player:
             sfx.play("swap")
         if "reload" in pressed and self.weapon.start_reload():
             sfx.play("reload")
+        if "deploy" in pressed:
+            self.toggle_turret(w)
         if "dash" in pressed:
             jet = next((g for g in self.equipped() if g.ready()), None)
             if jet is not None:
@@ -1237,6 +1265,7 @@ class World:
         self._shooter = players[0]
         self.arcs = []             # lightning: [[(x, y, z), ...], life, max, colour, width]
         self.decoys = []           # decoy projector holograms monsters chase instead of players
+        self.turrets = []          # deployed MG / mortar turrets
         self.popups = []           # floating "WEAK" / "RESIST" ticks and damage numbers [x, y, z, text, colour, life]
         self.show_numbers = False  # coloured damage numbers (option on the title / pause screens)
         self.blocked = set()       # ids of enemy projectiles eaten by an arc shield this frame
@@ -1335,16 +1364,23 @@ class World:
             d = min(self.decoys, key=lambda q: (q.x - x) ** 2 + (q.y - y) ** 2)
             if (d.x - x) ** 2 + (d.y - y) ** 2 < 100:
                 return d
-        return self.nearest_player(x, y)
+        p = self.nearest_player(x, y)
+        if self.turrets:                  # a deployed turret closer than any player gets mobbed instead
+            t = min(self.turrets, key=lambda q: (q.x - x) ** 2 + (q.y - y) ** 2)
+            if (t.x - x) ** 2 + (t.y - y) ** 2 < ((p.x - x) ** 2 + (p.y - y) ** 2 if p.alive else 1e9):
+                return t
+        return p
 
-    def add_player(self):
+    def add_player(self, char=None):
         """Drop-in co-op: a new player appears next to the first living one."""
         if len(self.players) >= 2:
             return None
         host = self.player
-        pl = Player(host.x, host.y, idx=len(self.players))
+        if char is None:            # default to a different body than the host
+            char = CH.ORDER[(CH.ORDER.index(host.char) + 1) % len(CH.ORDER)]
+        pl = Player(host.x, host.y, idx=len(self.players), char=char)
         pl.x, pl.y = resolve(self.level, host.x + 0.6, host.y + 0.6, pl.R)
-        pl.max_hp = host.max_hp
+        pl.max_hp = int(round(pl.max_hp * host.max_hp / (100 * CH.CHARS[host.char]["hp"])))   # match grafts so far
         pl.hp = pl.max_hp
         self.players.append(pl)
         self.message("PLAYER 2 JOINED", (90, 230, 230))
@@ -1913,10 +1949,19 @@ class World:
                     return True
         return False
 
-    def hurt_player(self, dmg, sx, sy, knock=7.0, who=None):
+    def hurt_player(self, dmg, sx, sy, knock=7.0, who=None, dtype="kinetic"):
         if getattr(who, "decoy", False):
             who.flash = 0.15
             return
+        if getattr(who, "is_turret", False):
+            who.hit(self, dmg)
+            return
+        if who is None and self.turrets:          # a monster swinging at a turret hits the turret
+            t = min(self.turrets, key=lambda q: (q.x - sx) ** 2 + (q.y - sy) ** 2)
+            p0 = self.nearest_player(sx, sy)
+            if math.hypot(t.x - sx, t.y - sy) < min(1.3, math.hypot(p0.x - sx, p0.y - sy)):
+                t.hit(self, dmg)
+                return
         if who is None and self.decoys:          # a monster swinging at a hologram hits nothing
             d = min(self.decoys, key=lambda q: (q.x - sx) ** 2 + (q.y - sy) ** 2)
             if math.hypot(d.x - sx, d.y - sy) < 1.4:
@@ -1925,7 +1970,7 @@ class World:
         p = who or self.nearest_player(sx, sy)
         if p.invuln > 0 or not p.alive:
             return
-        p.hp -= dmg * p.mult("aegis")
+        p.hp -= dmg * p.mult("aegis") * CH.player_mult(p, dtype)
         p.invuln = 0.6
         p.flash = 0.15
         d = math.hypot(p.x - sx, p.y - sy) or 1
@@ -1953,7 +1998,7 @@ class World:
                     return
             p.hp = 0
             p.alive = False
-            self.gibs_from("player", p.x, p.y, 1.0, p.x - sx, p.y - sy, force=1.3)
+            self.gibs_from(CH.CHARS[p.char]["gibs"], p.x, p.y, 1.0, p.x - sx, p.y - sy, force=1.3)
             self.explode(p.x, p.y, 1.5, 0, (120, 230, 255), hurt_player=False, quiet=True)
             sfx.play("player_death")
             self.spray(p.x, p.y, 1.0, OIL, 30, 4.5)
@@ -2152,9 +2197,12 @@ class World:
                 if math.hypot(pos[0] + 0.5 - x, pos[1] + 0.5 - y) < radius:
                     self.damage_crate(pos, 5)
         if hurt_player:
+            for t in list(self.turrets):
+                if t.alive and math.hypot(t.x - x, t.y - y) < radius * 0.85:
+                    t.hit(self, player_dmg)
             for p in self.players:
                 if p.alive and math.hypot(p.x - x, p.y - y) < radius * 0.85:
-                    self.hurt_player(player_dmg, x, y, knock=12, who=p)
+                    self.hurt_player(player_dmg, x, y, knock=12, who=p, dtype="explosive")
         if breach:
             self.breach(x, y, breach)
 
@@ -2289,6 +2337,13 @@ class World:
             if pl.alive:
                 for g in pl.equipped():
                     g.update(self, dt, pl)
+        if self.turrets:                  # turrets whose module was dropped / unequipped pack themselves away
+            worn = {id(g) for pl in self.players for g in pl.gear if g is not None}
+            for t in self.turrets:
+                if t.alive and id(t.mod) not in worn:
+                    t.alive = False
+                    t.mod.deployed = None
+            self.turrets = [t for t in self.turrets if t.alive]
         self.projs = [b for b in self.projs if id(b) not in self.blocked and self.step_proj(b, dt)]
         self.enemies = [e for e in self.enemies if e.alive]
         self.spawners = [s for s in self.spawners if s.alive]
@@ -2335,7 +2390,7 @@ class World:
                         self.dot(e, dps * dt, "radiation" if hz[4] == "rad" else "chemical")
                 for pl in alive:
                     if (pl.x - x_) ** 2 + (pl.y - y_) ** 2 < r_ * r_:
-                        pl.hp -= dps * dt * pl.mult("aegis")
+                        pl.hp -= dps * dt * pl.mult("aegis") * CH.player_mult(pl, "radiation" if hz[4] == "rad" else "chemical")
                         self.hurt_flash = max(self.hurt_flash, 0.06)
                         if self.acid_t <= 0:
                             self.acid_t = 0.45
@@ -2365,7 +2420,7 @@ class World:
                                   0, 0, 1.2, 0.6, (120, 255, 60), 2))
             for pl in alive:
                 if math.hypot(pl.x - hz[0], pl.y - hz[1]) < hz[2]:
-                    pl.hp -= 14 * dt * pl.mult("aegis")
+                    pl.hp -= 14 * dt * pl.mult("aegis") * CH.player_mult(pl, "chemical")
                     self.hurt_flash = max(self.hurt_flash, 0.08)
                     if self.acid_t <= 0:
                         self.acid_t = 0.4
@@ -2558,6 +2613,8 @@ class World:
             return self.step_wave(b, dt)
         b.age += dt
         if k == "mortar":
+            b.x += b.vx * dt               # enemy shells drop straight down (vx = vy = 0); turret shells arc
+            b.y += b.vy * dt
             b.z += b.vz * dt
             b.vz -= 6 * dt
             if b.z <= 0.1:
@@ -2704,12 +2761,20 @@ class World:
                 return False
             b.x, b.y = nx, ny
             if b.hostile:
+                tur = next((t for t in self.turrets if t.alive and (k not in ("acid", "mortar") or b.z < 1.3)
+                            and math.hypot(t.x - b.x, t.y - b.y) < t.R + b.r), None)
+                if tur is not None:
+                    if b.blast or k == "acid":
+                        self.impact(b, b.x, b.y)
+                    else:
+                        tur.hit(self, b.dmg)
+                    return False
                 for pl in self.players:
                     if pl.alive and (k != "acid" or b.z < 1.3) and math.hypot(pl.x - b.x, pl.y - b.y) < pl.R + b.r:
                         if b.blast or k == "acid":
                             self.impact(b, b.x, b.y)
                         else:
-                            self.hurt_player(b.dmg, b.x - b.vx, b.y - b.vy, who=pl)
+                            self.hurt_player(b.dmg, b.x - b.vx, b.y - b.vy, who=pl, dtype=CH.HOSTILE_TYPE.get(k, "kinetic"))
                         if b.effect:
                             self.player_effect(b.effect, b.owner, who=pl)
                         if k == "chem" and b.gas:

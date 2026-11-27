@@ -16,6 +16,9 @@
   jets      - Jump Jets: dash (SHIFT / LB) with a cooldown, optionally leaving a burning trail
   tether    - Tether Beam: a damaging beam to your partner (healing you both) or to its own satellite
   magnet    - Loot Magnet: pulls health and power-ups to you
+  mgturret  - MG Turret: deploy (F / B) a machine-gun tripod; undeploy by pressing again next to it
+  mortar    - Mortar Turret: deploy a mortar that lobs shells over walls
+  Deployed turrets draw monsters, take damage, and go up like a tactical nuke when destroyed.
 
 Every item rolls its own parameters (speed, strength, size, reach...) from a seed; rarity biases the rolls upward.
 """
@@ -116,7 +119,23 @@ KINDS = {
         "radius": (3.0, 7.0, "RADIUS", "%.1f m"),
         "pull":   (3.0, 8.0, "PULL", "%.1f"),
     }),
+    "mgturret": dict(label="MG Turret", color=(170, 180, 110), weight=7, params={
+        "dmg":     (1.2, 2.6, "DMG", "%.1f"),
+        "rate":    (5.0, 10.0, "RATE", "%.1f/s"),
+        "range":   (6.0, 10.0, "RANGE", "%.1f m"),
+        "hp":      (60, 140, "ARMOR", "%d"),
+        "rebuild": (25.0, 10.0, "REBUILD", "%.0fs"),
+    }),
+    "mortar": dict(label="Mortar Turret", color=(170, 180, 110), weight=6, params={
+        "dmg":     (12, 26, "DMG", "%.0f"),
+        "blast":   (1.4, 2.2, "BLAST", "%.1f m"),
+        "rate":    (0.4, 0.9, "RATE", "%.2f/s"),
+        "range":   (9.0, 14.0, "RANGE", "%.1f m"),
+        "hp":      (50, 120, "ARMOR", "%d"),
+        "rebuild": (30.0, 12.0, "REBUILD", "%.0fs"),
+    }),
 }
+TURRETS = {"mgturret", "mortar"}
 # modules whose flavour is rolled, not just their numbers
 ELEMENTS = {"core": ("blast", "magnet", "storm"), "aura": ("burn", "chill", "rad"), "battery": ("revive", "nova")}
 ELEMENT_LABEL = {"blast": "Blast Core", "magnet": "Magnet Core", "storm": "Storm Core",
@@ -125,7 +144,7 @@ ELEMENT_LABEL = {"blast": "Blast Core", "magnet": "Magnet Core", "storm": "Storm
 ELEMENT_COLOR = {"blast": (255, 150, 60), "magnet": (130, 170, 255), "storm": (170, 150, 255),
                  "burn": (255, 110, 40), "chill": (140, 210, 255), "rad": (150, 255, 70)}
 PCT = {"heal"}                 # shown as percentages for these kinds
-INT = {"capacity", "latches", "trigger", "max"}
+INT = {"capacity", "latches", "trigger", "max", "hp"}
 # the adjective an item gets from its best roll
 ADJ = {
     "sawbot": {"dmg": "Serrated", "spin": "Whirling", "orbit": "Wide-Orbit", "size": "Hulking"},
@@ -144,6 +163,8 @@ ADJ = {
     "jets": {"dist": "Long", "cooldown": "Twitchy", "burn": "Scorching"},
     "tether": {"dps": "Searing", "length": "Long", "spin": "Spinning", "heal": "Kindred"},
     "magnet": {"radius": "Strong", "pull": "Greedy"},
+    "mgturret": {"dmg": "Heavy", "rate": "Rapid", "range": "Long-Range", "hp": "Armored", "rebuild": "Quick-Build"},
+    "mortar": {"dmg": "Heavy", "blast": "High-Yield", "rate": "Rapid", "range": "Long-Range", "hp": "Armored", "rebuild": "Quick-Build"},
 }
 UNIQUE = {"sawbot": ["Mr. Whirly", "The Lawnmower", "Grinder Prime"], "shield": ["The Umbrella", "Halo of Saint Rivet", "Bulwark-9"],
           "medbot": ["Nurse Ratchet", "Dr. Bolts", "Saint Gauze"], "gunbot": ["Little Buddy", "The Wingman", "Peacekeeper Mk.0"],
@@ -152,8 +173,9 @@ UNIQUE = {"sawbot": ["Mr. Whirly", "The Lawnmower", "Grinder Prime"], "shield": 
           "decoy": ["Doppelganger", "Mirror Man", "Fetch"], "mines": ["Breadcrumbs", "Party Favors", "The Gardener"],
           "aura": ["Halo of Ruin", "Personal Space", "Hotbox"], "battery": ["Lazarus Cell", "Second Wind", "Phylactery"],
           "autoloader": ["Busy Hands", "The Butler", "Quartermaster"], "jets": ["Rocket Boots", "Heel Burners", "Quickfoot"],
-          "tether": ["Umbilical", "Red String", "Leash"], "magnet": ["Sticky Fingers", "Gravity Well", "The Collector"]}
-SCALED = {"dmg", "heal", "capacity", "drain", "dps", "burn"}     # grows with item level
+          "tether": ["Umbilical", "Red String", "Leash"], "magnet": ["Sticky Fingers", "Gravity Well", "The Collector"],
+          "mgturret": ["Sentry Gun", "The Doorman", "Tripod Tim"], "mortar": ["Big Bertha", "Rainmaker", "Thunder Pot"]}
+SCALED = {"dmg", "heal", "capacity", "drain", "dps", "burn", "hp"}     # grows with item level
 NOT_SCALED = {("battery", "capacity"), ("battery", "heal"), ("leech", "heal"), ("tether", "heal")}
 
 
@@ -234,6 +256,9 @@ class Support:
         self.beam = None
         self.stow_t = 0.0
         self.tx = self.ty = 0.0
+        self.deployed = None       # turret modules: the Turret in the world, or None while packed
+        self.armor = self.p.get("hp", 0)
+        self.rebuild_t = 0.0
 
     # ---- info
     @property
@@ -270,6 +295,7 @@ class Support:
         if self.kind == "battery":
             return "explosive" if self.elem == "nova" else None
         return {"sawbot": "kinetic", "gunbot": "kinetic", "leech": "chemical", "skull": "explosive", "mines": "explosive",
+                "mgturret": "kinetic", "mortar": "explosive",
                 "jets": "fire", "tether": "electrical"}.get(self.kind)
 
     def blurb(self):
@@ -292,7 +318,9 @@ class Support:
                 "autoloader": "Faster reloads; reloads your stowed gun",
                 "jets": "Dash with SHIFT / LB, leaving a burning trail",
                 "tether": "Beam to your partner (or a satellite) that burns monsters",
-                "magnet": "Pulls health and power-ups to you"}[self.kind]
+                "magnet": "Pulls health and power-ups to you",
+                "mgturret": "Deploy / pack up with F / B: auto-firing machine gun",
+                "mortar": "Deploy / pack up with F / B: lobs shells over walls"}[self.kind]
 
     # ---- behaviour
     def attach(self, pl, slot=0):
@@ -310,6 +338,7 @@ class Support:
         self.state = "idle"
         self.z = 1.4
         self.sat = (pl.x, pl.y)
+        self.deployed = None       # a new sector: the turret comes along packed
 
     def radius(self):
         """sawbot orbit / shield ring radius in tiles"""
@@ -857,6 +886,163 @@ class Support:
                 lt.x += dx / d * step
                 lt.y += dy / d * step
                 self.beam.append((lt.x, lt.y))
+
+
+    # ---- deployable turrets (deploy / pack up from Player.update via toggle_turret)
+    def update_mgturret(self, w, dt, pl):
+        self.update_turret_module(w, dt, pl)
+
+    def update_mortar(self, w, dt, pl):
+        self.update_turret_module(w, dt, pl)
+
+    def update_turret_module(self, w, dt, pl):
+        self.station(w, dt, pl, 1.5)
+        if self.rebuild_t > 0:
+            self.rebuild_t -= dt
+            if self.rebuild_t <= 0:
+                self.armor = self.p["hp"]
+                w.message("%s rebuilt" % self.label, (170, 180, 110))
+        tr = self.deployed
+        if tr is None:
+            self.armor = min(self.p["hp"], self.armor + self.p["hp"] * 0.05 * dt)    # field repairs while packed
+            return
+        if not tr.alive:
+            self.deployed = None
+            self.rebuild_t = self.p["rebuild"]
+            return
+        tr.update(w, dt, pl)
+
+    def can_deploy(self):
+        return self.kind in TURRETS and self.deployed is None and self.rebuild_t <= 0
+
+    def deploy(self, w, pl):
+        from world import resolve
+        ax, ay = pl.aim
+        x, y = resolve(w.level, pl.x + ax * 0.9, pl.y + ay * 0.9, 0.35)
+        self.deployed = Turret(self, x, y, pl.aim)
+        w.turrets.append(self.deployed)
+        w.snd("servo", x, y, 0.8)
+        w.message("%s deployed" % self.label, (170, 180, 110))
+
+    def pack_up(self, w):
+        tr = self.deployed
+        self.armor = tr.hp
+        tr.alive = False
+        if tr in w.turrets:
+            w.turrets.remove(tr)
+        self.deployed = None
+        w.snd("reload", tr.x, tr.y, 0.8)
+
+
+class Turret:
+    """A deployed MG / mortar: picks targets, shoots, draws monsters, takes hits, and goes up like a tactical nuke."""
+
+    R = 0.35
+    is_turret = True
+
+    def __init__(self, mod, x, y, aim):
+        self.mod = mod
+        self.kind = mod.kind
+        self.x, self.y = x, y
+        self.r = self.R
+        self.aim = aim
+        self.hp = mod.armor
+        self.max_hp = mod.p["hp"]
+        self.alive = True
+        self.cd = 0.5
+        self.flash = 0.0
+        self.muzzle = 0.0
+        self.target = None
+        self.burst = 0
+
+    def update(self, w, dt, pl):
+        from traps import los
+        from world import Proj, Particle
+        self.flash = max(0.0, self.flash - dt)
+        self.muzzle = max(0.0, self.muzzle - dt)
+        self.cd -= dt
+        p = self.mod.p
+        mortar = self.kind == "mortar"
+        tg = self.target
+        ok = lambda e: (mortar and math.hypot(e.x - self.x, e.y - self.y) > 2.0) or (not mortar and los(w.level, self.x, self.y, e.x, e.y))
+        if tg is None or not tg.alive or math.hypot(tg.x - self.x, tg.y - self.y) > p["range"] + 1 or not ok(tg):
+            self.target = tg = next((e for e in targets(w, self.x, self.y, p["range"]) if ok(e)), None)
+        if tg is None:
+            return
+        dx, dy = tg.x - self.x, tg.y - self.y
+        d = math.hypot(dx, dy) or 1
+        want = math.atan2(dy, dx)
+        cur = math.atan2(self.aim[1], self.aim[0])
+        diff = (want - cur + math.pi) % math.tau - math.pi
+        cur += max(-6 * dt, min(6 * dt, diff))
+        self.aim = (math.cos(cur), math.sin(cur))
+        if self.cd > 0 or abs(diff) > 0.25:
+            return
+        dmg = p["dmg"] * pl.dmg_mult()
+        if mortar:
+            self.cd = 1.0 / p["rate"]
+            T = max(0.7, min(1.8, d / 6.0))
+            z0 = 0.7
+            vz = (0.1 - z0 + 3.0 * T * T) / T          # step_proj's mortar arc: z += vz dt, vz -= 6 dt
+            pr = Proj("mortar", self.x + self.aim[0] * 0.3, self.y + self.aim[1] * 0.3, z0, dx / T, dy / T, dmg, life=T + 1,
+                      color=(255, 170, 60), r=0.15, blast=p["blast"], vz=vz)
+            pr.owner = pl
+            pr.dtype = "explosive"
+            w.projs.append(pr)
+            w.warnings.append([tg.x, tg.y, p["blast"] * 0.6, T, T, (255, 170, 60)])
+            w.snd("shot_grenade", self.x, self.y, 0.7)
+            for _ in range(6):
+                w.add(Particle("smoke", self.x + self.aim[0] * 0.3, self.y + self.aim[1] * 0.3, 0.8, random.uniform(-0.5, 0.5),
+                               random.uniform(-0.5, 0.5), 1.0, 0.8, (110, 105, 95), 0.2))
+        else:
+            self.cd = 1.0 / p["rate"]
+            a = random.uniform(-0.06, 0.06)
+            c, s_ = math.cos(a), math.sin(a)
+            vx, vy = self.aim[0] * c - self.aim[1] * s_, self.aim[0] * s_ + self.aim[1] * c
+            side = 0.05 if self.burst % 2 else -0.05
+            self.burst += 1
+            pr = Proj("bullet", self.x + vx * 0.5 - vy * side, self.y + vy * 0.5 + vx * side, 0.55, vx * 22, vy * 22, dmg,
+                      life=p["range"] / 22 + 0.1, color=(255, 210, 130))
+            pr.owner = pl
+            w.projs.append(pr)
+            w.snd("shot_smg", self.x, self.y, 0.4)
+        self.muzzle = 0.06
+
+    def hit(self, w, dmg):
+        if not self.alive:
+            return
+        self.hp -= dmg
+        self.flash = 0.1
+        w.snd("hit_metal", self.x, self.y, 0.5)
+        if self.hp <= 0:
+            self.destroy(w)
+
+    def destroy(self, w):
+        """Goes up like a tactical nuke (no fallout): flattens walls, hurts everything nearby, you included."""
+        from world import Particle
+        self.alive = False
+        if self in w.turrets:
+            w.turrets.remove(self)
+        x, y = self.x, self.y
+        w.explode(x, y, 3.0, 45 * (1 + 0.15 * (self.mod.level - 1)), (255, 200, 120), hurt_player=True, player_dmg=45, breach=3.0)
+        for _ in range(40):
+            a = random.random() * math.tau
+            s_ = random.uniform(0.3, 1.0) * 6
+            w.add(Particle("fire", x, y, random.uniform(0.1, 0.8), math.cos(a) * s_, math.sin(a) * s_, random.uniform(0.5, 3),
+                           random.uniform(0.5, 1.1), random.choice(((255, 240, 150), (255, 170, 60), (255, 120, 40))), random.uniform(18, 30)))
+        for _ in range(24):
+            w.add(Particle("smoke", x + random.uniform(-0.4, 0.4), y + random.uniform(-0.4, 0.4), random.uniform(0.5, 2.5),
+                           random.uniform(-0.3, 0.3), random.uniform(-0.3, 0.3), random.uniform(1.5, 3.5), random.uniform(2, 4),
+                           (90, 85, 75), random.uniform(0.4, 0.8)))
+        w.add(Particle("ring", x, y, 0.05, 9, 0, 0, 0.6, (255, 220, 150), 0.2))
+        w.flash_white = 0.35
+        w.shake = 15
+        w.hitstop = max(w.hitstop, 0.1)
+        w.snd("nuke_blast", x, y)
+        w.message("%s DESTROYED" % self.mod.label.upper(), (255, 140, 90))
+        self.mod.deployed = None
+        self.mod.rebuild_t = self.mod.p["rebuild"]
+        self.mod.armor = 0
 
 
 class ArmProxy:

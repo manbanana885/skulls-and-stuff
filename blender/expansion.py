@@ -717,8 +717,22 @@ def weapon_build(kind, hand, sp):
         box("sw", (0.6, 0.02, 0.05), (0.33, 0, 0), M["chrome"], hand)
         box("swg", (0.03, 0.16, 0.03), (0.03, 0, 0), M["gold"], hand)
     elif kind == "cleaver":
-        box("cv", (0.35, 0.02, 0.2), (0.25, 0, -0.05), M["rust"], hand)
-        drip("cvd", (0.3, 0.01, -0.15), 0.08, 0.012, M["blood"], hand)
+        th = sp.get("thick", 1.0)
+        skin = M[sp.get("skin", "zskin")]
+        sphere("cvfist", 0.055 * th, (0, 0, 0), skin, hand, (1.15, 1, 0.9), 8, 6, True)           # the hand gripping it
+        for k in range(3):
+            bone("cvfing%d" % k, (0.03, -0.035 + k * 0.035, 0.03), (0.05, -0.035 + k * 0.035, -0.03), 0.016 * th, skin, hand)
+        bone("cvhandle", (-0.09, 0, 0.0), (0.17, 0, 0.0), 0.022, M["darkwood"], hand)              # wrapped wooden handle
+        for x in (-0.07, 0.1, 0.15):
+            ring("cvwrap%.2f" % x, 0.025, 0.012, (x, 0, 0), M["rust2"], hand, rot=(0, PI / 2, 0), segs=6)
+        sphere("cvpommel", 0.03, (-0.1, 0, 0), M["iron"], hand, segs=6, rings=4)
+        box("cvbolster", (0.04, 0.05, 0.06), (0.18, 0, -0.01), M["iron"], hand)
+        box("cv", (0.36, 0.025, 0.24), (0.38, 0, -0.09), M["rust"], hand)                           # heavy blade below the spine
+        box("cvspine", (0.36, 0.04, 0.03), (0.38, 0, 0.03), M["iron"], hand)
+        box("cvedge", (0.36, 0.012, 0.03), (0.38, 0, -0.205), M["chrome"], hand)
+        cyl("cvhole", 0.025, 0.03, (0.5, 0, -0.01), M["black"], hand, rot=(PI / 2, 0, 0), segs=8)
+        drip("cvd", (0.42, 0.014, -0.18), 0.1, 0.014, M["blood"], hand)
+        drip("cvd2", (0.3, -0.014, -0.15), 0.07, 0.01, M["blood"], hand)
     elif kind == "staff":
         bone("st", (-0.3, 0, -0.1), (0.5, 0, 0.05), 0.015, M["darkwood"], hand)
         sphere("sto", 0.06, (0.52, 0, 0.06), M[sp.get("glow", "glow_red")], hand)
