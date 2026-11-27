@@ -279,6 +279,34 @@ for arch, shell, force_pen in (("shotgun", None, False), ("shotgun", "dumdum", F
     print("    %-22s damage behind the shield %.1f" % (label, dealt))
     check((dealt > 0) == through, "%s %s the shield" % (label, "goes through" if through else "is stopped by"))
 
+# chemical jets splash off the shield into a puddle at the knight's feet
+print("jets vs shieldbearer, from the front")
+for arch in ("jet_napalm", "jet_cryo", "jet_rad"):
+    wp = WP.generate(1, random.Random(4), arch=arch, rarity=0)
+    p.weapons[p.cur] = wp
+    p.x, p.y = x0 + 0.5, y0 + 0.5
+    w.projs, w.particles, w.hazards = [], [], []
+    e = Enemy("shieldbearer", x0 + 4.5, y0 + 0.5, awake=True, depth=1)
+    e.hp = 1e6
+    e.speed = 0
+    e.target = p
+    w.enemies = [e]
+    wp.cd = wp.reload_t = 0
+    bot.aim, bot.fire = AIM, True
+    for _ in range(60):
+        g.update(1 / 60)
+        e.x, e.y = x0 + 4.5, y0 + 0.5
+    bot.fire = False
+    pools = [h for h in w.hazards if h[4] == "jet"]
+    near = [h for h in pools if math.hypot(h[0] - e.x, h[1] - e.y) < h[2] + e.r]
+    for _ in range(60):
+        g.update(1 / 60)
+        e.x, e.y = x0 + 4.5, y0 + 0.5
+    dealt = 1e6 - e.hp
+    print("    %-10s puddles %d (%d under the knight), damage %.1f, burning %s, frozen %s" % (
+        arch, len(pools), len(near), dealt, getattr(e, "burn", 0) > 0, getattr(e, "frozen", 0) > 0 or getattr(e, "chill", 0) > 0))
+    check(near and dealt > 0, "%s splashes off the shield into a puddle that hurts the knight" % arch)
+
 # weapon cards
 for a, shell in (("shotgun_3", "sabot"), ("auto_shotgun", "dumdum")):
     p.weapons[p.cur] = make(a, shell)
