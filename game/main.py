@@ -1000,7 +1000,8 @@ class Game:
                     self.draw_gas(gx, gy, hz)
                 else:
                     f = min(1.0, hz[3])
-                    self.add_glow(gx, gy, int(hz[2] * HW * 1.3), (int(120 * f), int(45 * f), int(8 * f)))
+                    big = 1.6 if hz[4] == "blaze" else 1.3
+                    self.add_glow(gx, gy, int(hz[2] * HW * big), (int(140 * f), int(50 * f), int(8 * f)))
 
         n = self.trap_items(w, items, n, ground, on_screen)
 

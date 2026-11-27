@@ -262,6 +262,18 @@ GEAR_SLOTS = 3
 PACK_SIZE = 6
 
 
+BARREL_WEIGHTS = {
+    "default": {"fire": 1, "chem": 1, "rad": 1, "shrap": 1},
+    "nuclear": {"fire": 1, "chem": 1, "rad": 4, "shrap": 1},
+    "chemical": {"fire": 1, "chem": 4, "rad": 1, "shrap": 1},
+    "hell": {"fire": 4, "chem": 1, "rad": 1, "shrap": 1},
+    "heresy": {"fire": 3, "chem": 1, "rad": 1, "shrap": 1},
+    "facility": {"fire": 1, "chem": 1, "rad": 1, "shrap": 2},
+    "outpost": {"fire": 2, "chem": 1, "rad": 1, "shrap": 2},
+    "sewer": {"fire": 1, "chem": 3, "rad": 1, "shrap": 1},
+}
+
+
 class Player:
     R = 0.28
     SPEED = 4.4
@@ -1296,7 +1308,20 @@ class World:
                 self.loot.append(Loot("buff", x, y, WP.roll_buff(level=depth)))
             else:
                 self.loot.append(Loot("health", x, y))
-        self.barrels = {pos: 3 for pos, name in L.props.items() if name == "barrel"}
+        # explosive barrels: each rolls a kind (biome-weighted) and shows it by colour
+        brng = random.Random(L.seed ^ 0xBA22E1)
+        bw = BARREL_WEIGHTS.get(biome, BARREL_WEIGHTS["default"])
+        self.barrels = {}
+        self.barrel_kind = {}
+        for pos, name in list(L.props.items()):
+            if name == "barrel":
+                kind = brng.choices(list(bw), weights=list(bw.values()))[0]
+                L.props[pos] = "barrel_" + kind
+                self.barrels[pos] = 3
+                self.barrel_kind[pos] = kind
+            elif name in ("raddrum", "chemdrum"):       # the sectors' own drums go off too, keeping their look
+                self.barrels[pos] = 3
+                self.barrel_kind[pos] = "rad" if name == "raddrum" else "chem"
         self.crates = {pos: 4 for pos, name in L.props.items() if name == "crate"}
         self.projs = []
         self.beams = []            # [x1, y1, x2, y2, z, life, max, colour, width]
@@ -2176,12 +2201,14 @@ class World:
         """Explosions chew through walls, opening rooms up."""
         L = self.level
         broke = 0
+        thin = radius > 4                 # huge craters: keep debris per wall low
         for cx in range(int(x - radius) - 1, int(x + radius) + 2):
             for cy in range(int(y - radius) - 1, int(y + radius) + 2):
                 if math.hypot(cx + 0.5 - x, cy + 0.5 - y) < radius and L.destroy_wall(cx, cy):
                     broke += 1
-                    self.gibs_from("rubble", cx + 0.5, cy + 0.5, 0.8, cx + 0.5 - x, cy + 0.5 - y, count=4, force=1.2)
-                    for _ in range(6):
+                    if not thin or rnd.random() < 0.25:
+                        self.gibs_from("rubble", cx + 0.5, cy + 0.5, 0.8, cx + 0.5 - x, cy + 0.5 - y, count=4 if not thin else 2, force=1.2)
+                    for _ in range(6 if not thin else (1 if rnd.random() < 0.5 else 0)):
                         a = rnd.random() * math.tau
                         self.add(Particle("smoke", cx + 0.5, cy + 0.5, rnd.uniform(0.2, 1.0), math.cos(a), math.sin(a),
                                           rnd.uniform(0.2, 0.8), rnd.uniform(1.0, 2.0), (95, 88, 80), rnd.uniform(0.25, 0.45)))
@@ -2249,14 +2276,67 @@ class World:
         self.barrels[pos] -= dmg
         if self.barrels[pos] <= 0:
             del self.barrels[pos]
+            kind = self.barrel_kind.pop(pos, "chem")
             L = self.level
             L.props.pop(pos, None)
             L.solid[L.i(*pos)] = 0
             cx, cy = pos[0] + 0.5, pos[1] + 0.5
-            self.splat(cx, cy, ICHOR, 0.6)
             self.gibs_from("barrel", cx, cy, 0.5, force=1.6)
-            self.spray(cx, cy, 0.6, ICHOR, 30, 5)
-            self.explode(cx, cy, 2.2, 8, (150, 255, 70), breach=1.4)
+            getattr(self, "barrel_" + kind)(cx, cy)
+
+    # each barrel kind's detonation: all of them can hurt players too
+    def barrel_fire(self, x, y):
+        """Red: a fireball, then burning ground ('blaze') that scorches monsters and players for a while."""
+        self.explode(x, y, 2.0, 10, (255, 120, 30), player_dmg=14, breach=1.0, dtype="fire")
+        for k in range(7):
+            a = k * math.tau / 7 + rnd.uniform(-0.3, 0.3)
+            d = rnd.uniform(0.3, 1.6)
+            self.hazards.append([x + math.cos(a) * d, y + math.sin(a) * d, 0.55, rnd.uniform(4, 6), "blaze", 8.0])
+        for _ in range(30):
+            a = rnd.random() * math.tau
+            s_ = rnd.uniform(2, 6)
+            self.add(Particle("fire", x, y, rnd.uniform(0.2, 0.8), math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(1, 3), 0.8,
+                              (255, 140, 40), rnd.uniform(14, 24)))
+        self.splat(x, y, (22, 16, 12), 0.7)
+
+    def barrel_chem(self, x, y):
+        """Green: a burst of toxic gas clouds drifting outward, plus an acid splash."""
+        self.explode(x, y, 2.0, 6, (150, 255, 70), player_dmg=10, breach=0.8, dtype="chemical")
+        for k in range(7):
+            a = k * math.tau / 7 + rnd.uniform(-0.3, 0.3)
+            d = rnd.uniform(0.4, 1.4)
+            self.add_gas(x + math.cos(a) * d, y + math.sin(a) * d, 7.0, math.cos(a) * 0.8, math.sin(a) * 0.8)
+        for k in range(3):
+            a = rnd.random() * math.tau
+            self.hazards.append([x + math.cos(a) * 0.9, y + math.sin(a) * 0.9, 0.7, 5.0, "acid"])
+        self.splat(x, y, ICHOR, 0.8)
+        self.spray(x, y, 0.6, ICHOR, 30, 5)
+        self.snd("sizzle", x, y)
+
+    def barrel_rad(self, x, y):
+        """Yellow: a blast that leaves a glowing fallout zone (hurts everything standing in it)."""
+        self.explode(x, y, 1.8, 10, (210, 255, 90), player_dmg=12, breach=1.0)
+        self.hazards.append([x, y, 2.2, 10.0, "rad", 7.0, 10.0])
+        self.add(Particle("ring", x, y, 0.05, 6, 0, 0, 0.5, (200, 255, 90), 0.2))
+        for _ in range(20):
+            a = rnd.random() * math.tau
+            s_ = rnd.uniform(1, 4)
+            self.add(Particle("glow", x, y, 0.4, math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(1, 3), 1.0, (170, 255, 70), 3))
+        self.splat(x, y, (90, 120, 20), 0.6)
+
+    def barrel_shrap(self, x, y):
+        """Orange: a hard blast and a ring of metal fragments that tear into monsters and players alike."""
+        self.explode(x, y, 2.4, 16, (255, 170, 60), player_dmg=20, breach=1.4)
+        n = 24
+        for k in range(n):
+            a = k * math.tau / n + rnd.uniform(-0.08, 0.08)
+            s_ = rnd.uniform(12, 17)
+            hostile = k % 2 == 1                  # half the shards can hit players, half hit monsters
+            pr = Proj("slug", x + math.cos(a) * 0.4, y + math.sin(a) * 0.4, 0.6, math.cos(a) * s_, math.sin(a) * s_,
+                      8 if hostile else 7, hostile=hostile, life=0.45, color=(255, 190, 120), r=0.08, pierce=1)
+            pr.dtype = "kinetic"
+            self.projs.append(pr)
+        self.snd("clatter", x, y, 0.9)
 
     def damage_crate(self, pos, dmg):
         if pos not in self.crates:
@@ -2436,6 +2516,23 @@ class World:
                             self.acid_t = 0.45
                             sfx.play("sizzle", 0.5)
                         self.check_player_death(x_, y_, pl)
+                continue
+            if hz[4] == "blaze":           # burning barrel fuel: scorches monsters and players
+                if rnd.random() < dt * 14:
+                    self.add(Particle("fire", hz[0] + rnd.uniform(-0.3, 0.3), hz[1] + rnd.uniform(-0.3, 0.3), 0.05,
+                                      0, 0, rnd.uniform(0.9, 1.8), 0.5, (255, 120, 30), rnd.uniform(10, 16)))
+                for e in self.nearby(hz[0], hz[1]):
+                    if e.alive and e.kind not in FLYERS and math.hypot(e.x - hz[0], e.y - hz[1]) < hz[2] + e.r:
+                        e.burn = max(e.burn, 1.5)
+                        e.burn_dps = max(e.burn_dps, hz[5] * DM.mult(e, "fire"))
+                for pl in alive:
+                    if math.hypot(pl.x - hz[0], pl.y - hz[1]) < hz[2]:
+                        pl.hp -= hz[5] * dt * pl.mult("aegis") * CH.player_mult(pl, "fire")
+                        self.hurt_flash = max(self.hurt_flash, 0.06)
+                        if self.acid_t <= 0:
+                            self.acid_t = 0.4
+                            sfx.play("sizzle", 0.5)
+                        self.check_player_death(hz[0], hz[1], pl)
                 continue
             if hz[4] == "acidp":           # Acid-Augmented puddles: eat monsters, leave players alone
                 k_ = min(1.0, hz[3] / hz[6] * 2)

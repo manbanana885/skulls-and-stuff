@@ -356,6 +356,11 @@ class Vent(Trap):
 
 
 # ---------------------------------------------------------------- reactor (shoot it!)
+REACTOR_RADIUS = 12.0     # tiles flattened when a reactor goes up
+REACTOR_FUSE = 4.5        # seconds of warning (chain reactions: REACTOR_CHAIN)
+REACTOR_CHAIN = 1.5
+
+
 class Reactor(Trap):
     shootable = True
     solid = True
@@ -366,6 +371,7 @@ class Reactor(Trap):
         self.hp = 45
         self.fuse = -1.0
         self.r = 0.42
+        self.klaxon_t = 0.0
 
     def hit(self, w, dmg, vx=0.0, vy=0.0):
         if not self.alive:
@@ -377,9 +383,11 @@ class Reactor(Trap):
             a = rnd.random() * math.tau
             w.add(Particle("spark", self.x, self.y, 0.6, math.cos(a) * 3, math.sin(a) * 3, rnd.uniform(1, 3), 0.3, (255, 230, 150), 2))
         if self.hp <= 0 and self.fuse < 0:
-            self.fuse = 2.2 if dmg < 25 else 0.7          # big blasts chain-react fast
-            w.snd("klaxon", self.x, self.y)
-            w.message("REACTOR CRITICAL!", (255, 210, 60) if self.style == "chem" else (140, 255, 90))
+            self.fuse = REACTOR_FUSE if dmg < 100 else REACTOR_CHAIN       # another reactor's blast sets it off sooner
+            self.klaxon_t = 0.0
+            col = (255, 210, 60) if self.style == "chem" else (140, 255, 90)
+            w.warnings.append([self.x, self.y, REACTOR_RADIUS, self.fuse, self.fuse, col])
+            w.message("REACTOR CRITICAL - GET CLEAR!", col)
         else:
             w.snd("hit_metal", self.x, self.y, 0.5)
 
@@ -389,7 +397,11 @@ class Reactor(Trap):
         col = (180, 255, 60) if self.style == "chem" else (90, 255, 120)
         if self.fuse >= 0:
             self.fuse -= dt
-            w.shake = max(w.shake, 1.5)
+            self.klaxon_t -= dt
+            if self.klaxon_t <= 0:
+                self.klaxon_t = 1.0
+                w.snd("klaxon", self.x, self.y, 1.0)
+            w.shake = max(w.shake, 1.5 + 3.0 * max(0.0, 1.0 - self.fuse / REACTOR_FUSE))
             if rnd.random() < dt * 25:
                 w.add(Particle("smoke", self.x, self.y, 1.0, rnd.uniform(-1, 1), rnd.uniform(-1, 1), 1.5, 0.8, col, 0.25))
             if self.fuse < 0:
@@ -405,14 +417,50 @@ class Reactor(Trap):
             L.solid[L.i(cx, cy)] = 0
             w.flow_tile = None
         w.gibs_from("barrel", self.x, self.y, 0.8, force=2.0)
-        w.explode(self.x, self.y, 2.6, 70, col, hurt_player=True, player_dmg=35, breach=2.0)
+        R = REACTOR_RADIUS
+        x, y = self.x, self.y
+        # everything in range: monsters, bosses, barrels, crates, hives, turrets, other reactors (chain) - and the walls
+        w.explode(x, y, R, 150, col, hurt_player=False, breach=R, dtype="explosive")
+        for (px_, py_), name in list(L.props.items()):      # heavy furniture too (barrels/crates went up in the blast)
+            if math.hypot(px_ + 0.5 - x, py_ + 0.5 - y) < R and L.solid[L.i(px_, py_)] == 2                     and (px_, py_) not in w.barrels and (px_, py_) not in w.crates:
+                if any(int(s_.x) == px_ and int(s_.y) == py_ for s_ in w.spawners):
+                    continue
+                if any(t.solid and t.alive and int(t.x) == px_ and int(t.y) == py_ for t in w.traps):
+                    continue
+                L.props.pop((px_, py_), None)
+                L.solid[L.i(px_, py_)] = 0
+                if rnd.random() < 0.5:
+                    w.gibs_from("rubble", px_ + 0.5, py_ + 0.5, 0.6, px_ + 0.5 - x, py_ + 0.5 - y, count=2, force=1.4)
+        w.flow_tile = None
+        for p in w.players:          # players: brutal up close, survivable at the edge
+            d = math.hypot(p.x - x, p.y - y)
+            if p.alive and d < R:
+                p.invuln = 0.0
+                w.hurt_player(12 + 78 * (1 - d / R), x, y, knock=18, who=p, dtype="explosive")
+        from world import Particle
+        for _ in range(140):
+            a = rnd.random() * math.tau
+            s_ = rnd.uniform(0.3, 1.0) * R * 1.4
+            w.add(Particle("fire", x, y, rnd.uniform(0.1, 1.2), math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(0.5, 4), rnd.uniform(0.6, 1.4),
+                           rnd.choice((col, (255, 240, 150), (255, 150, 40))), rnd.uniform(24, 44)))
+        for _ in range(70):           # rising mushroom column
+            w.add(Particle("smoke", x + rnd.uniform(-0.8, 0.8), y + rnd.uniform(-0.8, 0.8), rnd.uniform(0.5, 4.0), rnd.uniform(-0.4, 0.4),
+                           rnd.uniform(-0.4, 0.4), rnd.uniform(2, 5), rnd.uniform(2.5, 5), (80, 90, 60), rnd.uniform(0.5, 1.0)))
+        for k, rr in enumerate((R * 0.5, R, R * 1.3)):
+            w.add(Particle("ring", x, y, 0.05, rr, 0, 0, 0.5 + 0.25 * k, col, 0.2))
+        w.flash_white = 0.9
+        w.shake = 30
+        w.hitstop = max(w.hitstop, 0.15)
+        w.snd("nuke_blast", x, y)
+        # the contamination it leaves behind
         if self.style == "rad":
-            w.hazards.append([self.x, self.y, 2.2, 12.0, "rad", 8, 12.0])
+            w.hazards.append([x, y, 5.0, 16.0, "rad", 9, 16.0])
         else:
-            for k in range(10):
-                a = k / 10 * math.tau
-                w.add_gas(self.x + math.cos(a) * 1.2, self.y + math.sin(a) * 1.2, 9, math.cos(a) * 4, math.sin(a) * 4)
-        w.splat(self.x, self.y, (30, 60, 10) if self.style == "chem" else (20, 70, 30), 1.0)
+            for k in range(18):
+                a = k / 18 * math.tau
+                d = rnd.uniform(1.0, 5.0)
+                w.add_gas(x + math.cos(a) * d, y + math.sin(a) * d, 9, math.cos(a) * 2, math.sin(a) * 2)
+        w.splat(x, y, (30, 60, 10) if self.style == "chem" else (20, 70, 30), 3.0)
 
 
 # ---------------------------------------------------------------- pop-up turret

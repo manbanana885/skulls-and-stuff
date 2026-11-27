@@ -2883,5 +2883,6 @@ exec(open(os.path.join(HERE, "modules.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "cluster_gun.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "characters.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "turrets.py"), encoding="utf-8").read())
+exec(open(os.path.join(HERE, "barrels.py"), encoding="utf-8").read())
 
 main()

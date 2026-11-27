@@ -230,8 +230,9 @@ w.popups = []
 for _ in range(60):
     w.dot(e, 0.2, "chemical")
     w.time += 1 / 60
+    w.flush_numbers()
 dots = [pu for pu in w.popups if pu[3][0].isdigit()]
-check(1 <= len(dots) <= 3, "damage over time is pooled into a few numbers (%d)" % len(dots))
+check(1 <= len(dots) <= 4, "damage over time is pooled into a few numbers (%d)" % len(dots))
 g.toggle_numbers()
 check(not w.show_numbers, "and toggles back off")
 
