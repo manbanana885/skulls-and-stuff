@@ -4,7 +4,9 @@ An isometric twin-stick shooter about cyborg skeletons, written in Python with p
 Every sprite is pre-rendered from procedural Blender models and every sound is synthesized offline.
 
 - Procedural levels across 17 biomes, each with its own enemies, a signature monster, bosses and 2-3 trap types
-- Procedural guns (19 archetypes x brands x rarities x mods) and power-ups
+- Procedural guns (25 archetypes x brands x rarities x mods) and power-ups, including heavy weapons
+  (chaingun, railgun, barrage missile launcher, storm coil) that slow you down but hit much harder
+- Support gadgets with rolled stats, one at a time: buzzsaw orbiter, arc shield, medbot and gun drone
 - Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
 - Drop-in local co-op for 2 players
 

@@ -792,6 +792,73 @@ def railgun(seed):
     return finish(drive(charge + shot[:n], 1.8), 10, 2, 3800, 0.12, 0.25)
 
 
+# ---------------------------------------------------------------- barrage / coil / microwave / support gadgets
+def barrage(seed):
+    """Small missile leaving its tube: soft pop + short hissing whoosh (one per missile in the salvo)."""
+    r = R(seed)
+    n = n_of(0.42)
+    t = tt(n)
+    pop = sine(70 + 90 * np.exp(-t / 0.02), n) * expdec(n, 0.05) * 1.1
+    puff = lp(noise(n, r), 900) * expdec(n, 0.03) * 0.9
+    whoosh = sweep_lp(noise(n, r), np.clip(1 - t / 0.35, 0, 1), 250, 1900) * ar(n, 0.02, 0.12) * 0.7
+    return finish(drive(pop + puff + whoosh, 1.6), 10, 2, 3500, 0.05, 0.15)
+
+
+def coil(seed):
+    """Coil discharge: a fat low buzz with a dull crackle on top, kept well under 4 kHz."""
+    r = R(seed)
+    n = n_of(0.32)
+    t = tt(n)
+    f = 85 * (1 + 0.25 * np.exp(-t / 0.04)) * r.uniform(0.92, 1.08)
+    buzz = drive(saw(f, n) + saw(f * 1.5, n) * 0.4, 3.0) * ar(n, 0.002, 0.07) * 0.55
+    cr = np.zeros(n)
+    for _ in range(14):
+        k = n_of(0.01)
+        place(cr, bp(noise(k, r), 400, 2200) * expdec(k, 0.0025), int(r.uniform(0, 0.12) * SR), r.uniform(0.4, 1))
+    thump = sine(55 + 60 * np.exp(-t / 0.015), n) * expdec(n, 0.04) * 0.8
+    return finish(lp(buzz, 1600) + cr * 0.8 + thump, 9, 2, 3200, 0.05, 0.18)
+
+
+def microwave(seed):
+    """Microwave pulse: a warbling low 'wum' that sweeps down, like a hum being thrown."""
+    r = R(seed)
+    n = n_of(0.45)
+    t = tt(n)
+    f = 140 * np.exp(-t / 0.18) + 55
+    am = 0.6 + 0.4 * np.sin(2 * np.pi * 28 * t)
+    body = (sine(f, n) + 0.35 * saw(f * 0.5, n)) * am * ar(n, 0.01, 0.16)
+    hum = lp(noise(n, r), 500) * ar(n, 0.01, 0.12) * 0.35
+    return finish(lp(drive(body, 1.8), 1400) + hum, 10, 2, 2400, 0.07, 0.2)
+
+
+def shield_block(seed):
+    """Shot absorbed by the arc shield: muffled thunk with a short fizz."""
+    r = R(seed)
+    n = n_of(0.25)
+    t = tt(n)
+    thunk = sine(130 + 120 * np.exp(-t / 0.01), n) * expdec(n, 0.05) * 1.1
+    fizz = bp(noise(n, r), 300, 1800) * ar(n, 0.003, 0.05) * 0.5
+    return finish(thunk + fizz, 10, 2, 3000)
+
+
+def shield_down(seed):
+    r = R(seed)
+    n = n_of(0.7)
+    t = tt(n)
+    f = 220 * np.exp(-t / 0.25) + 40
+    wind = lp(saw(f, n), 1200) * ar(n, 0.005, 0.3) * 0.7
+    crack = lp(noise(n, r), 1500) * ar(n, 0.002, 0.06)
+    return finish(drive(wind + crack, 1.6), 10, 2, 2800, 0.08, 0.2)
+
+
+def shield_up(seed):
+    n = n_of(0.5)
+    t = tt(n)
+    f = 70 + 160 * np.clip(t / 0.35, 0, 1)
+    rise = lp(saw(f, n) + sine(f * 2, n) * 0.4, 1300) * ar(n, 0.08, 0.15) * 0.7
+    return finish(rise, 10, 2, 2600)
+
+
 
 SOUNDS = {
     "shot_nuke": (nuke_launch, 2),
@@ -868,6 +935,8 @@ SOUNDS = {
     "thunder": (thunder, 3), "chomp": (chomp, 3), "klaxon": (klaxon, 1), "servo": (servo, 2), "tentacle": (tentacle_snd, 3),
     "bubble": (bubble_snd, 3),
     "shot_chaingun": (chaingun, 6), "shot_railgun": (railgun, 2),
+    "shot_barrage": (barrage, 5), "shot_coil": (coil, 5), "shot_microwave": (microwave, 4),
+    "shield_block": (shield_block, 4), "shield_down": (shield_down, 1), "shield_up": (shield_up, 1),
 }
 
 

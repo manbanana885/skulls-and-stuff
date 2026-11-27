@@ -4,6 +4,7 @@ import random
 from assets import screen_to_world_dir, dir_index, to_screen, S as _S
 from level import Level
 import weapons as WP
+import support as SU
 import bestiary as BE
 import sfx
 
@@ -212,7 +213,7 @@ class Proj:
     """kind: bullet | pellet | slug | bolt | plasma | flame | grenade | rocket | acid"""
     __slots__ = ("kind", "x", "y", "z", "vx", "vy", "vz", "life", "dmg", "hostile", "color", "r", "pierce", "bounce",
                  "blast", "burn", "shock", "homing", "slow", "grav", "hit", "trail", "age", "maxspeed", "rad", "gas", "chill", "spin",
-                 "hurt_cd", "effect", "owner")
+                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach")
 
     def __init__(self, kind, x, y, z, vx, vy, dmg, hostile=False, life=0.9, color=(255, 220, 140), r=0.1,
                  pierce=0, bounce=0, blast=0.0, burn=0.0, shock=0, homing=0, slow=0, vz=0.0, grav=0.0, maxspeed=22.0,
@@ -232,10 +233,13 @@ class Proj:
         self.hurt_cd = 0.0
         self.effect = None
         self.owner = None
+        self.ox = self.oy = 0.0
+        self.cone = 0.0
+        self.reach = None
 
 
 class Loot:
-    """kind: weapon | buff | health"""
+    """kind: weapon | support | buff | health"""
 
     def __init__(self, kind, x, y, item=None, pop=False):
         self.kind, self.x, self.y, self.item = kind, x, y, item
@@ -276,6 +280,11 @@ class Player:
         self.buffs = {}            # kind -> [magnitude, seconds left]
         self.status = {}           # chill / confuse -> seconds left
         self.perm_dmg = 1.0
+        self.support = None        # one support gadget (support.Support)
+        self.salvo_q = 0           # barrage missiles still to ripple out
+        self.salvo_t = 0.0
+        self.salvo_n = 0
+        self.salvo_wp = None
 
     @property
     def weapon(self):
@@ -333,6 +342,13 @@ class Player:
                 del self.buffs[k]
                 w.message("%s faded" % WP.BUFFS[k][0], (150, 150, 160))
         self.weapon.update(dt)
+        if self.salvo_q > 0:
+            self.salvo_t -= dt
+            while self.salvo_q > 0 and self.salvo_t <= 0:
+                self.salvo_t += 0.05
+                w.fire_missile(self, self.salvo_wp, self.salvo_n)
+                self.salvo_q -= 1
+                self.salvo_n += 1
         pressed = getattr(inp, "pressed", ())
         if "swap" in pressed:
             self.weapon.reload_t = 0.0
@@ -417,7 +433,7 @@ def weapon_to_shot(wp):
         sh.update(burst=4 if st["rate"] > 7 else (2 if st["rate"] > 3 else 1), dmg=8 if st["rate"] > 3 else 13)
     elif pk == "grenade":
         sh.update(kind="fireball", speed=7.0, blast=0.9, dmg=12, color=(255, 150, 60), r=0.2)
-    elif pk == "rocket":
+    elif pk in ("rocket", "missile"):
         sh.update(kind="rocket", speed=5.0, blast=1.2, dmg=14, cd=(2.4, 3.2))
     elif pk == "plasma":
         sh.update(kind="orb", speed=7.0, dmg=11, r=0.2)
@@ -1163,7 +1179,13 @@ class World:
                 pl.hp = pl.max_hp * 0.5
             pl.idx = i
         self.players = players
+        for pl in players:
+            if pl.support:
+                pl.support.attach(pl)
+            pl.salvo_q = 0
         self._shooter = players[0]
+        self.arcs = []             # lightning: [[(x, y, z), ...], life, max, colour, width]
+        self.blocked = set()       # ids of enemy projectiles eaten by an arc shield this frame
         self.near_loot_by = {}
         self.score = score
         self.time = 0.0
@@ -1172,8 +1194,15 @@ class World:
         for s in self.spawners:
             L.solid[L.i(int(s.x), int(s.y))] = 2
         self.loot = []
-        for kind, x, y in L.pickups:
-            if kind == "weapon":
+        suprng = random.Random(L.seed ^ 0x5099)
+        wspots = [i for i, pk in enumerate(L.pickups) if pk[0] == "weapon"]
+        sup_at = {i for i in wspots if suprng.random() < 0.2}
+        if wspots and not sup_at:          # at least one support item per sector
+            sup_at.add(suprng.choice(wspots))
+        for i_, (kind, x, y) in enumerate(L.pickups):
+            if i_ in sup_at:
+                self.loot.append(Loot("support", x, y, SU.generate(depth, suprng, bonus=0.3)))
+            elif kind == "weapon":
                 self.loot.append(Loot("weapon", x, y, WP.generate(depth, bonus=0.3)))
             elif kind == "power":
                 self.loot.append(Loot("buff", x, y, WP.roll_buff(level=depth)))
@@ -1411,6 +1440,23 @@ class World:
     def drop_weapon(self, x, y, bonus=0.0):
         self.loot.append(Loot("weapon", x, y, WP.generate(self.depth, bonus=bonus), pop=True))
 
+    def drop_support(self, x, y, bonus=0.0):
+        self.loot.append(Loot("support", x, y, SU.generate(self.depth, bonus=bonus), pop=True))
+
+    def take_support(self, lt, p=None):
+        p = p or self.player
+        old = p.support
+        new = lt.item
+        p.support = new
+        new.attach(p)
+        if old is not None:
+            lt.item = old
+            lt.vz, lt.z = 3.0, 0.0
+        elif lt in self.loot:
+            self.loot.remove(lt)
+        self.message("Deployed %s  [%s %s, lvl %d]" % (new.name, new.rarity_name, new.label, new.level), new.color)
+        sfx.play("power")
+
     def drop_buff(self, x, y):
         self.loot.append(Loot("buff", x, y, WP.roll_buff(level=self.depth), pop=True))
 
@@ -1460,6 +1506,11 @@ class World:
         lanes = (-0.09, 0.09) if st["twin"] else (0.0,)
         p.muzzle = 0.05
         p.muzzle_color = st["color"]
+        if st["salvo"]:                   # missiles ripple out of the pod over the next few frames
+            p.salvo_q += st["salvo"] + extra * 2
+            p.salvo_wp, p.salvo_t, p.salvo_n = wp, 0.0, 0
+            sfx.play("servo", 0.4)
+            return
         for i in range(count):
             if st["pellets"] > 1 or kind in WP.SPRAYS:
                 a = rnd.uniform(-spread, spread)
@@ -1472,6 +1523,9 @@ class World:
                 ox, oy = mx + dy * lane, my - dx * lane
                 if kind == "beam":
                     self.fire_beam(ox, oy, mz, dx, dy, dmg, st, wp)
+                    continue
+                if kind == "arc":
+                    self.fire_arc(ox, oy, mz, dx, dy, dmg, st, p)
                     continue
                 spray = kind in WP.SPRAYS
                 spd = st["speed"] * (rnd.uniform(0.85, 1.15) if (kind == "pellet" or spray) else 1.0)
@@ -1486,6 +1540,9 @@ class World:
                 if kind == "rail":
                     pr.bounce = st["wallpierce"]
                     pr.r = 0.16
+                    pr.owner = p
+                if kind == "wave":
+                    self.setup_wave(pr, ox, oy, dx, dy, st)
                     pr.owner = p
                 self.projs.append(pr)
         if kind == "rail":
@@ -1511,6 +1568,140 @@ class World:
             p.kby -= ay * kick * 0.6
         if st["sound"]:
             sfx.play(st["sound"])
+
+    def fire_missile(self, p, wp, i):
+        """One missile of a barrage salvo, from barrel i of the 4x2 pod; fans out, then homes in."""
+        st = wp.st
+        ax, ay = p.aim
+        mf, mz = WP.MUZZLE[wp.arch]
+        lat = ((i % 4) - 1.5) * 0.055
+        z = mz + (((i // 4) % 2) - 0.5) * 0.07
+        mx, my = p.x + ax * mf + ay * lat, p.y + ay * mf - ax * lat
+        lvl = 1 + 0.2 * (wp.level - 1)
+        a = rnd.uniform(-1, 1) * (0.3 + st["spread"])
+        dx, dy = rot(ax, ay, a)
+        spd = st["speed"] * rnd.uniform(0.85, 1.1)
+        pr = Proj("missile", mx, my, z, dx * spd, dy * spd, st["dmg"] * p.dmg_mult(), life=st["life"] * rnd.uniform(0.9, 1.1),
+                  color=st["color"], r=0.12, blast=st["blast"], burn=st["burn"] * 1.4 * lvl * p.dmg_mult(), shock=st["shock"],
+                  homing=st["homing"], slow=st["slow"], chill=st["chill"], maxspeed=st["speed"] * 2.4)
+        pr.cone = math.atan2(ay, ax)      # where the salvo was aimed: missiles with nothing to chase drift back to it
+        pr.owner = p
+        self.projs.append(pr)
+        for _ in range(2):
+            self.add(Particle("smoke", mx, my, z, -dx * rnd.uniform(1, 2.5), -dy * rnd.uniform(1, 2.5), 0.4, 0.6, (110, 104, 96), 0.15))
+        p.muzzle = 0.04
+        p.muzzle_color = st["color"]
+        self.shake = max(self.shake, st["kick"])
+        sfx.play(st["sound"], 0.55)
+
+    def setup_wave(self, pr, x, y, dx, dy, st):
+        """Microwave ring: an arc of a circle centred on the muzzle that grows as it flies. Walls cast shadows in it."""
+        pr.ox, pr.oy = x, y
+        pr.cone = st["cone"]
+        pr.r = 0.3
+        base = math.atan2(dy, dx)
+        far = st["speed"] * st["life"] + 0.5
+        L = self.level
+        reach = []
+        for k in range(11):
+            a = base - pr.cone + 2 * pr.cone * k / 10
+            c, s = math.cos(a), math.sin(a)
+            d = 0.0
+            while d < far and not L.is_solid(int(x + c * d), int(y + s * d)):
+                d += 0.2
+            reach.append(d)
+        pr.reach = reach
+
+    def fire_arc(self, x, y, z, dx, dy, dmg, st, p):
+        """Coil lightning: instant bolt that ricochets off walls until it finds a monster, then chains through the pack."""
+        from traps import los
+        L = self.level
+        pts = [(x, y, z)]
+        bounces, left = st["bounce"], st["arc_range"]
+        cx, cy = x, y
+        step = 0.15
+        first = None
+        while left > 0 and first is None:
+            nx, ny = cx + dx * step, cy + dy * step
+            left -= step
+            tx, ty = int(nx), int(ny)
+            if L.is_solid(tx, ty):
+                self.hit_solid((tx, ty), dmg, nx, ny, z, None)
+                pts.append((cx, cy, z))
+                for _ in range(5):
+                    a = rnd.random() * math.tau
+                    self.add(Particle("spark", cx, cy, z, math.cos(a) * 4, math.sin(a) * 4, rnd.uniform(0, 2), 0.2, st["color"], 2))
+                if bounces <= 0:
+                    break
+                bounces -= 1
+                sx_, sy_ = L.is_solid(tx, int(cy)), L.is_solid(int(cx), ty)
+                if sx_:
+                    dx = -dx
+                if sy_:
+                    dy = -dy
+                if not sx_ and not sy_:
+                    dx, dy = -dx, -dy
+                continue
+            cx, cy = nx, ny
+            for e in list(self.nearby(cx, cy)) + self.bosses + self.shootables:
+                if e.alive and getattr(e, "state", "") != "dormant" and not getattr(e, "submerged", False) \
+                        and math.hypot(e.x - cx, e.y - cy) < e.r + 0.18:
+                    first = e
+                    break
+        if first is None:
+            pts.append((cx, cy, z))
+        else:
+            def hz(e):
+                return (getattr(e, "st", None) or {}).get("hz", 0.8) * 0.6
+            pts.append((first.x, first.y, hz(first)))
+            self.hit_enemy(first, dmg, dx * 10, dy * 10, st)
+            hit = {id(first)}
+            cur, k = first, dmg
+            for _ in range(st["chain"]):
+                nxt = next((o for o in SU.targets(self, cur.x, cur.y, 3.6) if id(o) not in hit and los(L, cur.x, cur.y, o.x, o.y)), None)
+                if nxt is None:
+                    break
+                k *= 0.85
+                hit.add(id(nxt))
+                pts.append((nxt.x, nxt.y, hz(nxt)))
+                self.hit_enemy(nxt, k, (nxt.x - cur.x) * 8, (nxt.y - cur.y) * 8, st)
+                cur = nxt
+            if len(hit) > 1:
+                self.snd("shock", cur.x, cur.y, 0.5)
+        self.arcs.append([pts, 0.13, 0.13, st["color"], 0.8 + st["chain"] * 0.12])
+        ex, ey, ez = pts[-1]
+        for _ in range(4):
+            a = rnd.random() * math.tau
+            self.add(Particle("glow", ex, ey, ez, math.cos(a) * 2, math.sin(a) * 2, rnd.uniform(0, 1.5), 0.25, st["color"], 2))
+
+    def step_wave(self, b, dt):
+        b.age += dt
+        b.x += b.vx * dt
+        b.y += b.vy * dt
+        b.life -= dt
+        if b.life <= 0:
+            return False
+        rad = math.hypot(b.x - b.ox, b.y - b.oy)
+        base = math.atan2(b.vy, b.vx)
+        n = len(b.reach)
+        for e in SU.targets(self, b.ox, b.oy, rad + 1.5) + [t for t in self.shootables if t.alive]:
+            if id(e) in b.hit:
+                continue
+            ex, ey = e.x - b.ox, e.y - b.oy
+            d = math.hypot(ex, ey) or 1e-6
+            if abs(d - rad) > 0.3 + e.r:
+                continue
+            da = (math.atan2(ey, ex) - base + math.pi) % math.tau - math.pi
+            if abs(da) > b.cone + e.r / max(d, 0.3):
+                continue
+            i = min(n - 1, max(0, int((da + b.cone) / (2 * b.cone) * (n - 1) + 0.5)))
+            if d > b.reach[i] + e.r:
+                continue                  # behind a wall
+            b.hit.add(id(e))
+            self.hit_enemy(e, b.dmg, ex / d * 4, ey / d * 4, b)
+            for _ in range(3):
+                self.add(Particle("glow", e.x, e.y, 0.6, rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(1, 2), 0.4, b.color, 2))
+        return True
 
     def fire_beam(self, x, y, z, dx, dy, dmg, st, wp):
         L = self.level
@@ -1724,6 +1915,8 @@ class World:
             self.drop_weapon(e.x, e.y, 0.6 if big else 0.0)
         elif rnd.random() < (0.2 if big else 0.045):
             self.drop_buff(e.x, e.y)
+        elif rnd.random() < (0.08 if big else 0.005):
+            self.drop_support(e.x, e.y, 0.5 if big else 0.0)
         elif rnd.random() < 0.04:
             self.loot.append(Loot("health", e.x, e.y, pop=True))
 
@@ -1743,6 +1936,8 @@ class World:
         self.drop_weapon(s.x, s.y, 1.0)
         if rnd.random() < 0.5:
             self.drop_buff(s.x, s.y)
+        if rnd.random() < 0.25:
+            self.drop_support(s.x, s.y, 0.8)
 
     def breach(self, x, y, radius):
         """Explosions chew through walls, opening rooms up."""
@@ -1844,8 +2039,10 @@ class World:
                 a = rnd.random() * math.tau
                 self.add(Particle("smoke", cx, cy, 0.3, math.cos(a), math.sin(a), 0.4, 0.8, (90, 80, 60), 0.2))
             r = rnd.random()
-            if r < 0.5:
+            if r < 0.45:
                 self.drop_weapon(cx, cy, 0.5)
+            elif r < 0.57:
+                self.drop_support(cx, cy, 0.5)
             elif r < 0.8:
                 self.drop_buff(cx, cy)
             else:
@@ -1936,7 +2133,11 @@ class World:
             wn[3] -= dt
         self.warnings = [wn for wn in self.warnings if wn[3] > 0]
 
-        self.projs = [b for b in self.projs if self.step_proj(b, dt)]
+        self.blocked = set()
+        for pl in self.players:
+            if pl.alive and pl.support is not None:
+                pl.support.update(self, dt, pl)
+        self.projs = [b for b in self.projs if id(b) not in self.blocked and self.step_proj(b, dt)]
         self.enemies = [e for e in self.enemies if e.alive]
         self.spawners = [s for s in self.spawners if s.alive]
         for g in self.gibs:
@@ -1945,6 +2146,9 @@ class World:
         for bm in self.beams:
             bm[5] -= dt
         self.beams = [bm for bm in self.beams if bm[5] > 0]
+        for a_ in self.arcs:
+            a_[1] -= dt
+        self.arcs = [a_ for a_ in self.arcs if a_[1] > 0]
 
         # wretch radio static
         near = min((math.hypot(e.x - pl.x, e.y - pl.y) for e in self.enemies if e.kind == "wretch" for pl in alive), default=99)
@@ -2025,7 +2229,7 @@ class World:
                     lt.vz = -lt.vz * 0.35 if lt.vz < -2 else 0.0
             for pl in alive:
                 d = math.hypot(lt.x - pl.x, lt.y - pl.y)
-                if lt.kind == "weapon":
+                if lt.kind in ("weapon", "support"):
                     if d < bests.get(pl.idx, 0.9):
                         bests[pl.idx] = d
                         self.near_loot_by[pl.idx] = lt
@@ -2047,7 +2251,10 @@ class World:
         for i, pl in enumerate(self.players):
             lt = self.near_loot_by.get(i)
             if lt is not None and lt in self.loot and pl.alive and i < len(inputs) and "interact" in getattr(inputs[i], "pressed", ()):
-                self.take_weapon(lt, pl)
+                if lt.kind == "support":
+                    self.take_support(lt, pl)
+                else:
+                    self.take_weapon(lt, pl)
 
         ex, ey = L.exit
         if not self.bosses and any(math.hypot(ex - pl.x, ey - pl.y) < 0.6 for pl in alive):
@@ -2090,10 +2297,10 @@ class World:
             col = (120, 255, 90) if b.kind == "plasma" else ((255, 90, 40) if b.hostile else (255, 170, 60))
             if b.kind == "fireball":
                 col = (255, 120, 30)
-            small = b.kind in ("plasma", "fireball") or b.blast < 1.0
-            heavy = b.kind in ("rocket", "grenade") and not b.hostile
+            small = b.kind in ("plasma", "fireball", "missile") or b.blast < 1.0
+            heavy = b.kind in ("rocket", "grenade", "missile") and not b.hostile
             # your own rockets and grenades hurt you too (reduced), and they chew through walls
-            pdmg = b.dmg if b.hostile else min(b.dmg * 0.6, 40)
+            pdmg = b.dmg if b.hostile else min(b.dmg * (1.5 if b.kind == "missile" else 0.6), 40)
             self.explode(x, y, b.blast, b.dmg if not b.hostile else b.dmg * 0.5, col,
                          hurt_player=b.hostile or heavy, quiet=small, small=small, player_dmg=pdmg,
                          breach=b.blast * 0.7 if (heavy or b.kind == "mortar") else 0.0)
@@ -2179,6 +2386,8 @@ class World:
         k = b.kind
         if k == "rail":
             return self.step_rail(b, dt)
+        if k == "wave":
+            return self.step_wave(b, dt)
         b.age += dt
         if k == "mortar":
             b.z += b.vz * dt
@@ -2212,6 +2421,20 @@ class World:
                 self.add(Particle("smoke", b.x - b.vx * 0.03, b.y - b.vy * 0.03, b.z, rnd.uniform(-0.3, 0.3), rnd.uniform(-0.3, 0.3),
                                   0.3, 0.7, (90, 85, 80), 0.12))
                 self.add(Particle("fire", b.x - b.vx * 0.02, b.y - b.vy * 0.02, b.z, 0, 0, 0, 0.12, (255, 150, 50), 9))
+        elif k == "missile":
+            sp = math.hypot(b.vx, b.vy) or 1
+            ns = min(b.maxspeed, sp + dt * 22)
+            b.vx, b.vy = b.vx / sp * ns, b.vy / sp * ns
+            if b.age > 0.12 and (not b.homing or self.nearest_enemy(b.x, b.y, b.vx, b.vy) is None):
+                cur = math.atan2(b.vy, b.vx)
+                diff = (b.cone - cur + math.pi) % math.tau - math.pi
+                b.vx, b.vy = rot(b.vx, b.vy, max(-2.5 * dt, min(2.5 * dt, diff)))
+            b.trail -= dt
+            if b.trail <= 0:
+                b.trail = 0.03
+                self.add(Particle("smoke", b.x - b.vx * 0.02, b.y - b.vy * 0.02, b.z, rnd.uniform(-0.2, 0.2), rnd.uniform(-0.2, 0.2),
+                                  0.2, 0.45, (100, 95, 90), 0.08))
+                self.add(Particle("fire", b.x - b.vx * 0.015, b.y - b.vy * 0.015, b.z, 0, 0, 0, 0.08, (255, 160, 60), 6))
         elif k in ("chem", "cryo"):
             f = math.exp(-1.7 * dt)
             b.vx *= f
@@ -2338,7 +2561,7 @@ class World:
                                 self.add(Particle("spark", b.x, b.y, b.z, math.cos(a) * 4, math.sin(a) * 4, rnd.uniform(1, 3), 0.25, (255, 230, 160), 2))
                             self.snd("hit_metal", b.x, b.y, 0.6)
                             return False      # deflected by the tower shield
-                    if k in ("grenade", "rocket", "nuke"):
+                    if k in ("grenade", "rocket", "nuke", "missile"):
                         self.impact(b, b.x, b.y)
                         return False
                     b.hit.add(id(e))
@@ -2352,7 +2575,7 @@ class World:
                     b.pierce -= 1
         b.life -= dt
         if b.life <= 0:
-            if k in ("grenade", "rocket", "plasma", "fireball", "nuke"):
+            if k in ("grenade", "rocket", "plasma", "fireball", "nuke", "missile"):
                 self.impact(b, b.x, b.y)
             elif k == "chem":
                 if rnd.random() < 0.55:
