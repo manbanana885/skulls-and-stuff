@@ -22,6 +22,7 @@ import shutil
 import socket
 import subprocess
 import threading
+
 import struct
 import time
 import zlib
@@ -106,6 +107,9 @@ class TailscaleProbe:
         self.state = "checking"
         self.ip = None
         self.name = None
+        if os.environ.get("SKULLS_OFFLINE"):
+            self.state = "missing"
+            return
         threading.Thread(target=self._run, daemon=True).start()
 
     def _run(self):
@@ -140,6 +144,134 @@ class TailscaleProbe:
         except Exception:
             pass
         self.state = "on" if self.ip else ("off" if installed else "missing")
+
+
+# ================================================================ public (internet) address
+def is_private_ip(ip):
+    """Addresses that only mean something inside a home / provider network (10.x, 172.16-31.x, 192.168.x, 100.64/10)."""
+    try:
+        a, b = (int(x) for x in ip.split(".")[:2])
+    except ValueError:
+        return True
+    return a == 10 or a == 127 or (a == 172 and 16 <= b <= 31) or (a == 192 and b == 168) or (a == 169 and b == 254) \
+        or is_tailscale_ip(ip)
+
+
+def _valid_ipv4(text):
+    parts = text.strip().split(".")
+    return len(parts) == 4 and all(p.isdigit() and 0 <= int(p) <= 255 for p in parts)
+
+
+UPNP_TARGETS = ("urn:schemas-upnp-org:device:InternetGatewayDevice:1", "urn:schemas-upnp-org:device:InternetGatewayDevice:2",
+                "urn:schemas-upnp-org:service:WANIPConnection:1", "urn:schemas-upnp-org:service:WANPPPConnection:1")
+
+
+def upnp_router(timeout=2.0):
+    """Ask the local network for a router that speaks UPnP. Returns (control URL, service type) or None."""
+    import urllib.request
+    import urllib.parse
+    import xml.etree.ElementTree as ET
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(0.4)
+    locations = []
+    try:
+        for st in UPNP_TARGETS:
+            msg = ("M-SEARCH * HTTP/1.1\r\nHOST: 239.255.255.250:1900\r\nMAN: \"ssdp:discover\"\r\nMX: 2\r\nST: %s\r\n\r\n" % st)
+            s.sendto(msg.encode(), ("239.255.255.250", 1900))
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            try:
+                data, _ = s.recvfrom(4096)
+            except socket.timeout:
+                continue
+            for line in data.decode("latin-1").split("\r\n"):
+                if line.lower().startswith("location:"):
+                    loc = line.split(":", 1)[1].strip()
+                    if loc not in locations and loc.startswith("http://"):
+                        locations.append(loc)
+    except OSError:
+        pass
+    finally:
+        s.close()
+    for loc in locations:
+        try:
+            xml = urllib.request.urlopen(loc, timeout=3).read(200000)
+            root = ET.fromstring(xml)
+        except Exception:
+            continue
+        ns = root.tag.split("}")[0] + "}" if root.tag.startswith("{") else ""
+        base = root.findtext(ns + "URLBase") or loc
+        for svc in root.iter(ns + "service"):
+            stype = svc.findtext(ns + "serviceType") or ""
+            if "WANIPConnection" in stype or "WANPPPConnection" in stype:
+                ctrl = svc.findtext(ns + "controlURL") or ""
+                return urllib.parse.urljoin(base, ctrl), stype
+    return None
+
+
+def upnp_call(router, action, args=(), timeout=4):
+    """One UPnP request to the router; returns the reply's fields as a dict (raises on failure)."""
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    from xml.sax.saxutils import escape
+    ctrl, stype = router
+    body = "".join("<%s>%s</%s>" % (k, escape(str(v)), k) for k, v in args)
+    env = ('<?xml version="1.0"?><s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+           's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body><u:%s xmlns:u="%s">%s</u:%s>'
+           '</s:Body></s:Envelope>' % (action, stype, body, action))
+    req = urllib.request.Request(ctrl, env.encode(), {"Content-Type": 'text/xml; charset="utf-8"',
+                                                      "SOAPAction": '"%s#%s"' % (stype, action)})
+    reply = urllib.request.urlopen(req, timeout=timeout).read(100000)
+    out = {}
+    for el in ET.fromstring(reply).iter():
+        tag = el.tag.split("}")[-1]
+        if el.text and not list(el):
+            out[tag] = el.text.strip()
+    return out
+
+
+class PublicIPProbe:
+    """This connection's internet address, found in the background.
+    Asks the router first (UPnP: nothing leaves the house); if it won't say, asks ipify.org once.
+    state: 'checking' | 'ok' | 'cgnat' (the provider shares one address: forwarding can't work) | 'unknown'"""
+
+    def __init__(self):
+        self.state = "checking"
+        self.ip = None
+        self.router = None          # (control URL, service) if the router speaks UPnP
+        self.router_ip = None
+        self.source = None
+        if os.environ.get("SKULLS_OFFLINE"):      # tests: don't go asking the router / the internet
+            self.state = "unknown"
+            return
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        try:
+            self.router = upnp_router()
+            if self.router:
+                try:
+                    ip = upnp_call(self.router, "GetExternalIPAddress").get("NewExternalIPAddress", "")
+                    if _valid_ipv4(ip):
+                        self.router_ip = ip
+                except Exception:
+                    pass
+            if self.router_ip and not is_private_ip(self.router_ip):
+                self.ip, self.source = self.router_ip, "router"
+            else:
+                import urllib.request
+                try:
+                    text = urllib.request.urlopen("https://api.ipify.org", timeout=5).read(64).decode("ascii", "replace")
+                    if _valid_ipv4(text):
+                        self.ip, self.source = text.strip(), "ipify.org"
+                except Exception:
+                    pass
+            if self.router_ip and is_private_ip(self.router_ip):
+                self.state = "cgnat"             # the router itself is behind another network: nobody can reach in
+            else:
+                self.state = "ok" if self.ip else "unknown"
+        except Exception:
+            self.state = "ok" if self.ip else "unknown"
 
 
 def open_link(url):

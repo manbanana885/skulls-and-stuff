@@ -110,7 +110,7 @@ game that's already running.
   for "Allow an app through Windows Firewall", find Python, and tick both boxes.
 
   Without Tailscale, the host can forward **TCP port 47777** on their router to their PC, and give friends
-  their public IP (search "what is my IP"). This doesn't work on some internet connections (CGNAT). Remove
+  the **INTERNET** address from the lobby (the game gets it from the router or from ipify.org). This doesn't work on some internet connections (CGNAT). Remove
   the forward when you're done playing.
 
 Then type the **game name** the host gave you; capitals, spaces and dashes don't matter. Pick a body with

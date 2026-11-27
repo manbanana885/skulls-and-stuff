@@ -137,6 +137,7 @@ class HostSession:
         self.before = self.name
         self.fails = {}                  # ip -> times of wrong game names
         self.tailscale = net.TailscaleProbe()
+        self.public = net.PublicIPProbe()
         sfx.router = self.route_sound
         sfx.music_router = self.route_music
         g.state = "lobby"
@@ -540,6 +541,7 @@ class HostSession:
         g.center_text(s, g.font, "LEFT / RIGHT your body   -   START / A begin   -   B / ESC stop hosting"
                       + ("   (guests can drop in later too)" if len(info["players"]) == 1 else ""),
                       g.H - g.sc(40), (255, 220, 120))
+        g.center_text(s, g.small, "version %s - your friends need the same one" % self.version, g.H - g.sc(16), (120, 125, 140))
         return True
 
     def draw_addresses(self, g, s, port):
@@ -569,8 +571,16 @@ class HostSession:
             line("TAILSCALE:", "not installed", (200, 205, 215), "over the internet? F1 opens %s (free)" % net.TAILSCALE_DOWNLOAD)
         else:
             line("TAILSCALE:", "checking...", (150, 155, 170))
-        line("OR:", "forward TCP port %d to this PC" % self.server.port, (150, 155, 170),
-             "and give your public IP   -   version %s" % self.version)
+        pub = self.public
+        if pub.state == "ok":
+            line("INTERNET:", pub.ip + port, (255, 230, 150), "works only if TCP port %d is forwarded to this PC" % self.server.port)
+        elif pub.state == "cgnat":
+            line("INTERNET:", "not reachable", (255, 160, 120),
+                 "your provider shares your address (CGNAT) - use Tailscale")
+        elif pub.state == "unknown":
+            line("INTERNET:", "couldn't find it", (200, 205, 215), "google \"what is my IP\" on this PC")
+        else:
+            line("INTERNET:", "checking...", (150, 155, 170))
 
     def status_line(self, g):
         n = sum(1 for gu in self.guests if gu.in_game)
