@@ -4,10 +4,14 @@ An isometric twin-stick shooter about cyborg skeletons, written in Python with p
 Every sprite is pre-rendered from procedural Blender models and every sound is synthesized offline.
 
 - Procedural levels across 17 biomes, each with its own enemies, a signature monster, bosses and 2-3 trap types
-- Procedural guns (26 archetypes x brands x rarities x mods) and power-ups, including heavy weapons
-  (chaingun, railgun, barrage missile launcher, storm coil) that slow you down but hit much harder
-- Modules with rolled stats, up to 3 equipped plus a backpack (managed from the pause menu): buzzsaw orbiter,
-  arc shield, medbot and gun drone
+- Procedural guns (30+ archetypes x brands x rarities x mods) and power-ups, including heavy weapons
+  (chaingun, railgun, barrage missile launcher, storm coil) that slow you down but hit much harder, a cluster
+  bomb launcher and chemical jets (napalm / cryo / rad-waste) that leave hazardous puddles
+- 21 manufacturers and nine rarity tiers, up to Mythical, Demonic, Eldritch and Sacred guns with their own
+  effects (run `run_loot_test.bat` to get only those four tiers)
+- Modules with rolled stats, 4 equipped (one per D-pad direction) plus an 8-slot backpack, managed from the
+  pause menu: buzzsaw orbiter, arc shield, medbot, gun drone, jump jets, decoys, grenades (shrapnel, hex,
+  nuke, incendiary, cryo, corrosive), carryable barrels and more
 - Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
 - Damage types (Kinetic, Explosive, Fire, Chemical, Cryo, Radiation, Electrical) against enemy categories
   (Undead, Robot, Demon, Construct, Mutant): bring the right gun. Kinetic guns can roll Penetrating Core or
@@ -16,7 +20,8 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
   treads, +20% integrity / -20% speed) and Super Mutant (mutant, +20% speed / -20% integrity)
 - Deployable MG and mortar turret modules (F / B) that draw monsters, take damage, and go up like a tactical nuke
 - Explosive barrels in four kinds: red (fire + burning ground), green (toxic gas + acid), yellow (radiation
-  fallout) and orange (shrapnel) - they hurt monsters and you alike, and chain off each other
+  fallout) and orange (shrapnel) - they hurt monsters and you alike, and chain off each other. Pick one up
+  with E / A and put it down somewhere better
 - Drop-in local co-op for 2 players
 
 ## How to play (Windows, no Python experience needed)
@@ -52,10 +57,20 @@ It clashes with `pygame-ce`.
 
 ## Controls
 
-WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). E / A picks things up, Q / Y swaps guns,
-SHIFT / LB dashes (with Jump Jets equipped), F / B deploys or packs up a turret module. ENTER / START pauses and opens the Modules screen:
-arrows / D-pad to move, E / A to equip or unequip, R / X to drop.
-Player 2 joins any time by pressing BACK / SELECT on a second controller.
+WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). Q / Y swaps guns, SHIFT / LB dashes
+(with Jump Jets equipped).
+
+- **Pick up: E, or the bottom face button** (A on Xbox, B on a SNES-style pad). Takes whatever you're next to
+  and facing: a gun, a module, a barrel, or your own deployed turret. A turret packs into the selected D-pad
+  slot, which has to be empty.
+- **Select a module slot: the D-pad, or keys 1-4.**
+- **Use the selected module: F, or the right face button** (B on Xbox, A on a SNES-style pad), **or RB.**
+  Throws a grenade, deploys a turret, puts a barrel down, and so on. It never picks anything up.
+
+ENTER / START pauses: the pause screen shows your two guns (E / A takes the
+highlighted one in hand) and your modules (arrows / D-pad to move, E / A to equip or unequip, R / X to drop).
+Player 2 joins any time by pressing BACK / SELECT on a second controller, then picks a body with LEFT / RIGHT
+and confirms with A / START (B / BACK backs out). The game waits while they choose.
 
 ## Rebuild assets
 
@@ -63,7 +78,7 @@ Sprites and audio are committed, so this is only needed after changing the gener
 
 ```
 build_assets.bat [names | prefix*] [--quick]   # renders sprites with Blender (edit the Blender path inside)
-build_audio.bat                                # synthesizes sfx + music (numpy/scipy)
+build_audio.bat                                # synthesizes sfx + the soundtrack (numpy/scipy/soundfile)
 ```
 
 ## Layout

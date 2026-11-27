@@ -245,6 +245,35 @@ check(1 <= len(dots) <= 4, "damage over time is pooled into a few numbers (%d)" 
 g.toggle_numbers()
 check(not w.show_numbers, "and toggles back off")
 
+# ---- top tiers: sacred heals, eldritch drains but feeds on damage, demonic burns you (never below 10%)
+print("== top tiers")
+for tier, label in ((WP.SACRED, "sacred"), (WP.ELDRITCH, "eldritch"), (WP.DEMONIC, "demonic")):
+    w, p = fresh()
+    p.max_hp = 100
+    p.hp = 50
+    p.weapons[p.cur] = WP.generate(3, random.Random(1), arch="carbine", rarity=tier)
+    for _ in range(300):
+        g.update(1 / 60)
+    after = p.hp
+    p.hp = 11
+    for _ in range(600):
+        g.update(1 / 60)
+    print("  %-8s 5s held: integrity 50 -> %.1f; from 11 after 10s: %.1f" % (label, after, p.hp))
+    if tier == WP.SACRED:
+        check(after > 54, "sacred guns heal their wielder")
+    else:
+        check(after < 47 and abs(p.hp - 10) < 0.01, "%s guns eat at their wielder but never below 10%%" % label)
+w, p = fresh()
+p.weapons[p.cur] = WP.generate(3, random.Random(1), arch="carbine", rarity=WP.ELDRITCH)
+p.max_hp, p.hp = 100, 50
+e = Enemy("zombie", p.x + 2, p.y, awake=True, depth=1)
+e.hp = 1e6
+w.enemies = [e]
+pr_ = __import__("world").Proj("bullet", p.x, p.y, 1, 10, 0, 100, life=1)
+pr_.owner, pr_.tier_leech = p, p.weapon.st["tier_leech"]
+w.hit_enemy(e, 100, 1, 0, pr_)
+check(abs(p.hp - (50 + 100 * 0.08)) < 0.01, "eldritch hits heal 8%% of damage dealt (50 -> %.1f)" % p.hp)
+
 # ---- feedback + cards
 w, p = fresh()
 e = Enemy("drone", p.x + 2, p.y, awake=True, depth=1)

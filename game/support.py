@@ -126,6 +126,14 @@ KINDS = {
         "hp":      (60, 140, "ARMOR", "%d"),
         "rebuild": (25.0, 10.0, "REBUILD", "%.0fs"),
     }),
+    "grenade": dict(label="Grenade", color=(255, 170, 60), weight=8, params={
+        "dmg":      (10, 100, "DMG", "%.0f"),
+        "radius":   (1.6, 2.8, "BLAST", "%.1f m"),
+        "cooldown": (40.0, 10.0, "COOLDOWN", "%.0fs"),
+    }),
+    "barrel": dict(label="Barrel", color=(220, 120, 60), weight=6, params={
+        "hp": (2, 6.49, "FUSE", "%d hits"),
+    }),
     "mortar": dict(label="Mortar Turret", color=(170, 180, 110), weight=6, params={
         "dmg":     (12, 26, "DMG", "%.0f"),
         "blast":   (1.4, 2.2, "BLAST", "%.1f m"),
@@ -137,12 +145,21 @@ KINDS = {
 }
 TURRETS = {"mgturret", "mortar"}
 # modules whose flavour is rolled, not just their numbers
-ELEMENTS = {"core": ("blast", "magnet", "storm"), "aura": ("burn", "chill", "rad"), "battery": ("revive", "nova")}
+ELEMENTS = {"core": ("blast", "magnet", "storm"), "aura": ("burn", "chill", "rad"), "battery": ("revive", "nova"),
+            "grenade": ("shrapnel", "hex", "nuke", "incendiary", "cryo", "corrosive"),
+            "barrel": ("fire", "chem", "rad", "shrap")}
+CONSUMED = {"barrel"}                 # used up when deployed
 ELEMENT_LABEL = {"blast": "Blast Core", "magnet": "Magnet Core", "storm": "Storm Core",
                  "burn": "Inferno Aura", "chill": "Frost Aura", "rad": "Rad Aura",
-                 "revive": "Bone Battery", "nova": "Nova Battery"}
+                 "revive": "Bone Battery", "nova": "Nova Battery",
+                 "shrapnel": "Shrapnel Grenade", "hex": "HE Grenade", "nuke": "Nuke Grenade", "incendiary": "Incendiary Grenade",
+                 "cryo": "Cryo Grenade", "corrosive": "Corrosive Grenade",
+                 "fire": "Fire Barrel", "chem": "Chem Barrel", "shrap": "Shrapnel Barrel"}
 ELEMENT_COLOR = {"blast": (255, 150, 60), "magnet": (130, 170, 255), "storm": (170, 150, 255),
-                 "burn": (255, 110, 40), "chill": (140, 210, 255), "rad": (150, 255, 70)}
+                 "burn": (255, 110, 40), "chill": (140, 210, 255), "rad": (150, 255, 70),
+                 "shrapnel": (255, 170, 60), "hex": (255, 220, 120), "nuke": (190, 255, 70), "incendiary": (255, 100, 30),
+                 "cryo": (140, 210, 255), "corrosive": (140, 230, 50), "fire": (230, 60, 40), "chem": (90, 200, 60),
+                 "shrap": (230, 130, 40)}
 PCT = {"heal"}                 # shown as percentages for these kinds
 INT = {"capacity", "latches", "trigger", "max", "hp"}
 # the adjective an item gets from its best roll
@@ -164,6 +181,8 @@ ADJ = {
     "tether": {"dps": "Searing", "length": "Long", "spin": "Spinning", "heal": "Kindred"},
     "magnet": {"radius": "Strong", "pull": "Greedy"},
     "mgturret": {"dmg": "Heavy", "rate": "Rapid", "range": "Long-Range", "hp": "Armored", "rebuild": "Quick-Build"},
+    "grenade": {"dmg": "Potent", "radius": "Wide", "cooldown": "Quick"},
+    "barrel": {"hp": "Stable"},
     "mortar": {"dmg": "Heavy", "blast": "High-Yield", "rate": "Rapid", "range": "Long-Range", "hp": "Armored", "rebuild": "Quick-Build"},
 }
 UNIQUE = {"sawbot": ["Mr. Whirly", "The Lawnmower", "Grinder Prime"], "shield": ["The Umbrella", "Halo of Saint Rivet", "Bulwark-9"],
@@ -174,9 +193,11 @@ UNIQUE = {"sawbot": ["Mr. Whirly", "The Lawnmower", "Grinder Prime"], "shield": 
           "aura": ["Halo of Ruin", "Personal Space", "Hotbox"], "battery": ["Lazarus Cell", "Second Wind", "Phylactery"],
           "autoloader": ["Busy Hands", "The Butler", "Quartermaster"], "jets": ["Rocket Boots", "Heel Burners", "Quickfoot"],
           "tether": ["Umbilical", "Red String", "Leash"], "magnet": ["Sticky Fingers", "Gravity Well", "The Collector"],
-          "mgturret": ["Sentry Gun", "The Doorman", "Tripod Tim"], "mortar": ["Big Bertha", "Rainmaker", "Thunder Pot"]}
+          "mgturret": ["Sentry Gun", "The Doorman", "Tripod Tim"], "mortar": ["Big Bertha", "Rainmaker", "Thunder Pot"],
+          "grenade": ["Holy Hand Grenade", "Pocket Sun", "The Pineapple"], "barrel": ["Old Faithful", "The Keg", "Party Barrel"]}
 SCALED = {"dmg", "heal", "capacity", "drain", "dps", "burn", "hp"}     # grows with item level
-NOT_SCALED = {("battery", "capacity"), ("battery", "heal"), ("leech", "heal"), ("tether", "heal")}
+NOT_SCALED = {("battery", "capacity"), ("battery", "heal"), ("leech", "heal"), ("tether", "heal"), ("barrel", "hp")}
+SPRITE = {"barrel": lambda s: "barrel_" + s.elem}
 
 
 def targets(w, x, y, rng):
@@ -217,12 +238,14 @@ class Support:
         self.p.setdefault("size", 1.0)
         self.p["capacity"] = int(round(self.p.get("capacity", 0)))
         self.elem = rng.choice(ELEMENTS[kind]) if kind in ELEMENTS else None
-        if rarity == 4:
+        if rarity >= 4:
             self.name = '"%s"' % rng.choice(UNIQUE[kind])
         else:
             best = max((n for n in rolls if n != "size" or len(rolls) < 2), key=lambda n: rolls[n])
             self.name = "%s %s" % (ADJ[kind][best], K["label"]) if rarity else K["label"]
         self.label = ELEMENT_LABEL.get(self.elem, K["label"])
+        if kind == "barrel":
+            self.label = {"fire": "Fire Barrel", "chem": "Chem Barrel", "rad": "Rad Barrel", "shrap": "Shrapnel Barrel"}[self.elem]
         if self.elem and rarity < 4:
             self.name = self.name.replace(K["label"], self.label)
         self.tint = ELEMENT_COLOR.get(self.elem, K["color"])
@@ -270,6 +293,11 @@ class Support:
         return WP.RARITY[self.rarity][0]
 
     @property
+    def sprite(self):
+        f = SPRITE.get(self.kind)
+        return f(self) if f else "sup_" + self.kind
+
+    @property
     def size(self):
         return self.p["size"]
 
@@ -296,6 +324,8 @@ class Support:
             return "explosive" if self.elem == "nova" else None
         return {"sawbot": "kinetic", "gunbot": "kinetic", "leech": "chemical", "skull": "explosive", "mines": "explosive",
                 "mgturret": "kinetic", "mortar": "explosive",
+                "grenade": {"shrapnel": "kinetic", "hex": "explosive", "nuke": "explosive", "incendiary": "fire", "cryo": "cryo",
+                            "corrosive": "chemical"}.get(self.elem), "barrel": "explosive",
                 "jets": "fire", "tether": "electrical"}.get(self.kind)
 
     def blurb(self):
@@ -319,15 +349,17 @@ class Support:
                 "jets": "Dash with SHIFT / LB, leaving a burning trail",
                 "tether": "Beam to your partner (or a satellite) that burns monsters",
                 "magnet": "Pulls health and power-ups to you",
-                "mgturret": "Deploy / pack up with F / B: auto-firing machine gun",
-                "mortar": "Deploy / pack up with F / B: lobs shells over walls"}[self.kind]
+                "mgturret": "F / B deploys it; E / A packs it into an empty slot: auto-firing machine gun",
+                "mortar": "F / B deploys it; E / A packs it into an empty slot: lobs shells over walls",
+                "grenade": "Select its slot, F / B to throw; hurts you too if you're close",
+                "barrel": "Select its slot, F / B to put down (used up); shoot it to set it off"}[self.kind]
 
     # ---- behaviour
     def attach(self, pl, slot=0):
         """Equip on a player. The slot spreads duplicates apart: orbiters start a third of a turn apart and the
         followers take different stations (right shoulder / left shoulder / behind)."""
         self.slot = slot
-        self.ang = slot * math.tau / 3
+        self.ang = slot * math.tau / 4
         self.x, self.y = pl.x, pl.y
         self.hit_cd.clear()
         self.target = None
@@ -343,6 +375,13 @@ class Support:
     def radius(self):
         """sawbot orbit / shield ring radius in tiles"""
         return self.p["orbit"] if self.kind == "sawbot" else 1.0 * self.p["size"]
+
+    def update_grenade(self, w, dt, pl):
+        self.station(w, dt, pl, 1.5)
+        self.cd = max(0.0, self.cd - dt)
+
+    def update_barrel(self, w, dt, pl):
+        self.station(w, dt, pl, 1.3)
 
     def update(self, w, dt, pl):
         self.t += dt
@@ -445,7 +484,7 @@ class Support:
     def update_medbot(self, w, dt, pl):
         ax, ay = pl.aim
         side = math.sin(self.t * 0.7) * 0.5
-        side += (0.0, 0.9, -0.9)[getattr(self, "slot", 0) % 3]
+        side += (0.0, 0.9, -0.9, 0.45)[getattr(self, "slot", 0) % 4]
         tx, ty = pl.x - ax * 0.85 - ay * side, pl.y - ay * 0.85 + ax * side
         ox, oy = self.x, self.y
         self.follow(w, dt, pl, tx, ty, self.p["speed"])
@@ -467,7 +506,7 @@ class Support:
         from traps import los
         ax, ay = pl.aim
         wob = math.sin(self.t * 1.3) * 0.3
-        lat, back = ((0.95, 0.25), (-0.95, 0.25), (0.0, 1.0))[getattr(self, "slot", 0) % 3]
+        lat, back = ((0.95, 0.25), (-0.95, 0.25), (0.0, 1.0), (0.6, -0.5))[getattr(self, "slot", 0) % 4]
         lat = lat + wob * (1 if lat >= 0 else -1)
         tx, ty = pl.x + ay * lat - ax * back, pl.y - ax * lat - ay * back
         self.follow(w, dt, pl, tx, ty, self.p["speed"])
@@ -502,8 +541,8 @@ class Support:
     # ================================================================ worn modules hover at a station on your back
     def station(self, w, dt, pl, z=1.55):
         ax, ay = pl.aim
-        lat = (0.45, -0.45, 0.0)[getattr(self, "slot", 0) % 3]
-        back = 0.45 if getattr(self, "slot", 0) % 3 < 2 else 0.75
+        lat = (0.45, -0.45, 0.0, 0.0)[getattr(self, "slot", 0) % 4]
+        back = (0.45, 0.45, 0.75, 1.1)[getattr(self, "slot", 0) % 4]
         tx, ty = pl.x - ax * back + ay * lat, pl.y - ay * back - ax * lat
         d = math.hypot(tx - self.x, ty - self.y)
         if d > 3:
@@ -524,7 +563,7 @@ class Support:
         from traps import los
         # bolted to the top corner of the backpack (right shoulder; a second arm takes the left, a third the middle)
         ax, ay = pl.aim
-        side = (-1, 1, 0)[getattr(self, "slot", 0) % 3]
+        side = (-1, 1, 0, 0)[getattr(self, "slot", 0) % 4]
         self.x = pl.x - ax * 0.2 - ay * 0.13 * side
         self.y = pl.y - ay * 0.2 + ax * 0.13 * side
         self.z = 1.32 if side else 1.42
@@ -608,7 +647,9 @@ class Support:
         from world import Particle
         self.station(w, dt, pl, 1.75)
         self.cd = max(0.0, self.cd - dt)
-        if not self.was_hit(pl) or self.cd > 0:
+        hit = self.was_hit(pl)
+        force, self._force = getattr(self, "_force", False), False
+        if not (hit or force) or self.cd > 0:
             return
         self.cd = self.p["cooldown"]
         self.flash = 0.3
@@ -709,7 +750,8 @@ class Support:
         if self.cd > 0:
             return
         near = sum(1 for e in targets(w, pl.x, pl.y, 4.5))
-        if near >= self.p["trigger"] or (hit and near):
+        force, self._force = getattr(self, "_force", False), False
+        if near >= self.p["trigger"] or (hit and near) or force:
             from world import resolve
             ax, ay = pl.aim
             x, y = resolve(w.level, pl.x - ax * 0.8, pl.y - ay * 0.8, 0.28)
@@ -780,10 +822,12 @@ class Support:
     def update_battery(self, w, dt, pl):
         self.station(w, dt, pl, 1.7)
         cap = self.p["capacity"]
-        if self.elem == "nova" and self.charge >= cap:
+        force, self._force = getattr(self, "_force", False), False
+        if self.elem == "nova" and (self.charge >= cap or (force and self.charge >= cap * 0.5)):
+            k = self.charge / cap                     # an early detonation is weaker
             self.charge = 0
             self.flash = 0.4
-            w.explode(pl.x, pl.y, 3.2, self.p["dmg"] * pl.dmg_mult(), (230, 220, 190), hurt_player=False)
+            w.explode(pl.x, pl.y, 3.2, self.p["dmg"] * pl.dmg_mult() * k, (230, 220, 190), hurt_player=False)
             w.message("BONE NOVA", (230, 220, 190))
 
     def on_kill(self, w):
@@ -888,7 +932,7 @@ class Support:
                 self.beam.append((lt.x, lt.y))
 
 
-    # ---- deployable turrets (deploy / pack up from Player.update via toggle_turret)
+    # ---- deployable turrets (deployed with the use button, packed up with the pick-up button)
     def update_mgturret(self, w, dt, pl):
         self.update_turret_module(w, dt, pl)
 
@@ -897,41 +941,114 @@ class Support:
 
     def update_turret_module(self, w, dt, pl):
         self.station(w, dt, pl, 1.5)
-        if self.rebuild_t > 0:
-            self.rebuild_t -= dt
-            if self.rebuild_t <= 0:
-                self.armor = self.p["hp"]
-                w.message("%s rebuilt" % self.label, (170, 180, 110))
-        tr = self.deployed
-        if tr is None:
-            self.armor = min(self.p["hp"], self.armor + self.p["hp"] * 0.05 * dt)    # field repairs while packed
-            return
-        if not tr.alive:
-            self.deployed = None
-            self.rebuild_t = self.p["rebuild"]
-            return
-        tr.update(w, dt, pl)
+        self.armor = min(self.p["hp"], self.armor + self.p["hp"] * 0.05 * dt)    # field repairs while packed
+
+    def activate(self, w, pl):
+        """F / B with this module's slot selected."""
+        k = self.kind
+        self.flash = max(self.flash, 0.12)
+        if k in TURRETS:
+            if self.can_deploy():
+                self.deploy(w, pl)
+        elif k == "grenade":
+            if self.cd > 0:
+                w.message("%s ready in %.0fs" % (self.label, self.cd), (200, 190, 160))
+            else:
+                self.throw(w, pl)
+        elif k == "barrel":
+            self.place_barrel(w, pl)
+        elif k == "jets":
+            if self.ready():
+                self.dash(w, pl, *pl.last_move)
+        elif k == "decoy":
+            if self.decoy is None and self.cd <= 0:
+                self._force = True
+        elif k == "core":
+            if self.cd <= 0:
+                self._force = True
+        elif k == "skull":
+            if self.state == "idle":
+                self.cd = 0.0
+        elif k == "battery" and self.elem == "nova":
+            if self.charge >= self.p["capacity"] * 0.5:
+                self._force = True
+            else:
+                w.message("Nova battery needs at least half a charge", (230, 220, 190))
+        else:
+            w.message("%s is passive - always on" % self.label, (160, 165, 180))
 
     def can_deploy(self):
-        return self.kind in TURRETS and self.deployed is None and self.rebuild_t <= 0
+        return self.kind in TURRETS and self.deployed is None
+
+    def leave_inventory(self, pl):
+        for i, g in enumerate(pl.gear):
+            if g is self:
+                pl.gear[i] = None
+        if self in pl.pack:
+            pl.pack.remove(self)
 
     def deploy(self, w, pl):
+        """Set the turret down; it leaves your inventory until you pack it up again."""
         from world import resolve
         ax, ay = pl.aim
         x, y = resolve(w.level, pl.x + ax * 0.9, pl.y + ay * 0.9, 0.35)
         self.deployed = Turret(self, x, y, pl.aim)
+        self.deployed.owner = pl
         w.turrets.append(self.deployed)
+        self.leave_inventory(pl)
         w.snd("servo", x, y, 0.8)
         w.message("%s deployed" % self.label, (170, 180, 110))
 
-    def pack_up(self, w):
+    def pack_up(self, w, pl, slot):
+        """Back into the (empty) gear slot it's packed into."""
         tr = self.deployed
+        if pl.gear[slot] is not None:
+            w.message("Select an empty D-pad slot to pack up the %s" % self.label, (255, 140, 120))
+            return False
+        pl.gear[slot] = self
+        self.attach(pl, slot)
         self.armor = tr.hp
         tr.alive = False
         if tr in w.turrets:
             w.turrets.remove(tr)
         self.deployed = None
         w.snd("reload", tr.x, tr.y, 0.8)
+        w.message("%s packed up" % self.label, (170, 180, 110))
+        return True
+
+    def throw(self, w, pl):
+        """Lob a grenade toward where you're aiming; it detonates on contact or when its fuse runs out."""
+        from world import Proj
+        ax, ay = pl.aim
+        spd = 8.0
+        pr = Proj("grenade", pl.x + ax * 0.5, pl.y + ay * 0.5, 1.1, ax * spd, ay * spd, self.p["dmg"] * pl.dmg_mult(), life=1.6,
+                  color=self.tint, r=0.16, blast=self.p["radius"])
+        pr.vz, pr.grav = 3.5, 14.0
+        pr.effect = "gmod:" + self.elem
+        pr.dtype = self.dtype() or "explosive"
+        pr.owner = pl
+        w.projs.append(pr)
+        self.cd = self.p["cooldown"] * (1.4 if self.elem == "nuke" else 1.0)
+        w.snd("shot_grenade", pl.x, pl.y, 0.7)
+
+    def place_barrel(self, w, pl):
+        """Drop the barrel on the floor in front of you (used up); shooting it sets it off."""
+        L = w.level
+        ax, ay = pl.aim
+        for d in (1.2, 1.7, 0.8):
+            cx, cy = int(pl.x + ax * d), int(pl.y + ay * d)
+            if (cx, cy) != (int(pl.x), int(pl.y)) and not L.is_solid(cx, cy) and (cx, cy) not in L.props \
+                    and all((int(e.x), int(e.y)) != (cx, cy) for e in w.enemies):
+                L.props[(cx, cy)] = "barrel_" + self.elem
+                L.solid[L.i(cx, cy)] = 2
+                w.barrels[(cx, cy)] = self.p["hp"]
+                w.barrel_kind[(cx, cy)] = self.elem
+                w.flow_tile = None
+                self.leave_inventory(pl)
+                w.snd("tink", cx + 0.5, cy + 0.5)
+                w.message("%s placed" % self.label, self.tint)
+                return
+        w.message("No room to put the barrel down", (255, 140, 120))
 
 
 class Turret:
@@ -1039,10 +1156,8 @@ class Turret:
         w.shake = 15
         w.hitstop = max(w.hitstop, 0.1)
         w.snd("nuke_blast", x, y)
-        w.message("%s DESTROYED" % self.mod.label.upper(), (255, 140, 90))
-        self.mod.deployed = None
-        self.mod.rebuild_t = self.mod.p["rebuild"]
-        self.mod.armor = 0
+        w.message("%s DESTROYED - module lost" % self.mod.label.upper(), (255, 140, 90))
+        self.mod.deployed = None                      # the module is gone with it (it already left the inventory)
 
 
 class ArmProxy:
@@ -1084,6 +1199,16 @@ class Decoy:
         self.aim = pl.aim
         self.idx = pl.idx
         self.flash = 0.0
+
+
+def barrel_module(elem, level, hp=3):
+    """A barrel picked up off the floor: the same kind, and however many hits it had left."""
+    m = Support("barrel", 0, level, random.randrange(1 << 30))
+    m.elem = elem
+    m.label = m.name = {"fire": "Fire Barrel", "chem": "Chem Barrel", "rad": "Rad Barrel", "shrap": "Shrapnel Barrel"}[elem]
+    m.tint = ELEMENT_COLOR.get(elem, KINDS["barrel"]["color"])
+    m.p["hp"] = max(1, int(round(hp)))
+    return m
 
 
 def generate(level, rng=None, bonus=0, kind=None, rarity=None):

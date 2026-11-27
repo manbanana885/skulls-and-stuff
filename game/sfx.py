@@ -118,7 +118,9 @@ def music(track, fade_ms=1500):
     if track is None:
         pygame.mixer.music.fadeout(fade_ms)
         return
-    path = os.path.join(MUSIC_DIR, track + ".wav")
+    path = os.path.join(MUSIC_DIR, track + ".ogg")
+    if not os.path.exists(path):
+        path = os.path.join(MUSIC_DIR, track + ".wav")
     if not os.path.exists(path):
         return
     try:

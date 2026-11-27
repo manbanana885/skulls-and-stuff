@@ -1043,6 +1043,8 @@ SOUNDS = {
     "shot_barrage": (barrage, 5), "shot_coil": (coil, 5), "shot_microwave": (microwave, 4),
     "shield_block": (shield_block, 4), "shield_down": (shield_down, 1), "shield_up": (shield_up, 1),
     "magnet_pulse": (magnet_pulse, 2), "decoy_on": (decoy_on, 2), "dash": (dash_snd, 3),
+    "shot_chem_jet": (lambda s: finish(lp(noise(n_of(0.12), R(s)), 900) * ar(n_of(0.12), 0.005, 0.04) * 0.9
+                                       + sine(140, n_of(0.12)) * ar(n_of(0.12), 0.002, 0.03) * 0.5, 10, 2, 2200), 4),
     "hurt_can": (hurt_can, 3), "death_can": (death_can, 1), "hurt_mutant": (hurt_mutant, 3), "death_mutant": (death_mutant, 1),
     "step_mutant": (step_mutant, 5), "tread_loop": (tread_loop, 1),
 }

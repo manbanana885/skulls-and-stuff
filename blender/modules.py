@@ -207,7 +207,19 @@ def build_sup_magnet():
     return root, _spin_pose(spin)
 
 
-for _n, _b in (("gunarm", build_sup_gunarm), ("leech", build_sup_leech), ("core", build_sup_core), ("decoy", build_sup_decoy),
+def build_sup_grenade():
+    root, spin = _spin_root("gr")
+    sphere("gr_body", 0.13, (0, 0, 0), M["olive"] if "olive" in M else M["steel2"], spin, (1, 1, 1.25), 12, 10, True)
+    for z in (-0.08, -0.03, 0.02, 0.07):
+        ring("gr_groove%.2f" % z, 0.128 * (1 - abs(z) * 1.5), 0.012, (0, 0, z), M["darkmetal"], spin, segs=12)
+    ring("gr_band", 0.132, 0.035, (0, 0, -0.01), M["glow_white"], spin, segs=14)
+    cyl("gr_fuse", 0.045, 0.06, (0, 0, 0.18), M["steel2"], spin, segs=10)
+    box("gr_lever", (0.03, 0.04, 0.2), (0.07, 0, 0.12), M["chrome"], spin, (0, 0.35, 0))
+    ring("gr_pin", 0.035, 0.012, (-0.05, 0, 0.2), M["chrome"], spin, rot=(PI / 2, 0, 0), segs=10)
+    return root, _spin_pose(spin)
+
+
+for _n, _b in (("grenade", build_sup_grenade), ("gunarm", build_sup_gunarm), ("leech", build_sup_leech), ("core", build_sup_core), ("decoy", build_sup_decoy),
                ("mines", build_sup_mines), ("aura", build_sup_aura), ("battery", build_sup_battery),
                ("autoloader", build_sup_autoloader), ("jets", build_sup_jets), ("tether", build_sup_tether),
                ("magnet", build_sup_magnet)):

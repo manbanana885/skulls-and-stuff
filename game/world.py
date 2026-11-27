@@ -215,7 +215,7 @@ class Proj:
     """kind: bullet | pellet | slug | bolt | plasma | flame | grenade | rocket | acid"""
     __slots__ = ("kind", "x", "y", "z", "vx", "vy", "vz", "life", "dmg", "hostile", "color", "r", "pierce", "bounce",
                  "blast", "burn", "shock", "homing", "slow", "grav", "hit", "trail", "age", "maxspeed", "rad", "gas", "chill", "spin",
-                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo")
+                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech")
 
     def __init__(self, kind, x, y, z, vx, vy, dmg, hostile=False, life=0.9, color=(255, 220, 140), r=0.1,
                  pierce=0, bounce=0, blast=0.0, burn=0.0, shock=0, homing=0, slow=0, vz=0.0, grav=0.0, maxspeed=22.0,
@@ -241,6 +241,7 @@ class Proj:
         self.dtype = "kinetic"
         self.acid = 0.0
         self.ammo = None
+        self.tier_leech = 0.0
 
 
 class Loot:
@@ -258,8 +259,9 @@ class Loot:
 TETHER_X, TETHER_Y = (960 - 180) * _S, (540 - 150) * _S   # max on-screen separation between co-op players
 
 
-GEAR_SLOTS = 3
-PACK_SIZE = 6
+GEAR_SLOTS = 4          # one per D-pad direction: up / right / down / left (keys 1-4)
+PACK_SIZE = 8
+SLOT_DIRS = ("UP", "RIGHT", "DOWN", "LEFT")
 
 
 BARREL_WEIGHTS = {
@@ -298,7 +300,8 @@ class Player:
         self.muzzle_color = (180, 240, 255)
         self.kbx = self.kby = 0.0
         self.alive = True
-        self.weapons = [WP.generate(1, arch="carbine", rarity=0), WP.generate(1, arch="pistol", rarity=0)]
+        start = None if WP.RARE_ONLY else 0          # loot-test mode: you start with top-tier guns too
+        self.weapons = [WP.generate(1, arch="carbine", rarity=start), WP.generate(1, arch="pistol", rarity=start)]
         self.cur = 0
         self.buffs = {}            # kind -> [magnitude, seconds left]
         self.status = {}           # chill / confuse -> seconds left
@@ -306,6 +309,9 @@ class Player:
         self.gear = [None] * GEAR_SLOTS    # equipped accessories (support.Support)
         self.pack = []                      # spare accessories, up to PACK_SIZE
         self.inv_cur = (0, 0)               # pause-menu cursor (column, row)
+        self.sel = 0                        # selected module slot (D-pad / 1-4); F / B uses it
+        self.dpad_t = 0.0                   # seconds left to show the D-pad HUD (it fades out when unused)
+        self.last_move = (0.0, 0.0)
         self.card_t = 0.0                   # seconds left to show the weapon card (after a swap / pickup)
         self.salvo_q = 0           # barrage missiles still to ripple out
         self.salvo_t = 0.0
@@ -342,32 +348,62 @@ class Player:
         if old is not None:
             self.pack.insert(k, old)
 
-    def toggle_turret(self, w):
-        """F / B: deploy the next packed turret module; with none left to deploy, pack up the nearest one in reach."""
-        mods = [g for g in self.equipped() if g.kind in SU.TURRETS]
-        if not mods:
-            return
-        ready = next((g for g in mods if g.can_deploy()), None)
-        if ready is not None:
-            ready.deploy(w, self)
-            return
-        out = [g for g in mods if g.deployed is not None]
-        if out:
-            g = min(out, key=lambda m_: math.hypot(m_.deployed.x - self.x, m_.deployed.y - self.y))
-            if math.hypot(g.deployed.x - self.x, g.deployed.y - self.y) < 2.5:
-                g.pack_up(w)
-            else:
-                w.message("Walk back to your turret to pack it up", (200, 200, 160))
+    DPAD_SHOW = 3.5
+
+    def use_button(self, w):
+        """F / B / RB: use the module in the selected slot (it never picks anything up)."""
+        g = self.gear[self.sel]
+        if g is None:
+            w.message("Slot %d (%s) is empty" % (self.sel + 1, SLOT_DIRS[self.sel]), (160, 165, 180))
         else:
-            left = min(g.rebuild_t for g in mods)
-            w.message("Turret rebuilding - %.0fs" % left, (200, 200, 160))
+            g.activate(w, self)
+
+    def pickup_target(self, w):
+        """What E / A would take: the nearest (and faced) of floor loot, a barrel, or your own deployed turret.
+        Returns ("loot", Loot) / ("barrel", (x, y)) / ("turret", Turret) or None."""
+        ax, ay = self.aim
+        al = math.hypot(ax, ay) or 1.0
+        best = None
+
+        def consider(kind, obj, x, y, reach):
+            nonlocal best
+            d = math.hypot(x - self.x, y - self.y)
+            if d < reach:
+                facing = ((x - self.x) * ax + (y - self.y) * ay) / (max(d, 1e-6) * al)
+                score = d - facing * 0.3
+                if best is None or score < best[0]:
+                    best = (score, kind, obj)
+        for lt in w.loot:
+            if lt.kind in ("weapon", "support"):
+                consider("loot", lt, lt.x, lt.y, 0.9)
+        for pos in w.barrels:
+            consider("barrel", pos, pos[0] + 0.5, pos[1] + 0.5, 1.3)
+        for t in w.turrets:
+            if t.alive and getattr(t, "owner", None) is self:
+                consider("turret", t, t.x, t.y, 1.4)
+        return best[1:] if best else None
+
+    def pick_up_barrel(self, w, pos):
+        """A barrel on the floor becomes a barrel module of the same kind."""
+        if all(g is not None for g in self.gear) and len(self.pack) >= PACK_SIZE:
+            w.message("No room to carry the barrel", (255, 140, 120))
+            return True
+        mod = SU.barrel_module(w.barrel_kind.get(pos, "chem"), w.depth, w.barrels[pos])
+        del w.barrels[pos]
+        w.barrel_kind.pop(pos, None)
+        L = w.level
+        L.props.pop(pos, None)
+        L.solid[L.i(*pos)] = 0
+        w.flow_tile = None
+        where = self.give(mod)
+        w.snd("tink", pos[0] + 0.5, pos[1] + 0.5)
+        w.message("Picked up %s (%s)" % (mod.label, where), mod.tint)
+        return True
 
     def unequip(self, i):
         if self.gear[i] is None or len(self.pack) >= PACK_SIZE:
             return False
-        if getattr(self.gear[i], "deployed", None) is not None:
-            self.gear[i].deployed.alive = False
-            self.gear[i].deployed = None
+
         self.pack.append(self.gear[i])
         self.gear[i] = None
         return True
@@ -381,6 +417,7 @@ class Player:
 
     def update(self, w, dt, inp):
         mx, my = inp.move
+        self.last_move = inp.move
         for k_ in list(self.status):
             self.status[k_] -= dt
             if self.status[k_] <= 0:
@@ -425,6 +462,12 @@ class Player:
                 del self.buffs[k]
                 w.message("%s faded" % WP.BUFFS[k][0], (150, 150, 160))
         self.weapon.update(dt)
+        fx_ = WP.TIER_FX.get(self.weapon.rarity)
+        if fx_ and fx_.get("regen"):        # sacred heals, demonic / eldritch eat at you (never below 10%)
+            if fx_["regen"] > 0:
+                self.hp = min(self.max_hp, self.hp + fx_["regen"] * dt)
+            elif self.hp > self.max_hp * 0.1:
+                self.hp = max(self.max_hp * 0.1, self.hp + fx_["regen"] * dt)
         if self.salvo_q > 0:
             self.salvo_t -= dt
             while self.salvo_q > 0 and self.salvo_t <= 0:
@@ -434,6 +477,7 @@ class Player:
                 self.salvo_n += 1
         pressed = getattr(inp, "pressed", ())
         self.card_t = max(0.0, self.card_t - dt)
+        self.dpad_t = max(0.0, self.dpad_t - dt)
         if "swap" in pressed:
             self.weapon.reload_t = 0.0
             self.cur = 1 - self.cur
@@ -441,8 +485,14 @@ class Player:
             sfx.play("swap")
         if "reload" in pressed and self.weapon.start_reload():
             sfx.play("reload")
+        for k_ in range(GEAR_SLOTS):         # D-pad / 1-4: only selects that slot
+            if "slot%d" % (k_ + 1) in pressed:
+                self.dpad_t = self.DPAD_SHOW
+                if self.sel != k_:
+                    self.sel = k_
+                    sfx.play("tink", 0.5)
         if "deploy" in pressed:
-            self.toggle_turret(w)
+            self.use_button(w)
         if "dash" in pressed:
             jet = next((g for g in self.equipped() if g.ready()), None)
             if jet is not None:
@@ -1473,7 +1523,7 @@ class World:
         self.message("%s AWAKENS" % b.title, b.color)
         self.boss_music = True
         self.shake = max(self.shake, 8)
-        sfx.music("boss", 800)
+        sfx.music("hunter", 800)
 
     def kill_boss(self, b):
         from bosses import drop_boss_loot
@@ -1695,7 +1745,7 @@ class World:
         st = wp.st
         ax, ay = p.aim
         mf, mz = WP.MUZZLE[wp.arch]
-        side = WP.SHOULDER.get(wp.arch, 0.0)
+        side = WP.SHOULDER.get(WP.sprite_arch(wp.arch), 0.0)
         mx, my = p.x + ax * mf + ay * side, p.y + ay * mf - ax * side
         lvl = 1 + 0.2 * (wp.level - 1)
         dmg = st["dmg"] * p.dmg_mult()
@@ -1740,6 +1790,10 @@ class World:
                           homing=st["homing"], slow=st["slow"], rad=rad, gas=gas, chill=st["chill"])
                 pr.dtype = st["dtype"]
                 pr.ammo = st["ammo"]
+                if kind == "jet":
+                    pr.effect = "jet:" + st["jet"]
+                    pr.r = 0.11
+                pr.tier_leech = st["tier_leech"]
                 if st["acid"]:
                     pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * st["pellets"]))
                 if kind == "grenade":
@@ -1798,6 +1852,7 @@ class World:
                   homing=st["homing"], slow=st["slow"], chill=st["chill"], maxspeed=st["speed"] * 2.4)
         pr.cone = math.atan2(ay, ax)      # where the salvo was aimed: missiles with nothing to chase drift back to it
         pr.dtype = st["dtype"]
+        pr.tier_leech = st["tier_leech"]
         if st["acid"]:
             pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * (st["salvo"] or 1)))
         pr.owner = p
@@ -1950,7 +2005,14 @@ class World:
         if isinstance(fx, dict):   # beam stats come unscaled
             burn = burn * 1.4 * self._shooter.dmg_mult()
         e.last_hit_by = getattr(fx, "owner", None) if not isinstance(fx, dict) else self._shooter
-        e.hit(self, self.typed(e, dmg, dtype, ammo), vx, vy)
+        dealt = self.typed(e, dmg, dtype, ammo)
+        e.hit(self, dealt, vx, vy)
+        tl = get("tier_leech")
+        if tl:                              # eldritch weapons feed their wielder
+            who = getattr(fx, "owner", None) if not isinstance(fx, dict) else self._shooter
+            who = getattr(who, "owner_player", who)
+            if isinstance(who, Player) and who.alive:
+                who.hp = min(who.max_hp, who.hp + dealt * tl)
         acid = get("acid")
         if acid:
             p_ = acid if not isinstance(fx, dict) else min(1.0, 1.6 / max(0.1, fx.get("rate", 1.0)))
@@ -1977,7 +2039,7 @@ class World:
             others = sorted((o for o in self.enemies if o.alive and o is not e and math.hypot(o.x - e.x, o.y - e.y) < 3.2),
                             key=lambda o: math.hypot(o.x - e.x, o.y - e.y))[:2]
             for o in others:
-                self.beams.append([e.x, e.y, o.x, o.y, e.st["hz"], 0.12, 0.12, (140, 200, 255), 0.6])
+                self.beams.append([e.x, e.y, o.x, o.y, e.st["hz"] if hasattr(e, "st") else 0.6, 0.12, 0.12, (140, 200, 255), 0.6])
                 o.hit(self, self.typed(o, raw * 0.5, "electrical"), o.x - e.x, o.y - e.y)
             if others:
                 self.snd("shock", e.x, e.y, 0.6)
@@ -2455,13 +2517,10 @@ class World:
             if pl.alive:
                 for g in pl.equipped():
                     g.update(self, dt, pl)
-        if self.turrets:                  # turrets whose module was dropped / unequipped pack themselves away
-            worn = {id(g) for pl in self.players for g in pl.gear if g is not None}
-            for t in self.turrets:
-                if t.alive and id(t.mod) not in worn:
-                    t.alive = False
-                    t.mod.deployed = None
-            self.turrets = [t for t in self.turrets if t.alive]
+        for t in self.turrets:            # deployed turrets run on their own (their module left the inventory)
+            if t.alive:
+                t.update(self, dt, getattr(t, "owner", None) or self.player)
+        self.turrets = [t for t in self.turrets if t.alive]
         self.projs = [b for b in self.projs if id(b) not in self.blocked and self.step_proj(b, dt)]
         self.enemies = [e for e in self.enemies if e.alive]
         self.spawners = [s for s in self.spawners if s.alive]
@@ -2516,6 +2575,34 @@ class World:
                             self.acid_t = 0.45
                             sfx.play("sizzle", 0.5)
                         self.check_player_death(x_, y_, pl)
+                continue
+            if hz[4] == "jet":             # chemical-jet puddles: napalm burns, cryo chills, rad-waste irradiates - everyone
+                kind = hz[7]
+                k_ = min(1.0, hz[3] / hz[6] * 2)
+                dps = hz[5] * k_
+                J = self.JET[kind]
+                for e in self.nearby(hz[0], hz[1]):
+                    if e.alive and e.kind not in FLYERS and (e.x - hz[0]) ** 2 + (e.y - hz[1]) ** 2 < (hz[2] + e.r) ** 2:
+                        if kind == "napalm" and hasattr(e, "burn_dps"):
+                            e.burn = max(e.burn, 1.2)
+                            e.burn_dps = max(e.burn_dps, dps * DM.mult(e, "fire"))
+                        else:
+                            self.dot(e, dps * dt, J["dtype"])
+                            if kind == "cryo" and hasattr(e, "frozen") and e.frozen <= 0:
+                                e.chill += dt * 0.25 * DM.mult(e, "cryo")
+                                if e.chill >= 1.0:
+                                    e.frozen, e.chill, e.vx, e.vy = 3.0, 0.0, 0.0, 0.0
+                for pl in alive:
+                    if (pl.x - hz[0]) ** 2 + (pl.y - hz[1]) ** 2 < hz[2] ** 2:
+                        pl.hp -= dps * 0.6 * dt * pl.mult("aegis") * CH.player_mult(pl, J["dtype"])
+                        if kind == "cryo":
+                            pl.status["chill"] = max(pl.status.get("chill", 0), 0.5)
+                        self.hurt_flash = max(self.hurt_flash, 0.05)
+                        self.check_player_death(hz[0], hz[1], pl)
+                if rnd.random() < dt * 6 * hz[2]:
+                    a, d_ = rnd.random() * math.tau, rnd.random() * hz[2]
+                    self.add(Particle("fire" if kind == "napalm" else "glow", hz[0] + math.cos(a) * d_, hz[1] + math.sin(a) * d_, 0.05,
+                                      0, 0, rnd.uniform(0.6, 1.4), 0.5, J["col"], 10 if kind == "napalm" else 2))
                 continue
             if hz[4] == "blaze":           # burning barrel fuel: scorches monsters and players
                 if rnd.random() < dt * 14:
@@ -2572,8 +2659,6 @@ class World:
         self.shootables = [t for t in self.traps if t.shootable]
 
         # loot (per player)
-        self.near_loot_by = {}
-        bests = {}
         for lt in self.loot[:]:
             lt.t += dt
             if lt.vz or lt.z > 0:
@@ -2587,10 +2672,7 @@ class World:
             for pl in alive:
                 d = math.hypot(lt.x - pl.x, lt.y - pl.y)
                 if lt.kind in ("weapon", "support"):
-                    if d < bests.get(pl.idx, 0.9):
-                        bests[pl.idx] = d
-                        self.near_loot_by[pl.idx] = lt
-                    continue
+                    continue                  # taken with E / A (see pickup_target below)
                 if d >= 0.6 or lt not in self.loot:
                     continue
                 self.loot.remove(lt)
@@ -2604,14 +2686,31 @@ class World:
                     a = rnd.random() * math.tau
                     self.add(Particle("glow", lt.x, lt.y, 0.4, math.cos(a) * 2.5, math.sin(a) * 2.5, rnd.uniform(1, 3), 0.6,
                                       (255, 255, 255), 2))
+        # E / A picks up whatever's nearest / faced: floor loot, a barrel, or your own turret
+        self.near_loot_by = {}
+        self.pickup_by = {}
+        for pl in alive:
+            tg = pl.pickup_target(self)
+            if tg is None:
+                continue
+            self.pickup_by[pl.idx] = tg
+            if tg[0] == "loot":
+                self.near_loot_by[pl.idx] = tg[1]
         self.near_loot = self.near_loot_by.get(0)
         for i, pl in enumerate(self.players):
-            lt = self.near_loot_by.get(i)
-            if lt is not None and lt in self.loot and pl.alive and i < len(inputs) and "interact" in getattr(inputs[i], "pressed", ()):
-                if lt.kind == "support":
-                    self.take_support(lt, pl)
+            tg = self.pickup_by.get(i)
+            if tg is None or not pl.alive or i >= len(inputs) or "interact" not in getattr(inputs[i], "pressed", ()):
+                continue
+            kind, obj = tg
+            if kind == "loot" and obj in self.loot:
+                if obj.kind == "support":
+                    self.take_support(obj, pl)
                 else:
-                    self.take_weapon(lt, pl)
+                    self.take_weapon(obj, pl)
+            elif kind == "barrel" and obj in self.barrels:
+                pl.pick_up_barrel(self, obj)
+            elif kind == "turret" and obj.alive:
+                obj.mod.pack_up(self, pl, pl.sel)
 
         ex, ey = L.exit
         if not self.bosses and any(math.hypot(ex - pl.x, ey - pl.y) < 0.6 for pl in alive):
@@ -2652,6 +2751,12 @@ class World:
             self.hitstop = max(self.hitstop, 0.12)
             sfx.play("nuke_blast")
             return
+        if b.effect and b.effect.startswith("gmod:"):
+            self.grenade_burst(b, x, y, b.effect[5:])
+            return
+        if b.effect and b.effect.startswith("jet:"):
+            self.jet_spatter(b, x, y, b.effect[4:])
+            return
         if b.effect == "cluster" and not b.hostile:
             self.cluster_burst(b, x, y)
         if b.blast:
@@ -2661,10 +2766,11 @@ class World:
             small = b.kind in ("plasma", "fireball", "missile") or b.blast < 1.0
             heavy = b.kind in ("rocket", "grenade", "missile") and not b.hostile
             # your own rockets and grenades hurt you too (reduced), and they chew through walls
-            pdmg = b.dmg if b.hostile else min(b.dmg * (1.5 if b.kind == "missile" else 0.6), 40)
+            pdmg = b.dmg if b.hostile else min(b.dmg * (1.5 if b.kind == "missile" or b.effect == "bomblet" else 0.6), 40)
             self.explode(x, y, b.blast, b.dmg if not b.hostile else b.dmg * 0.5, col,
                          hurt_player=b.hostile or heavy, quiet=small, small=small, player_dmg=pdmg,
-                         breach=b.blast * 0.7 if (heavy or b.kind == "mortar") else 0.0,
+                         breach=(max(1.0, b.blast * 0.7) if b.effect in ("bomblet", "cluster") else b.blast * 0.7)
+                         if (heavy or b.kind == "mortar") else 0.0,
                          dtype=getattr(b, "dtype", "explosive") if b.kind == "plasma" else "explosive")
             return
         if b.kind == "acid":
@@ -2686,6 +2792,77 @@ class World:
         self.add(Particle("chunk", x, y, b.z, -b.vx * 0.1, -b.vy * 0.1, 2, 1.0, (70, 70, 80), 3))
         if not b.hostile:
             self.snd("ricochet", x, y)
+
+    JET = {"napalm": dict(col=(255, 120, 30), dtype="fire", life=4.0),
+           "cryo": dict(col=(150, 215, 255), dtype="cryo", life=4.0),
+           "rad": dict(col=(170, 255, 60), dtype="radiation", life=6.0)}
+
+    def jet_spatter(self, b, x, y, kind):
+        """A chemical-jet droplet landed: splash, then feed (or start) a puddle that hurts monsters and players."""
+        J = self.JET[kind]
+        L = self.level
+        x, y = x - b.vx * 0.01, y - b.vy * 0.01
+        if L.is_solid(int(x), int(y)):
+            return
+        for _ in range(4):
+            a = rnd.random() * math.tau
+            s_ = rnd.uniform(1.5, 4)
+            self.add(Particle("glow", x, y, 0.3, math.cos(a) * s_ - b.vx * 0.08, math.sin(a) * s_ - b.vy * 0.08, rnd.uniform(1, 2.5),
+                              0.35, J["col"], 2))
+        dps = max(1.5, b.dmg * 1.6)
+        for hz in self.hazards:          # keep feeding the same puddle rather than carpeting the floor
+            if hz[4] == "jet" and hz[7] == kind and (hz[0] - x) ** 2 + (hz[1] - y) ** 2 < 0.5 ** 2:
+                hz[3] = hz[6] = J["life"]
+                hz[2] = min(1.3, hz[2] + 0.04)
+                hz[5] = max(hz[5], dps)
+                return
+        self.hazards.append([x, y, 0.45, J["life"], "jet", dps, J["life"], kind])
+
+    def grenade_burst(self, b, x, y, kind):
+        """Grenade modules: each kind goes off its own way; all of them hurt players close by and chew walls."""
+        R, dmg = b.blast, b.dmg
+        if kind == "hex":
+            self.explode(x, y, R, dmg, (255, 200, 90), player_dmg=dmg * 0.5, breach=R * 0.8)
+        elif kind == "shrapnel":
+            self.explode(x, y, R * 0.8, dmg * 0.6, (255, 170, 60), player_dmg=dmg * 0.35, breach=R * 0.5)
+            for k in range(20):
+                a = k * math.tau / 20 + rnd.uniform(-0.1, 0.1)
+                hostile = k % 2 == 1
+                pr = Proj("slug", x + math.cos(a) * 0.3, y + math.sin(a) * 0.3, 0.6, math.cos(a) * 15, math.sin(a) * 15,
+                          dmg * 0.25, hostile=hostile, life=0.45, color=(255, 190, 120), r=0.08, pierce=1)
+                self.projs.append(pr)
+        elif kind == "nuke":
+            self.explode(x, y, R * 1.2, dmg, (200, 255, 90), player_dmg=min(dmg * 0.6, 60), breach=3.0)
+            self.hazards.append([x, y, 2.5, 10.0, "rad", max(4.0, dmg * 0.08), 10.0])
+            self.add(Particle("ring", x, y, 0.05, R * 4, 0, 0, 0.6, (220, 255, 120), 0.2))
+            self.flash_white = 0.35
+            self.shake = 15
+            sfx.play("nuke_blast")
+        elif kind == "incendiary":
+            self.explode(x, y, R * 0.8, dmg * 0.4, (255, 120, 30), player_dmg=dmg * 0.3, breach=R * 0.4, dtype="fire")
+            for k in range(9):
+                a = k * math.tau / 9 + rnd.uniform(-0.3, 0.3)
+                d = rnd.uniform(0.3, R)
+                self.hazards.append([x + math.cos(a) * d, y + math.sin(a) * d, 0.55, rnd.uniform(5, 8), "blaze", max(5.0, dmg * 0.1)])
+        elif kind == "cryo":
+            self.explode(x, y, R, dmg * 0.4, (150, 215, 255), player_dmg=dmg * 0.25, breach=R * 0.4, dtype="cryo")
+            for e in list(self.enemies):
+                if e.alive and math.hypot(e.x - x, e.y - y) < R + e.r and hasattr(e, "frozen"):
+                    e.frozen = 3.5 * DM.mult(e, "cryo")
+                    e.vx = e.vy = 0.0
+            for pl in self.players:
+                if pl.alive and math.hypot(pl.x - x, pl.y - y) < R:
+                    pl.status["chill"] = 3.0
+            self.splat(x, y, (175, 210, 235), R * 0.5)
+            self.snd("freeze", x, y)
+        else:   # corrosive
+            self.explode(x, y, R * 0.8, dmg * 0.4, (140, 230, 50), player_dmg=dmg * 0.3, breach=R * 0.4, dtype="chemical")
+            for k in range(4):
+                a = k * math.tau / 4 + rnd.uniform(-0.4, 0.4)
+                self.hazards.append([x + math.cos(a) * R * 0.5, y + math.sin(a) * R * 0.5, 0.7, 6.0, "acid"])
+                self.hazards.append([x + math.cos(a) * R * 0.5, y + math.sin(a) * R * 0.5, 0.6, 6.0, "acidp", max(4.0, dmg * 0.1), 6.0])
+            self.add_gas(x, y, max(5.0, dmg * 0.08))
+            self.splat(x, y, (90, 200, 40), R * 0.5)
 
     def cluster_burst(self, b, x, y):
         """Cluster shell bursting: throw a ring of small grenades that bounce about and pop a moment later."""
@@ -2894,7 +3071,7 @@ class World:
             cx, cy = int(nx), int(ny)
             if L.is_solid(cx, cy):
                 destructible = self.hit_solid((cx, cy), b.dmg, nx, ny, b.z, b)
-                if not destructible and (k == "grenade" or b.bounce > 0):
+                if not destructible and ((k == "grenade" and b.effect != "cluster") or b.bounce > 0):
                     if L.is_solid(cx, int(b.y)):
                         b.vx = -b.vx * 0.7
                     if L.is_solid(int(b.x), cy):
@@ -2964,7 +3141,7 @@ class World:
                     b.pierce -= 1
         b.life -= dt
         if b.life <= 0:
-            if k in ("grenade", "rocket", "plasma", "fireball", "nuke", "missile"):
+            if k in ("grenade", "rocket", "plasma", "fireball", "nuke", "missile", "jet"):
                 self.impact(b, b.x, b.y)
             elif k == "chem":
                 if rnd.random() < 0.55:

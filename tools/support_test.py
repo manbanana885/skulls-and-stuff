@@ -223,13 +223,14 @@ bot.pressed = {"interact"}
 g.update(1 / 60)
 bot.pressed = set()
 check(p.gear[1] is b_ and not w.loot, "a second module goes into the next free slot")
-# fill all 3 slots + the 6-slot backpack, then one more swaps with slot 1
-for k in range(7):
+# fill all module slots + the backpack, then one more swaps with slot 1
+import world as WD  # noqa: E402
+for k in range(WD.GEAR_SLOTS - 2 + WD.PACK_SIZE):
     w.loot = [Loot("support", p.x + 0.3, p.y, SU.generate(2, random.Random(100 + k)))]
     bot.pressed = {"interact"}
     g.update(1 / 60)
     bot.pressed = set()
-check(all(p.gear) and len(p.pack) == 6, "slots fill first, then the backpack (gear %d, pack %d)" % (len(p.equipped()), len(p.pack)))
+check(all(p.gear) and len(p.pack) == WD.PACK_SIZE, "slots fill first, then the backpack (gear %d, pack %d)" % (len(p.equipped()), len(p.pack)))
 extra = SU.generate(2, random.Random(200))
 first = p.gear[0]
 w.loot = [Loot("support", p.x + 0.3, p.y, extra)]
@@ -240,20 +241,20 @@ check(p.gear[0] is extra and len(w.loot) == 1 and w.loot[0].item is first, "with
 # pause-menu inventory: unequip, equip from pack (swap by column), drop
 g.state = "pause"
 p.pack.pop()                      # make room to unequip
-p.inv_cur = (1, 0)
+p.inv_cur = (1, 1)
 geared = p.gear[1]
 bot.pressed = {"confirm"}
 g.update(1 / 60)
 bot.pressed = set()
 check(p.gear[1] is None and p.pack[-1] is geared, "confirm on a gear slot unequips into the backpack")
-p.inv_cur = (0, 1)
+p.inv_cur = (0, 2)
 want = p.pack[0]
 bot.pressed = {"confirm"}
 g.update(1 / 60)
 bot.pressed = set()
 check(p.gear[1] is want, "confirm on a backpack item equips it into the free slot")
-p.inv_cur = (2, 1)
-victim = g.inv_item(p, 2, 1)
+p.inv_cur = (2, 2)
+victim = g.inv_item(p, 2, 2)
 n_loot = len(w.loot)
 bot.pressed = {"reload"}
 g.update(1 / 60)
@@ -263,7 +264,16 @@ for name in ("nav_right", "nav_down"):
     bot.pressed = {name}
     g.update(1 / 60)
 bot.pressed = set()
-check(p.inv_cur == (0, 2), "cursor moves with the navigation keys (at %s)" % (p.inv_cur,))
+check(p.inv_cur == (3, 3), "cursor moves with the navigation keys (at %s)" % (p.inv_cur,))
+# guns row: highlight the stowed gun and take it in hand
+p.inv_cur = (0, 0)
+held = p.cur
+bot.pressed = {"nav_right"}
+g.update(1 / 60)
+bot.pressed = {"confirm"}
+g.update(1 / 60)
+bot.pressed = set()
+check(p.cur != held and p.inv_cur == (1, 0), "pause menu: the guns row shows both guns and confirm swaps which is in hand")
 g.draw()
 pygame.image.save(g.screen, os.path.join(out, "inventory.png"))
 g.state = "play"

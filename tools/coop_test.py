@@ -60,6 +60,30 @@ g.spare = {1: pad}
 pad.pressed = {"back"}
 g.try_join()
 pad.pressed = set()
+check(g.state == "join" and len(g.inputs) == 2 and len(w.players) == 1, "BACK on a spare pad opens P2's body pick (game waits)")
+p2b = g.inputs[1]
+# backing out gives up the slot
+p2b.pressed = {"back"}
+g.update(1 / 60)
+p2b.pressed = set()
+check(g.state == "play" and len(g.inputs) == 1 and len(w.players) == 1, "B / BACK on the pick screen cancels the join")
+# join again, pick a body, confirm
+g.spare = {1: pad}
+pad.pressed = {"back"}
+g.try_join()
+pad.pressed = set()
+p2b = g.inputs[1]
+g.chars[1] = "skelebot"
+p2b.pressed = {"nav_right"}
+g.update(1 / 60)
+want = g.chars[1]
+g.draw()
+pygame.image.save(g.screen, os.path.join(out, "coop_pick.png"))
+p2b.pressed = {"a"}
+g.update(1 / 60)
+p2b.pressed = set()
+check(want != "skelebot" and g.state == "play" and len(w.players) == 2 and w.players[1].char == want,
+      "P2 chose %s with LEFT / RIGHT and joined as it" % want)
 check(len(g.inputs) == 2 and len(w.players) == 2, "P2 joined (inputs %d, players %d)" % (len(g.inputs), len(w.players)))
 p2b = g.inputs[1]
 P1, P2 = w.players
