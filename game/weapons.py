@@ -146,10 +146,11 @@ MODS = [
     _m("explosive", "Explosive", "Rounds explode on impact", _explosive, lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "wave"} and a not in EXPLOSIVE),
     _m("piercing", "Piercing", "Punches through 2 more targets", _add(pierce=2),
        lambda a: a not in EXPLOSIVE and ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail", "arc", "wave"} | set(BULLETS)),
+    # ammo types are rolled separately (every bullet gun gets one), never as bonus mods
     _m("penetrating", "Penetrating Core", "Pierces 2 more; x1.35 vs robots & constructs, x0.8 vs undead & mutants",
-       _penetrating, lambda a: ARCH[a]["proj"] in BULLETS),
+       _penetrating, lambda a: False),
     _m("expanding", "Expanding", "x1.35 vs undead & mutants, x0.75 vs robots & constructs",
-       _expanding, lambda a: ARCH[a]["proj"] in BULLETS),
+       _expanding, lambda a: False),
     _m("ricochet", "Ricochet", "Bounces off walls", _add(bounce=1), lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "bolt", "slug", "plasma", "saw", "arc")),
     _m("twin", "Twin-Linked", "Fires a second parallel shot", _set_twin, lambda a: ARCH[a]["proj"] not in SPRAYS | {"nuke", "missile"}),
     _m("rapid", "Rapid", "+35% fire rate", _mul(rate=1.35, dmg=0.88)),
@@ -193,6 +194,13 @@ class Weapon:
         self.brand = rng.choice(list(BRANDS))
         for k, v in BRANDS[self.brand].items():
             st[k] *= v
+        # bullet guns always roll an ammo type: standard 50%, Penetrating Core 25%, Expanding 25%
+        self.ammo = None
+        if ARCH[arch]["proj"] in BULLETS:
+            r_ = rng.random()
+            self.ammo = "pen" if r_ < 0.25 else ("exp" if r_ < 0.5 else None)
+            if self.ammo:
+                MOD_BY_KEY["penetrating" if self.ammo == "pen" else "expanding"]["fn"](st)
         pool = [m for m in MODS if m["ok"](arch)]
         rng.shuffle(pool)
         n_mods = min(rarity, 3)
@@ -212,7 +220,8 @@ class Weapon:
             self.name = '"%s"' % rng.choice(UNIQUE_NAMES)
         else:
             adj = self.mods[0]["adj"] + " " if self.mods else ""
-            self.name = "%s%s" % (adj, st["label"])
+            ammo_word = {"pen": "Penetrating ", "exp": "Expanding "}.get(self.ammo, "")
+            self.name = "%s%s%s" % (adj, ammo_word, st["label"])
         self.ammo = st["mag"]
         self.reload_t = 0.0
         self.cd = 0.0

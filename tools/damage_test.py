@@ -106,6 +106,7 @@ check(abs((1e6 - b.hp) - 14) < 1e-6, "bosses use their category too (Black Knigh
 def shoot(arch, kind, frames=40, mods=()):
     w, p = fresh()
     wp = WP.generate(2, random.Random(1), arch=arch, rarity=0)
+    wp.st["ammo"] = None                 # measure the plain gun; the test applies any ammo itself
     for k in mods:
         WP.MOD_BY_KEY[k]["fn"](wp.st)
     wp.st["spread"] = 0
@@ -201,8 +202,16 @@ for mod, lo_kind, hi_kind in (("penetrating", "zombie", "drone"), ("expanding", 
 wpn = WP.generate(1, random.Random(3), arch="carbine")
 WP.MOD_BY_KEY["penetrating"]["fn"](wpn.st)
 check(wpn.st["pierce"] >= 2, "penetrating core adds pierce (%d)" % wpn.st["pierce"])
-both = sum(1 for i in range(4000) if {"penetrating", "expanding"} <= {m["key"] for m in WP.generate(3, random.Random(i), arch="smg", rarity=3).mods})
-check(both == 0, "penetrating and expanding never roll together")
+tally = {None: 0, "pen": 0, "exp": 0}
+for i in range(4000):
+    wq = WP.generate(1, random.Random(i), arch=random.Random(i).choice(["pistol", "smg", "carbine", "shotgun"]), rarity=0)
+    tally[wq.st["ammo"]] += 1
+    assert not {"penetrating", "expanding"} & {m["key"] for m in wq.mods}
+print("  ammo on 4000 common bullet guns: standard %d, penetrating %d, expanding %d" % (tally[None], tally["pen"], tally["exp"]))
+check(abs(tally["pen"] / 4000 - 0.25) < 0.03 and abs(tally["exp"] / 4000 - 0.25) < 0.03,
+      "every bullet gun (commons too) rolls an ammo type: ~50/25/25, separate from bonus mods")
+check(all(WP.generate(1, random.Random(i), arch=a, rarity=2).st["ammo"] is None for i in range(200) for a in ("railgun", "saw", "rocket")),
+      "railgun, saws and explosives never get an ammo type")
 w, p = fresh()
 vals = []
 for kind in REP.values():

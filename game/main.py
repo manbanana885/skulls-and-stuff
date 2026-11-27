@@ -2208,6 +2208,10 @@ class Game:
         main_ = st_["dtype"].upper() + ((" (%s)" % DM.AMMO_LABEL[st_["ammo"]]) if st_.get("ammo") else "")
         lines.append((self.small, [("DAMAGE: ", (130, 135, 150)), (main_, DM.COLOR[st_["dtype"]])]
                       + [x_ for t in sec for x_ in (("  +  ", (130, 135, 150)), (t.upper(), DM.COLOR[t]))], None))
+        if st_.get("ammo"):
+            lines.append((self.small, "AMMO: " + {"pen": "Penetrating Core: pierces 2 more, x1.35 vs robots & constructs",
+                                                   "exp": "Expanding: x1.35 vs undead & mutants, x0.75 vs robots & constructs"}[st_["ammo"]],
+                          (230, 230, 235)))
         if st_.get("salvo"):
             lines.append((self.small, "Fires %d-missile homing barrages" % st_["salvo"], (255, 200, 120)))
         if st_.get("cluster"):
