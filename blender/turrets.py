@@ -1,7 +1,8 @@
 # Deployable turret modules: MG turret and mortar. dep_<kind> is the deployed unit (aims via direction frames);
 # sup_<kind> is the same model spinning, used for the pickup / inventory icon. exec'd after characters.py.
 
-mat("olive", (0.18, 0.2, 0.1), 0.2, 0.6)
+if "olive" not in M:
+    mat("olive", (0.18, 0.2, 0.1), 0.2, 0.6)
 
 
 def turret_mg(root):

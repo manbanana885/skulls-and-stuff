@@ -2880,6 +2880,7 @@ exec(open(os.path.join(HERE, "traps.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "heavy_guns.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "support_items.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "modules.py"), encoding="utf-8").read())
+exec(open(os.path.join(HERE, "cluster_gun.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "characters.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "turrets.py"), encoding="utf-8").read())
 

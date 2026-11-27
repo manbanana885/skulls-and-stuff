@@ -1272,6 +1272,7 @@ class World:
         self.turrets = []          # deployed MG / mortar turrets
         self.popups = []           # floating "WEAK" / "RESIST" ticks and damage numbers [x, y, z, text, colour, life]
         self.show_numbers = False  # coloured damage numbers (option on the title / pause screens)
+        self.dot_targets = []      # monsters with pooled (spray / damage-over-time) numbers waiting to show
         self.blocked = set()       # ids of enemy projectiles eaten by an arc shield this frame
         self.near_loot_by = {}
         self.score = score
@@ -1490,24 +1491,44 @@ class World:
         return dmg * m
 
     def damage_number(self, e, amount, dtype, tick):
-        """Big single hits pop their own number; rapid small hits pool for 0.2s and damage over time for 0.5s,
-        per target and type, so sprays and burns read as a steady count instead of a blizzard."""
+        """Direct hits of 1+ pop their own number at once. Spray puffs and damage over time (burning, gas, auras,
+        puddles) pool per target and type; World.update shows each pool every 0.4s and flushes what's left."""
+        if not tick and amount >= 1.0:
+            self.number_popup(e, amount, dtype)
+            return
+        acc = getattr(e, "_dot_acc", None)
+        if acc is None:
+            acc = e._dot_acc = {}
+            self.dot_targets.append(e)
+        a = acc.get(dtype)
+        if a is None:
+            a = acc[dtype] = [0.0, self.time]
+        a[0] += amount
+
+    def number_popup(self, e, amount, dtype):
         hz = (getattr(e, "st", None) or {}).get("hz", 0.8)
-        if tick or amount < 5:
-            acc = getattr(e, "_dot_acc", None)
-            if acc is None:
-                acc = e._dot_acc = {}
-            a = acc.get(dtype)
-            if a is None:
-                a = acc[dtype] = [0.0, self.time]
-            a[0] += amount
-            if self.time - a[1] < (0.5 if tick else 0.2):
-                return
-            amount, a[0], a[1] = a[0], 0.0, self.time
-            if amount < 0.5:
-                return
+        k = getattr(e, "_num_k", 0)
+        e._num_k = k + 1
+        side = ((k % 5) - 2) * 0.22                  # fan consecutive numbers out so they don't stack
         txt = "%d" % round(amount) if amount >= 1 else "%.1f" % amount
-        self.popups.append([e.x + rnd.uniform(-0.25, 0.25), e.y + rnd.uniform(-0.25, 0.25), hz + 0.2, txt, DM.COLOR[dtype], 0.7])
+        self.popups.append([e.x + side, e.y - side, hz + 0.25 + (k % 2) * 0.15, txt, DM.COLOR[dtype], 1.0])
+
+    def flush_numbers(self):
+        keep = []
+        for e in self.dot_targets:
+            acc = e._dot_acc
+            for dtype, a in acc.items():
+                due = self.time - a[1] >= 0.4 or not e.alive
+                if due and a[0] >= 0.5:
+                    self.number_popup(e, a[0], dtype)
+                    a[0], a[1] = 0.0, self.time
+                elif due:
+                    a[1] = self.time
+            if e.alive:
+                keep.append(e)
+            else:
+                e._dot_acc = None
+        self.dot_targets = keep
 
     def acid_puddle(self, x, y, dps):
         L = self.level
@@ -1698,6 +1719,11 @@ class World:
                     pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * st["pellets"]))
                 if kind == "grenade":
                     pr.vz, pr.grav = 3.0, 14.0
+                if st["cluster"]:               # the mother shell: bigger, carries its bomblet count
+                    pr.effect = "cluster"
+                    pr.cone = st["cluster"]
+                    pr.r = 0.2
+                    pr.vz = 3.6
                 if kind == "rail":
                     pr.bounce = st["wallpierce"]
                     pr.r = 0.16
@@ -2365,9 +2391,11 @@ class World:
         for bm in self.beams:
             bm[5] -= dt
         self.beams = [bm for bm in self.beams if bm[5] > 0]
+        if self.dot_targets:
+            self.flush_numbers()
         for pu in self.popups:
             pu[5] -= dt
-            pu[2] += dt * 1.2
+            pu[2] += dt * 1.0
         self.popups = [pu for pu in self.popups if pu[5] > 0]
         for a_ in self.arcs:
             a_[1] -= dt
@@ -2527,6 +2555,8 @@ class World:
             self.hitstop = max(self.hitstop, 0.12)
             sfx.play("nuke_blast")
             return
+        if b.effect == "cluster" and not b.hostile:
+            self.cluster_burst(b, x, y)
         if b.blast:
             col = (120, 255, 90) if b.kind == "plasma" else ((255, 90, 40) if b.hostile else (255, 170, 60))
             if b.kind == "fireball":
@@ -2559,6 +2589,21 @@ class World:
         self.add(Particle("chunk", x, y, b.z, -b.vx * 0.1, -b.vy * 0.1, 2, 1.0, (70, 70, 80), 3))
         if not b.hostile:
             self.snd("ricochet", x, y)
+
+    def cluster_burst(self, b, x, y):
+        """Cluster shell bursting: throw a ring of small grenades that bounce about and pop a moment later."""
+        n = int(b.cone) or 6
+        for i in range(n):
+            a = i * math.tau / n + rnd.uniform(-0.3, 0.3)
+            s_ = rnd.uniform(2.5, 5.0)
+            bl = Proj("grenade", x, y, 0.4, math.cos(a) * s_, math.sin(a) * s_, b.dmg * 0.45, life=rnd.uniform(0.45, 0.9),
+                      color=b.color, r=0.1, blast=0.9, burn=b.burn, shock=b.shock, slow=b.slow, chill=b.chill)
+            bl.vz, bl.grav = rnd.uniform(3.0, 5.0), 14.0
+            bl.dtype = "explosive"
+            bl.effect = "bomblet"
+            bl.owner = b.owner
+            self.projs.append(bl)
+        self.snd("clatter", x, y, 0.6)
 
     def nearest_enemy(self, x, y, vx, vy, rng=7.0):
         sp = math.hypot(vx, vy) or 1
@@ -2793,6 +2838,8 @@ class World:
                             self.add_gas(b.x, b.y, b.gas)
                         return False
                 continue
+            if b.effect == "bomblet" and b.age < 0.3:
+                continue                   # freshly scattered bomblets arm before they can go off on contact
             for e in list(self.nearby(b.x, b.y)) + self.bosses + self.shootables:
                 if e.alive and id(e) not in b.hit and not getattr(e, "submerged", False) and math.hypot(e.x - b.x, e.y - b.y) < e.r + b.r:
                     if e.bdef and e.bdef["ai"] == "shield" if hasattr(e, "bdef") else False:

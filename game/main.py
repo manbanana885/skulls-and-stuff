@@ -1222,9 +1222,10 @@ class Game:
             self.draw_arc(a_, ox, oy)
         for x_, y_, z_, txt, col, life in w.popups:
             a, b = to_screen(x_, y_, z_)
-            img = self.small.render(txt, True, col)
+            f_ = self.small if txt in ("WEAK", "RESIST") else self.font
+            img = f_.render(txt, True, col)
             img.set_alpha(int(255 * min(1.0, life / 0.4)))
-            sh = self.small.render(txt, True, (0, 0, 0))
+            sh = f_.render(txt, True, (0, 0, 0))
             sh.set_alpha(img.get_alpha())
             surf.blit(sh, (a + ox - img.get_width() / 2 + 2, b + oy + 2))
             surf.blit(img, (a + ox - img.get_width() / 2, b + oy))
@@ -1696,6 +1697,17 @@ class Game:
         elif k == "mortar":
             pygame.draw.circle(s, (60, 55, 50), (hx, hy), sc(6))
             self.add_glow(hx, hy, sc(16), (c[0] // 2, c[1] // 3, c[2] // 3))
+        elif k == "grenade" and b.effect == "cluster":
+            pygame.draw.circle(s, (20, 22, 18), (hx, hy), sc(8.5))
+            pygame.draw.circle(s, (70, 78, 50), (hx, hy), sc(7.5))
+            pygame.draw.line(s, (230, 170, 40), (hx - sc(7), hy), (hx + sc(7), hy), max(2, sc(3)))
+            if int(b.age * 8) % 2 == 0:
+                pygame.draw.circle(s, (255, 90, 40), (hx, hy - sc(4)), sc(2.5))
+                self.add_glow(hx, hy, sc(16), (110, 40, 10))
+        elif k == "grenade" and b.effect == "bomblet":
+            pygame.draw.circle(s, (40, 40, 36), (hx, hy), sc(3.2))
+            if int(b.age * 14) % 2 == 0:
+                pygame.draw.circle(s, (255, 150, 50), (hx, hy), sc(1.6))
         elif k == "grenade":
             pygame.draw.circle(s, (45, 50, 40), (hx, hy), sc(4.5))
             if int(b.age * 8) % 2 == 0:
@@ -2197,6 +2209,8 @@ class Game:
                       + [x_ for t in sec for x_ in (("  +  ", (130, 135, 150)), (t.upper(), DM.COLOR[t]))], None))
         if st_.get("salvo"):
             lines.append((self.small, "Fires %d-missile homing barrages" % st_["salvo"], (255, 200, 120)))
+        if st_.get("cluster"):
+            lines.append((self.small, "Shells burst into %d bouncing bomblets" % st_["cluster"], (255, 200, 120)))
         if st_.get("chain"):
             lines.append((self.small, "Lightning chains %d targets, ricochets %d walls" % (st_["chain"], st_["bounce"]), (170, 190, 255)))
         if st_["proj"] == "wave":

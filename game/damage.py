@@ -53,7 +53,7 @@ BOSS_CATEGORY = {
 WEAPON_TYPE = {
     "pistol": "kinetic", "revolver": "kinetic", "smg": "kinetic", "shotgun": "kinetic", "carbine": "kinetic",
     "assault": "kinetic", "sniper": "kinetic", "grenade": "explosive", "rocket": "explosive", "tac_nuke": "explosive",
-    "nuke": "explosive", "saw": "kinetic", "chaingun": "kinetic", "railgun": "kinetic", "barrage": "explosive",
+    "nuke": "explosive", "saw": "kinetic", "chaingun": "kinetic", "railgun": "kinetic", "barrage": "explosive", "cluster": "explosive",
     "flamer": "fire", "laser_pistol": "fire", "laser_rifle": "fire",
     "chem": "chemical", "cryo": "cryo",
     "plasma": "radiation", "microwave": "radiation",
