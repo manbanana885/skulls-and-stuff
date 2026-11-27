@@ -215,7 +215,7 @@ class Proj:
     """kind: bullet | pellet | slug | bolt | plasma | flame | grenade | rocket | acid"""
     __slots__ = ("kind", "x", "y", "z", "vx", "vy", "vz", "life", "dmg", "hostile", "color", "r", "pierce", "bounce",
                  "blast", "burn", "shock", "homing", "slow", "grav", "hit", "trail", "age", "maxspeed", "rad", "gas", "chill", "spin",
-                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo")
+                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech")
 
     def __init__(self, kind, x, y, z, vx, vy, dmg, hostile=False, life=0.9, color=(255, 220, 140), r=0.1,
                  pierce=0, bounce=0, blast=0.0, burn=0.0, shock=0, homing=0, slow=0, vz=0.0, grav=0.0, maxspeed=22.0,
@@ -241,6 +241,7 @@ class Proj:
         self.dtype = "kinetic"
         self.acid = 0.0
         self.ammo = None
+        self.tier_leech = 0.0
 
 
 class Loot:
@@ -425,6 +426,12 @@ class Player:
                 del self.buffs[k]
                 w.message("%s faded" % WP.BUFFS[k][0], (150, 150, 160))
         self.weapon.update(dt)
+        fx_ = WP.TIER_FX.get(self.weapon.rarity)
+        if fx_ and fx_.get("regen"):        # sacred heals, demonic / eldritch eat at you (never below 10%)
+            if fx_["regen"] > 0:
+                self.hp = min(self.max_hp, self.hp + fx_["regen"] * dt)
+            elif self.hp > self.max_hp * 0.1:
+                self.hp = max(self.max_hp * 0.1, self.hp + fx_["regen"] * dt)
         if self.salvo_q > 0:
             self.salvo_t -= dt
             while self.salvo_q > 0 and self.salvo_t <= 0:
@@ -1740,6 +1747,7 @@ class World:
                           homing=st["homing"], slow=st["slow"], rad=rad, gas=gas, chill=st["chill"])
                 pr.dtype = st["dtype"]
                 pr.ammo = st["ammo"]
+                pr.tier_leech = st["tier_leech"]
                 if st["acid"]:
                     pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * st["pellets"]))
                 if kind == "grenade":
@@ -1798,6 +1806,7 @@ class World:
                   homing=st["homing"], slow=st["slow"], chill=st["chill"], maxspeed=st["speed"] * 2.4)
         pr.cone = math.atan2(ay, ax)      # where the salvo was aimed: missiles with nothing to chase drift back to it
         pr.dtype = st["dtype"]
+        pr.tier_leech = st["tier_leech"]
         if st["acid"]:
             pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * (st["salvo"] or 1)))
         pr.owner = p
@@ -1950,7 +1959,14 @@ class World:
         if isinstance(fx, dict):   # beam stats come unscaled
             burn = burn * 1.4 * self._shooter.dmg_mult()
         e.last_hit_by = getattr(fx, "owner", None) if not isinstance(fx, dict) else self._shooter
-        e.hit(self, self.typed(e, dmg, dtype, ammo), vx, vy)
+        dealt = self.typed(e, dmg, dtype, ammo)
+        e.hit(self, dealt, vx, vy)
+        tl = get("tier_leech")
+        if tl:                              # eldritch weapons feed their wielder
+            who = getattr(fx, "owner", None) if not isinstance(fx, dict) else self._shooter
+            who = getattr(who, "owner_player", who)
+            if isinstance(who, Player) and who.alive:
+                who.hp = min(who.max_hp, who.hp + dealt * tl)
         acid = get("acid")
         if acid:
             p_ = acid if not isinstance(fx, dict) else min(1.0, 1.6 / max(0.1, fx.get("rate", 1.0)))

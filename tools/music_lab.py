@@ -319,15 +319,20 @@ def snare(kind="gate", var=0):
         n = n_of(0.8)
         t = tt(n)
         return drive(sine(170 - 30 * t, n) * expdec(n, 0.1) + bp(noise(n, r), 600, 5000) * expdec(n, 0.22) * 1.1, 1.5)
-    n = n_of(0.35)
+    n = n_of(0.4)
     t = tt(n)
-    return drive(sine(185 - 20 * t, n) * expdec(n, 0.07) * 0.8 + bp(noise(n, r), 1200, 7000) * expdec(n, 0.12), 1.6)
+    body = (sine(190 - 25 * t, n) + 0.5 * sine(330, n)) * expdec(n, 0.06) * 0.8
+    crack = hp(noise(n, r), 2500) * expdec(n, 0.004) * 0.6
+    rattle = bp(noise(n, r), 1500, 7000) * expdec(n, 0.14)
+    return drive(body + crack + rattle, 1.8)
 
 
 @cached
 def hat(open_=False, var=0):
-    n = n_of(0.3 if open_ else 0.06)
-    return lp(hp(noise(n, R(20 + var)), 6500), 10000) * expdec(n, 0.12 if open_ else 0.018) * 0.4
+    n = n_of(0.35 if open_ else 0.07)
+    metal_ = sum(pulse(f * (1 + 0.003 * var), n, 0.5) for f in (205, 304, 369, 522, 540, 800)) / 6
+    x = hp(metal_, 7000) * 0.7 + hp(noise(n, R(20 + var)), 7500) * 0.35
+    return lp(x, 11000) * expdec(n, 0.13 if open_ else 0.02) * 0.45
 
 
 @cached
@@ -525,6 +530,9 @@ class Mix:
         out[1] += convolve(send[1], irR)
         out = lp(hp(out, 30), master_lp)
         out = out - lp(out, 60) * 0.35 + bp(out, 1200, 4000) * 0.25       # tame the sub, a little presence
+        low = lp(out, 120)                                     # everything under 120 Hz dead centre (punchier, tighter)
+        out = out - low + low.mean(axis=0, keepdims=True)
+        out = bus_compress(out)
         pk = np.max(np.abs(out)) or 1
         out = np.tanh(out / pk * drive) / np.tanh(drive)       # glue / saturation
         out = out[:, :n_of(self.sec)]
@@ -533,15 +541,33 @@ class Mix:
         return normalize(out.T, 0.89)
 
 
+def bus_compress(x2, thresh_db=-14.0, ratio=3.0, attack=0.01, release=0.18):
+    """Glue compressor on the stereo bus: RMS envelope of the mid signal, soft knee-less gain reduction."""
+    from scipy.signal import lfilter
+    m = x2.mean(axis=0)
+    pk = np.max(np.abs(m)) or 1.0
+    p = (m / pk) ** 2
+    a_att = 1 - np.exp(-1 / (attack * SR))
+    a_rel = 1 - np.exp(-1 / (release * SR))
+    env = lfilter([a_rel], [1, -(1 - a_rel)], p)            # slow, then sharpen the rising edges with a fast follower
+    fast = lfilter([a_att], [1, -(1 - a_att)], p)
+    env = np.maximum(env, fast)
+    db = 10 * np.log10(env + 1e-9)
+    over = np.maximum(0.0, db - thresh_db)
+    gain = 10 ** (-over * (1 - 1 / ratio) / 20)
+    return x2 * gain
+
+
 # ================================================================ darksynth instruments
 @cached
 def punch():
     """80s drum-machine kick: fast pitch dive, click, a little drive."""
-    n = n_of(0.42)
+    n = n_of(0.5)
     t = tt(n)
-    x = sine(52 + 170 * np.exp(-t / 0.018), n) * ar(n, 0.001, 0.26)
-    x += hp(noise(n, R(3)), 2500) * expdec(n, 0.0025) * 0.5
-    return drive(x * 1.3, 2.2)
+    sub = sine(48 + 30 * np.exp(-t / 0.04), n) * ar(n, 0.002, 0.32)                  # weight
+    body = sine(70 + 190 * np.exp(-t / 0.012), n) * ar(n, 0.001, 0.09) * 0.9           # the punch you feel
+    click = hp(noise(n, R(3)), 3000) * expdec(n, 0.0018) * 0.45 + sine(1800, n) * expdec(n, 0.003) * 0.15
+    return drive((sub + body + click) * 1.2, 2.0)
 
 
 @cached
@@ -549,10 +575,15 @@ def growl(midi, dur, bright=1.0, drv=4.0):
     """Distorted saw bass with a snappy filter envelope - the core darksynth bass."""
     f = hz(midi)
     n = n_of(dur + 0.03)
-    x = saw(f * 1.005, n) + saw(f * 0.995, n, 0.4) + 0.7 * pulse(f * 0.5, n, 0.5)
-    x = sweep_lp(x, 0.12 + 0.88 * expdec(n, 0.07 + 0.05 * bright) * bright, 140, 5500)
-    x *= adsr(n, 0.002, 0.1, 0.85, 0.02, dur)
-    return tail(lp(np.tanh(x * drv) * 0.5, 6500), 0.01)
+    env = adsr(n, 0.002, 0.1, 0.85, 0.02, dur)
+    while f > 110:                                            # the clean sub sits an octave (or two) down
+        f /= 2
+    sub = sine(f, n) * env * 0.55
+    fm = hz(midi)
+    x = saw(fm * 1.005, n) + saw(fm * 0.995, n, 0.4) + saw(fm * 2.002, n, 0.7) * 0.35
+    x = sweep_lp(x, 0.12 + 0.88 * expdec(n, 0.07 + 0.05 * bright) * bright, 180, 5500)
+    grit = hp(np.tanh(x * env * drv), 130)                    # distortion lives in the mids only
+    return tail(lp(sub + grit * 0.45, 6500), 0.01)
 
 
 @cached
@@ -560,10 +591,14 @@ def reese2(midi, dur, cutoff=1600, drv=3.0):
     """Wide phasing reese with a sine sub, overdriven."""
     f = hz(midi)
     n = n_of(dur + 0.03)
+    env = adsr(n, 0.003, 0.15, 0.9, 0.03, dur)
+    fs = f / 2
+    while fs > 110:
+        fs /= 2
+    sub = sine(fs, n) * env * 0.6
     x = saw(f * 1.008, n) + saw(f * 0.992, n, 0.5) + saw(f, n, 0.2) * 0.6
-    x = lp(x, cutoff) + 0.8 * sine(f / 2, n)
-    x *= adsr(n, 0.003, 0.15, 0.9, 0.03, dur)
-    return tail(np.tanh(x * drv) * 0.45, 0.01)
+    grit = hp(np.tanh(lp(x, cutoff) * env * drv), 140)
+    return tail(sub + grit * 0.42, 0.01)
 
 
 @cached
@@ -614,9 +649,16 @@ def lead_line(events, total, glide=0.06, bright=4500, drv=2.5, detune=0.007, vib
     t = tt(n)
     f = f * (1 + vib * np.sin(TAU * 5.4 * t) * smooth(g, 0.35) ** 2)
     env = smooth(g, 0.012)
-    x = saw(f, n) + 0.7 * saw(f * (1 + detune), n, 0.3) + 0.35 * pulse(f * 0.5, n, 0.4)
-    x = np.tanh(lp(x, bright) * drv) / np.tanh(drv)
-    return lp(x, bright * 1.4) * env * 0.3
+    out = []
+    for side in (-1, 1):                                       # 5-voice unison, voices fanned across the stereo field
+        x = np.zeros(n)
+        for k, (d, w_) in enumerate(((0.0, 1.0), (detune, 0.8), (-detune, 0.8), (detune * 1.9, 0.5), (-detune * 1.9, 0.5))):
+            pan_w = 1.0 if k == 0 else (1.25 if (k % 2 == 0) == (side > 0) else 0.6)
+            x += saw(f * (1 + d), n, 0.17 * k + 0.1 * side) * w_ * pan_w
+        x += 0.3 * pulse(f * 0.5, n, 0.4)
+        x = np.tanh(lp(x, bright) * drv * 0.6) / np.tanh(drv * 0.6)
+        out.append(lp(x, bright * 1.4) * env * 0.22)
+    return out[0], out[1]
 
 
 def fill(mx, c, start, beats, freqs=(210, 180, 150, 125, 100, 82)):
@@ -699,7 +741,8 @@ def nightcrawler():
     ev = [(c(b * 4 + st), c.d(ln) * 0.97, m(nn)) for b, st, ln, nn in mel]
     total = c.d(bars * 4) + 1
     mx.add("lead", lead_line(ev, total, 0.05, 5000), 0, 1.0, -0.05)
-    mx.add("lead", lead_line([(s, d, n - 12) for s, d, n in ev], total, 0.05, 3000) * 0.5, 0, 1.0, 0.1)
+    lo_l, lo_r = lead_line([(s, d, n - 12) for s, d, n in ev], total, 0.05, 3000)
+    mx.add("lead", (lo_l * 0.5, lo_r * 0.5), 0, 1.0)
     mx.add("fx", riser(c.d(8)), c(8), 0.8)
     for b in (4, 10, 16):
         mx.add("fx", crash(), c(b * 4), 0.9)

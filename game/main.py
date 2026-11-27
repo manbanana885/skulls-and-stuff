@@ -9,7 +9,7 @@ import pygame
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import assets as A  # noqa: E402
 from assets import load_all, to_screen, dir_index, glow, shadow, vignette, ROOT  # noqa: E402
-from world import World  # noqa: E402
+from world import World, Particle  # noqa: E402
 import characters as CH  # noqa: E402
 import weapons as WP  # noqa: E402
 from biomes import BIOMES, biome_for  # noqa: E402
@@ -1043,6 +1043,9 @@ class Game:
                 col, rar = lt.item.color, lt.item.rarity
                 n += 1
                 items.append((key, n, None, lambda gx=gx, gy=gy, c=col, r=rar: self.draw_pillar(gx, gy, c, r), 0))
+                if rar >= WP.DEMONIC:            # top-tier pickups glow hard
+                    n += 1
+                    items.append((key, n, None, lambda gx=gx, gy=gy, c=col: self.add_glow(gx, gy - sc(30), sc(70), (c[0] // 3, c[1] // 3, c[2] // 3)), 0))
                 n += 1
                 items.append((key, n, sp.get("idle", 0, lt.t * 8), gx - sp.ax, gy - sp.ay + bob))
             elif lt.kind == "support":
@@ -1160,6 +1163,17 @@ class Game:
                 if pl.flash > 0:
                     n += 1
                     items.append((plkey, n, torso.flash(timg), plx - torso.ax, ply - torso.ay + bob))
+                aura = {WP.SACRED: (140, 140, 130), WP.ELDRITCH: (30, 120, 30), WP.DEMONIC: (140, 28, 14)}.get(pl.weapon.rarity)
+                if aura:
+                    pk_ = 0.75 + 0.25 * math.sin(self.time * 3)
+                    n += 1
+                    items.append((plkey - 0.05, n, None, lambda x_=plx, y_=ply, c=aura, k=pk_:
+                                  self.add_glow(x_, y_ - sc(40), int(sc(74) * k), c), 0))
+                    if rnd.random() < 0.45:
+                        w.add(Particle("fire" if pl.weapon.rarity == WP.DEMONIC else "glow", pl.x + rnd.uniform(-0.3, 0.3),
+                                       pl.y + rnd.uniform(-0.3, 0.3), rnd.uniform(0.3, 1.3), 0, 0, rnd.uniform(0.6, 1.4), 0.6,
+                                       {WP.ELDRITCH: (90, 255, 90), WP.SACRED: (255, 255, 235)}.get(pl.weapon.rarity, (255, 70, 30)),
+                                       8 if pl.weapon.rarity == WP.DEMONIC else 2))
                 if len(w.players) > 1:   # who's who
                     n += 1
                     items.append((plkey + 0.02, n, None, lambda pl=pl, x_=plx, y_=ply: self.draw_tag(pl, x_, y_), 0))
@@ -1263,11 +1277,11 @@ class Game:
         key = (col, rarity)
         img = self._pillar.get(key)
         if img is None:
-            h = sc(60 + 30 * rarity)
+            h = sc(60 + 30 * min(rarity, 6))
             wdt = sc(14)
             img = pygame.Surface((wdt, h))
             for yy in range(h):
-                k = (yy / h) ** 1.8 * (0.35 + 0.12 * rarity)
+                k = (yy / h) ** 1.8 * min(1.0, 0.35 + 0.12 * rarity)
                 for xx in range(wdt):
                     e = 1 - abs(xx - wdt / 2) / (wdt / 2)
                     img.set_at((xx, yy), (int(col[0] * k * e), int(col[1] * k * e), int(col[2] * k * e)))
@@ -2192,25 +2206,58 @@ class Game:
             pygame.draw.rect(s, c, (x - sc(1), y - sc(1), sc(2), sc(2)))
 
     # ------------------------------------------------------------ HUD
+    def tier_text(self, font, txt, rarity, default_col):
+        """Weapon name lettered for its tier: Demonic = black with a red outline, Eldritch = black with green, Sacred = white."""
+        spec = WP.TIER_TEXT.get(rarity)
+        if not spec:
+            return font.render(txt, True, default_col)
+        col, out = spec
+        key = ("tiertext", id(font), txt, rarity)
+        img = self._tint.get(key)
+        if img is None:
+            base = font.render(txt, True, col)
+            if out is None:
+                img = base
+            else:
+                ol = font.render(txt, True, out)
+                img = pygame.Surface((base.get_width() + 4, base.get_height() + 4), pygame.SRCALPHA)
+                for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-1, -1), (1, 1), (-1, 1), (1, -1)):
+                    img.blit(ol, (2 + dx, 2 + dy))
+                img.blit(base, (2, 2))
+            self._tint[key] = img
+        return img
+
     def panel(self, s, rect, alpha=125):
         bg = pygame.Surface(rect.size, pygame.SRCALPHA)
         bg.fill((8, 8, 14, alpha))
         s.blit(bg, rect.topleft)
 
     def weapon_card(self, s, wp, x, y, compare=None, title=None):
-        lines = [(self.mid, wp.name, wp.color),
-                 (self.small, "%s %s %s  -  LVL %d" % (wp.rarity_name, wp.brand, wp.st["label"], wp.level), (170, 175, 190))]
+        B = WP.BRANDS[wp.brand]
+        lines = [(self.mid, wp.name, ("tier", wp.rarity, wp.color)),
+                 (self.small, "%s %s  -  LVL %d" % (wp.rarity_name, wp.st["label"], wp.level), (170, 175, 190)),
+                 (self.small, [(wp.brand.upper(), B["color"]), ("  -  " + B["blurb"], (150, 150, 165))], None),
+                 (self.small, WP.brand_summary(wp.brand), tuple(int(c_ * 0.8 + 40) for c_ in B["color"]))]
         for m in wp.mods:
             lines.append((self.small, "+ %s: %s" % (m["adj"], m["desc"]), (150, 220, 160)))
         st_ = wp.st
+        fx_ = WP.TIER_FX.get(wp.rarity)
+        if wp.rarity == WP.SACRED:
+            lines.append((self.small, "SACRED: heals you %.0f integrity/s while wielded" % fx_["regen"], (255, 255, 255)))
+        elif wp.rarity == WP.ELDRITCH:
+            lines.append((self.small, "ELDRITCH: drains %.0f integrity/s while wielded, heals you %d%% of damage dealt"
+                          % (-fx_["regen"], round(fx_["leech"] * 100)), (90, 255, 90)))
+        elif wp.rarity == WP.DEMONIC:
+            lines.append((self.small, "DEMONIC: burns you %.1f integrity/s while wielded, +%d%% damage"
+                          % (-fx_["regen"], round(st_["demonic_bonus"] * 100)), (255, 70, 50)))
         import damage as DM
         sec = DM.secondary(st_)
         main_ = st_["dtype"].upper() + ((" (%s)" % DM.AMMO_LABEL[st_["ammo"]]) if st_.get("ammo") else "")
         lines.append((self.small, [("DAMAGE: ", (130, 135, 150)), (main_, DM.COLOR[st_["dtype"]])]
                       + [x_ for t in sec for x_ in (("  +  ", (130, 135, 150)), (t.upper(), DM.COLOR[t]))], None))
         if st_.get("ammo"):
-            lines.append((self.small, "AMMO: " + {"pen": "Penetrating Core: pierces 2 more, x1.35 vs robots & constructs",
-                                                   "exp": "Expanding: x1.35 vs undead & mutants, x0.75 vs robots & constructs"}[st_["ammo"]],
+            lines.append((self.small, "AMMO: " + {"pen": "Penetrating Core  (+2 pierce, x1.35 robots & constructs)",
+                                                   "exp": "Expanding  (x1.35 undead & mutants, x0.75 robots & constructs)"}[st_["ammo"]],
                           (230, 230, 235)))
         if st_.get("salvo"):
             lines.append((self.small, "Fires %d-missile homing barrages" % st_["salvo"], (255, 200, 120)))
@@ -2226,7 +2273,10 @@ class Game:
         stats = wp.card_lines()
         other = dict(compare.card_lines()) if compare else {}
         h = sc(12) + sum(f.get_height() + sc(2) for f, _, _ in lines) + sc(22) * 2 + (sc(20) if title else 0)
-        wdt = sc(370)
+        widest = max(sum(f.size(p_)[0] for p_, _ in t_) if isinstance(t_, list) else f.size(t_)[0] for f, t_, _ in lines)
+        if title:
+            widest = max(widest, self.small.size(title)[0])
+        wdt = max(sc(370), widest + sc(24))          # cards grow to fit long lines instead of spilling over
         rect = pygame.Rect(x, y, wdt, h)
         self.panel(s, rect)
         pygame.draw.rect(s, wp.color, (x, y, sc(4), h))
@@ -2241,6 +2291,8 @@ class Game:
                     img = f.render(part, True, pc)
                     s.blit(img, (xx, cy))
                     xx += img.get_width()
+            elif isinstance(col, tuple) and col and col[0] == "tier":
+                s.blit(self.tier_text(f, txt, col[1], col[2]), (x + sc(10), cy - 2))
             else:
                 s.blit(f.render(txt, True, col), (x + sc(12), cy))
             cy += f.get_height() + sc(2)
@@ -2304,7 +2356,7 @@ class Game:
             by += sc(22)
         # always-on weapon readout: name, ammo, stowed gun. The full card only fades in after a swap / pickup.
         wp = p.weapon
-        name_img = self.mid.render(wp.name, True, wp.color)
+        name_img = self.tier_text(self.mid, wp.name, wp.rarity, wp.color)
         bx = W - sc(16) - max(sc(220), name_img.get_width()) if right else sc(16)
         top = H - sc(108)
         s.blit(name_img, (bx, top))
@@ -2314,7 +2366,7 @@ class Game:
             fade = min(1.0, p.card_t / 0.5, (3.0 - p.card_t) / 0.15 + 0.2)
             card = self._card_surf if getattr(self, "_card_surf", None) is not None else None
             if card is None:
-                card = self._card_surf = pygame.Surface((sc(400), sc(330)), pygame.SRCALPHA)
+                card = self._card_surf = pygame.Surface((sc(720), sc(560)), pygame.SRCALPHA)
             card.fill((0, 0, 0, 0))
             r_ = self.weapon_card(card, wp, 0, 0)
             card.set_alpha(int(255 * max(0.0, min(1.0, fade))))
@@ -2354,7 +2406,13 @@ class Game:
                 same = next((g for g in p.equipped() if g.kind == lt.item.kind), None)
                 self.support_card(s, lt.item, int(cx), int(cy), compare=same, title="%s%s  TAKE  (%s)" % (who, key, dest))
             else:
-                self.weapon_card(s, lt.item, int(cx), int(cy), compare=wp, title="%s%s  TAKE  (swaps with %s)" % (who, key, wp.name))
+                ttl = "%s%s  TAKE  (swaps with %s)" % (who, key, wp.name)
+                if getattr(self, "_measure", None) is None:
+                    self._measure = pygame.Surface((sc(800), sc(700)), pygame.SRCALPHA)
+                r_ = self.weapon_card(self._measure, lt.item, 0, 0, compare=wp, title=ttl)      # measure, then fit on screen
+                cx = min(max(sc(10), cx), W - r_.width - sc(10))
+                cy = min(max(sc(70), cy), H - r_.height - sc(10))
+                self.weapon_card(s, lt.item, int(cx), int(cy), compare=wp, title=ttl)
 
     def draw_hud(self, s):
         w = self.world

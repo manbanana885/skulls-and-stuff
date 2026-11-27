@@ -10,7 +10,8 @@ import damage as DM
 # ---------------------------------------------------------------- archetypes
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
-                heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None)
+                heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None,
+                tier_leech=0.0, demonic_bonus=0.0)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
@@ -85,16 +86,125 @@ MUZZLE = {
 SHOULDER = {"rocket": 0.14, "tac_nuke": 0.14, "nuke": 0.15}   # sideways offset to the right shoulder
 
 RARITY = [("Common", (205, 205, 205)), ("Uncommon", (80, 225, 95)), ("Rare", (70, 145, 255)),
-          ("Epic", (195, 85, 255)), ("Legendary", (255, 155, 30))]
+          ("Epic", (195, 85, 255)), ("Legendary", (255, 155, 30)), ("Mythical", (40, 230, 255)), ("Demonic", (255, 50, 40)),
+          ("Eldritch", (90, 255, 90)), ("Sacred", (255, 255, 255))]
+LEGENDARY, MYTHICAL, DEMONIC, ELDRITCH, SACRED = 4, 5, 6, 7, 8
+# how a tier's name is lettered: (text colour, outline colour or None)
+TIER_TEXT = {DEMONIC: ((12, 8, 8), (255, 50, 40)), ELDRITCH: ((8, 12, 8), (90, 255, 90)), SACRED: ((255, 255, 255), None)}
+# while it's the gun in your hands: integrity per second (+ heals, - hurts) and the share of damage dealt that heals you
+TIER_FX = {SACRED: dict(regen=1.0), ELDRITCH: dict(regen=-1.0, leech=0.08), DEMONIC: dict(regen=-1.5)}
 
-BRANDS = {
-    "Ossuary Arms": dict(dmg=1.15, rate=0.92),
-    "Necrotek": dict(rate=1.15, spread=1.2),
-    "Hexforge": dict(speed=1.25, reload=0.9),
-    "Marrow & Sons": dict(mag=1.35, dmg=0.95),
-    "Cadaver Dynamics": dict(reload=0.75),
-    "Graveline": dict(spread=0.6, dmg=1.05),
+# ---------------------------------------------------------------- manufacturers
+# Which weapon groups each archetype belongs to; a manufacturer only builds guns in its groups ("all" = anything).
+GROUPS = {
+    "pistol": {"sidearm"}, "revolver": {"sidearm"}, "laser_pistol": {"sidearm", "energy"}, "coil_pistol": {"sidearm", "energy"},
+    "smg": {"auto"}, "carbine": {"auto"}, "assault": {"auto"}, "coil_rifle": {"auto", "energy"}, "chaingun": {"auto", "heavy"},
+    "shotgun": {"shotgun"},
+    "sniper": {"precision"}, "railgun": {"precision", "heavy"}, "laser_rifle": {"precision", "energy"},
+    "plasma": {"energy"}, "microwave": {"energy"}, "coil_heavy": {"energy", "heavy"},
+    "flamer": {"sprayer"}, "chem": {"sprayer"}, "cryo": {"sprayer"},
+    "grenade": {"explosive"}, "rocket": {"explosive"}, "barrage": {"explosive", "heavy"}, "cluster": {"explosive"},
+    "tac_nuke": {"explosive"}, "nuke": {"explosive"},
+    "saw": {"exotic"},
 }
+GROUP_LABEL = {"sidearm": "sidearms", "auto": "automatics", "shotgun": "shotguns", "precision": "precision rifles",
+               "energy": "energy weapons", "sprayer": "sprayers", "explosive": "explosives", "heavy": "heavy weapons",
+               "exotic": "exotic launchers"}
+
+
+def _brand(groups, color, blurb, mul=None, add=None, extra_mods=0, bias=None, tier=0, weight=1.0, special=None):
+    return dict(groups=groups, color=color, blurb=blurb, mul=mul or {}, add=add or {}, extra_mods=extra_mods, bias=bias or {},
+                tier=tier, weight=weight, special=special)
+
+
+# mul: stat multipliers; add: additive stat bonuses; extra_mods: +/- bonus mod slots; bias: mod key -> roll weight;
+# tier: minimum rarity that can carry the brand (LEGENDARY / MYTHICAL / ELDRITCH / SACRED brands are exclusive to those tiers)
+BRANDS = {
+    # --- the original six, now with real personalities
+    "Ossuary Arms": _brand("all", (215, 205, 180), "old reliable bone-and-steel", {"dmg": 1.35, "rate": 0.78}),
+    "Necrotek": _brand({"energy"}, (90, 230, 255), "corporate death-tech", {"rate": 1.55, "spread": 1.8, "dmg": 0.88},
+                       bias={"rapid": 4, "shock": 4}),
+    "Hexforge": _brand({"sidearm", "precision"}, (200, 120, 255), "witch-forged precision",
+                       {"speed": 1.7, "spread": 0.35, "dmg": 1.15, "reload": 0.8}, bias={"precise": 4, "velocity": 4}),
+    "Marrow & Sons": _brand("all", (190, 150, 110), "family workshop, bottomless drums", {"mag": 2.0, "dmg": 0.82, "reload": 1.3},
+                            bias={"drum": 3}),
+    "Cadaver Dynamics": _brand({"explosive", "heavy"}, (150, 170, 120), "military ordnance",
+                               {"reload": 0.55, "mag": 1.5, "dmg": 0.92}, bias={"quick": 4, "drum": 2}),
+    "Graveline": _brand({"precision"}, (170, 180, 200), "one shot, one grave", {"dmg": 1.6, "mag": 0.55, "rate": 0.85},
+                        bias={"heavy": 3}),
+    # --- new houses
+    "Rattlebone Surplus": _brand("all", (160, 140, 90), "junkyard guns, jury-rigged extras", {"dmg": 0.72, "mag": 1.4, "spread": 1.3},
+                                 extra_mods=1, weight=0.8),
+    "Pyre & Ash Industrial": _brand({"sprayer", "explosive"}, (255, 120, 40), "arsonist chemists", {"dmg": 1.1},
+                                    add={"burn": 2.5}, bias={"incendiary": 8}),
+    "Halcyon Biomech": _brand({"sprayer", "energy"}, (130, 230, 170), "clean-room bio-weapons", {"rate": 1.15},
+                              add={"chill": 0.04, "gas": 3.0}, bias={"acid": 6, "cryo": 6}),
+    "Gorewright Foundry": _brand({"heavy"}, (170, 60, 50), "crude, brutal, hits like a truck", {"dmg": 1.9, "rate": 0.7, "spread": 1.2},
+                                 extra_mods=-1),
+    "Kettleblack Pneumatics": _brand({"shotgun"}, (120, 110, 100), "choked barrels, packed shells", {"spread": 0.55, "dmg": 0.9},
+                                     add={"pellets": 4}, bias={"heavy": 2}),
+    "Blackreef Munitions": _brand({"auto"}, (80, 120, 150), "spray and pray", {"rate": 1.45, "mag": 1.5, "dmg": 0.78, "spread": 1.5},
+                                  bias={"drum": 3, "rapid": 2}),
+    "Voltaic Mortuary": _brand({"energy", "auto"}, (150, 140, 255), "electrified undertakers", {"dmg": 1.05},
+                               add={"shock": 1, "chain": 1}, bias={"shock": 5}),
+    "Thornwall Defense": _brand({"heavy", "precision"}, (120, 140, 110), "frame-mounted, easy to carry",
+                                {"mag": 1.5, "reload": 0.8}, special="light"),
+    "Saint Wormwood Armory": _brand({"sidearm", "shotgun"}, (240, 230, 190), "blessed arms for demon hunters",
+                                    {"dmg": 1.3, "mag": 0.8, "reload": 1.2}, bias={"explosive": 3, "incendiary": 3}),
+    "Sawtooth & Cleaver Co.": _brand({"exotic", "shotgun"}, (210, 210, 220), "butcher's engineering", {"dmg": 1.25},
+                                     add={"pierce": 2, "bounce": 1}, bias={"ricochet": 5}),
+    # --- legendary-only houses
+    "The Ninefold Choir": _brand("all", (255, 210, 120), "nine voices, one hymn of ruin", {"dmg": 1.4}, extra_mods=1, tier=LEGENDARY),
+    "Asphodel Atelier": _brand({"sidearm", "precision"}, (255, 170, 200), "bespoke killing instruments",
+                               {"dmg": 1.6, "speed": 1.5, "spread": 0.3, "reload": 0.8}, tier=LEGENDARY),
+    "House Mourningstar": _brand({"explosive", "heavy"}, (255, 140, 60), "dynastic artillery", {"blast": 1.5, "mag": 1.6, "dmg": 1.2},
+                                 tier=LEGENDARY),
+    # --- mythical-only, eldritch-only and sacred-only
+    "The Gilded Pantheon": _brand("all", (40, 230, 255), "forged by the smiths of dead gods", {"dmg": 1.45, "speed": 1.3, "reload": 0.8},
+                                  extra_mods=1, tier=MYTHICAL),
+    "Brimstone Covenant": _brand("all", (255, 50, 40), "forged in the ninth pit", {"dmg": 1.4, "rate": 1.15},
+                                 add={"burn": 2.0}, bias={"incendiary": 10, "explosive": 3}, tier=DEMONIC),
+    "The Unspeakable Works": _brand("all", (90, 255, 90), "built by something that should not build", {"dmg": 1.5, "rate": 1.25},
+                                    extra_mods=1, tier=ELDRITCH),
+    "The Reliquary": _brand("all", (255, 245, 200), "relics of a dead god", {"dmg": 1.6, "rate": 1.2, "mag": 1.4, "reload": 0.7},
+                            extra_mods=1, tier=SACRED),
+}
+
+
+def brands_for(arch, rarity):
+    groups = GROUPS.get(arch, set())
+    out = []
+    for name, b in BRANDS.items():
+        if b["tier"] > rarity:
+            continue
+        if rarity >= MYTHICAL and b["tier"] < LEGENDARY:
+            continue                     # mythical / sacred guns only come out of the top houses
+        if b["groups"] != "all" and not (b["groups"] & groups):
+            continue
+        w = b["weight"]
+        if b["tier"] and b["tier"] == rarity:
+            w *= 14.0                    # each top tier mostly comes from its own house
+        elif b["tier"]:
+            w *= 3.0
+        out.append((name, w))
+    return out
+
+
+def brand_summary(name):
+    """'+60% DMG  -45% MAG' style line from a brand's multipliers and additions."""
+    b = BRANDS[name]
+    lab = {"dmg": "DMG", "rate": "RATE", "mag": "MAG", "reload": "RELOAD", "speed": "VELOCITY", "spread": "SPREAD", "blast": "BLAST"}
+    parts = []
+    for k, v in b["mul"].items():
+        parts.append("%+d%% %s" % (round((v - 1) * 100), lab.get(k, k.upper())))
+    for k, v in b["add"].items():
+        parts.append({"burn": "+BURN", "chill": "+CHILL", "gas": "+GAS", "pellets": "+%d PELLETS" % v, "shock": "+SHOCK",
+                      "chain": "+1 CHAIN (coil guns)", "pierce": "+%d PIERCE" % v, "bounce": "+BOUNCE"}.get(k, "+" + k.upper()))
+    if b["extra_mods"]:
+        parts.append("%+d MOD" % b["extra_mods"])
+    if b["special"] == "light":
+        parts.append("HALF WEIGHT")
+    return "  ".join(parts)
 
 NO_PROJ_SPEED = {"beam", "arc"}
 EXPLOSIVE = {"grenade", "rocket", "tac_nuke", "nuke", "barrage", "cluster"}
@@ -168,6 +278,14 @@ MODS = [
 ]
 MOD_BY_KEY = {m["key"]: m for m in MODS}
 
+MYTHICAL_NAMES = ["Starfall", "The Worldspine", "Titan's Mercy", "Aegis of Ash", "Hydra's Last Head", "Ironsong",
+                  "The Ninth Labour", "Dawnbreaker", "Oathkeeper's Wrath"]
+DEMONIC_NAMES = ["Hellmaw Howitzer", "The Ninth Circle", "Brimstone Sermon", "Pitfire", "Cinder Saint", "The Goat's Bargain",
+                 "Infernal Writ", "Ashen Tongue", "Sulphur Kiss"]
+ELDRITCH_NAMES = ["The Hollow Psalm", "Mouth of the Deep", "Nine Black Stars", "The Unborn Choir", "Grief Engine",
+                  "Whisper of Yth", "The Thing in the Barrel", "Sorrowmaw", "Last Light Eater"]
+SACRED_NAMES = ["The Last Benediction", "Saint Ossein's Mercy", "Halo Breaker", "Requiem Aeterna", "Gospel of Teeth",
+                "The Marrow Relic", "Choirfall", "Lux Ultima"]
 UNIQUE_NAMES = ["Bonesaw", "Marrowmaker", "Gravewhisper", "Last Rites", "The Ossifier", "Hellmouth", "Cadaver Kiss",
                 "Widowmaker", "Coffin Nail", "Requiem", "Ribcracker", "Dead Man's Hand", "Ashen Choir",
                 "Neon Reaper", "Skullsplitter", "Black Sabbath Engine", "Night Drive", "The Undertaker"]
@@ -191,36 +309,67 @@ class Weapon:
         if st["salvo"]:
             st["salvo"] = rng.randint(*st["salvo"])
             st["dmg"] *= (10.0 / st["salvo"]) ** 0.35     # small salvos hit a little harder per missile
-        self.brand = rng.choice(list(BRANDS))
-        for k, v in BRANDS[self.brand].items():
+        options = brands_for(arch, rarity)
+        self.brand = rng.choices([n for n, _ in options], weights=[w for _, w in options])[0]
+        B = BRANDS[self.brand]
+        for k, v in B["mul"].items():
             st[k] *= v
+        for k, v in B["add"].items():
+            if k == "pellets" and st["pellets"] <= 1:
+                continue
+            if k == "chain" and not st["chain"]:
+                continue
+            if k == "bounce" and st["proj"] not in ("bullet", "pellet", "bolt", "slug", "plasma", "saw", "arc"):
+                continue
+            st[k] += v
+        if B["special"] == "light" and st["heavy"] < 1.0:
+            st["heavy"] = 1.0 - (1.0 - st["heavy"]) * 0.5
         # bullet guns always roll an ammo type: standard 50%, Penetrating Core 25%, Expanding 25%
-        self.ammo = None
+        self.ammo_type = None
         if ARCH[arch]["proj"] in BULLETS:
             r_ = rng.random()
-            self.ammo = "pen" if r_ < 0.25 else ("exp" if r_ < 0.5 else None)
-            if self.ammo:
-                MOD_BY_KEY["penetrating" if self.ammo == "pen" else "expanding"]["fn"](st)
+            pen_w = 0.25 * (2.0 if self.brand == "Graveline" else 1.0)
+            self.ammo_type = "pen" if r_ < pen_w else ("exp" if r_ < pen_w + 0.25 else None)
+            if self.ammo_type:
+                MOD_BY_KEY["penetrating" if self.ammo_type == "pen" else "expanding"]["fn"](st)
         pool = [m for m in MODS if m["ok"](arch)]
-        rng.shuffle(pool)
-        n_mods = min(rarity, 3)
+        n_mods = max(0, {LEGENDARY: 3, MYTHICAL: 4, DEMONIC: 4, ELDRITCH: 5, SACRED: 5}.get(rarity, rarity) + B["extra_mods"])
+        n_mods = min(n_mods, 6)
         self.mods = []
-        for m in pool:                       # Penetrating Core and Expanding rounds are mutually exclusive
-            if len(self.mods) >= n_mods:
-                break
-            if m["key"] in AMMO_MODS and any(o["key"] in AMMO_MODS for o in self.mods):
-                continue
+        while pool and len(self.mods) < n_mods:        # weighted draw without replacement; brands lean toward their favourites
+            weights = [B["bias"].get(m["key"], 1.0) for m in pool]
+            m = rng.choices(pool, weights=weights)[0]
+            pool.remove(m)
             self.mods.append(m)
+        if rarity == DEMONIC and rng.random() < 0.9 and not any(m["key"] == "incendiary" for m in self.mods):
+            inc = MOD_BY_KEY["incendiary"]                      # demonic guns almost always burn
+            if self.mods:
+                self.mods[-1] = inc
+            else:
+                self.mods.append(inc)
         for m in self.mods:
             m["fn"](st)
-        st["dmg"] *= (1 + 0.07 * rarity) * (1.35 if rarity == 4 else 1.0) * (1 + 0.2 * (level - 1))
+        if rarity == DEMONIC:
+            st["demonic_bonus"] = rng.uniform(0.10, 0.30)
+            st["dmg"] *= 1 + st["demonic_bonus"]
+        st["tier_leech"] = TIER_FX.get(rarity, {}).get("leech", 0.0)
+        st["dmg"] *= (1 + 0.07 * rarity) * {LEGENDARY: 1.35, MYTHICAL: 1.7, DEMONIC: 1.85, ELDRITCH: 2.0, SACRED: 2.4}.get(rarity, 1.0) * (1 + 0.2 * (level - 1))
         st["mag"] = max(1, int(round(st["mag"])))
+        st["pellets"] = int(round(st["pellets"]))
         self.st = st
-        if rarity == 4:
+        if rarity == SACRED:
+            self.name = '"%s"' % rng.choice(SACRED_NAMES)
+        elif rarity == ELDRITCH:
+            self.name = '"%s"' % rng.choice(ELDRITCH_NAMES)
+        elif rarity == DEMONIC:
+            self.name = '"%s"' % rng.choice(DEMONIC_NAMES)
+        elif rarity == MYTHICAL:
+            self.name = '"%s"' % rng.choice(MYTHICAL_NAMES)
+        elif rarity == LEGENDARY:
             self.name = '"%s"' % rng.choice(UNIQUE_NAMES)
         else:
             adj = self.mods[0]["adj"] + " " if self.mods else ""
-            ammo_word = {"pen": "Penetrating ", "exp": "Expanding "}.get(self.ammo, "")
+            ammo_word = {"pen": "Penetrating ", "exp": "Expanding "}.get(self.ammo_type, "")
             self.name = "%s%s%s" % (adj, ammo_word, st["label"])
         self.ammo = st["mag"]
         self.reload_t = 0.0
@@ -278,15 +427,15 @@ class Weapon:
 
 
 def roll_rarity(rng, level, bonus=0):
-    w = [60, 26, 10, 3.5, 0.8]
+    w = [60, 26, 10, 3.5, 0.8, 0.012, 0.005, 0.003, 0.0008]
     shift = min(level - 1, 8) * 0.35 + bonus
     for i in range(len(w)):
-        w[i] *= (1 + shift) ** (i * 0.8)
+        w[i] *= (1 + shift) ** (min(i, LEGENDARY) * 0.8)     # tiers above legendary keep a fixed ratio to it
     r = rng.uniform(0, sum(w))
     for i, wi in enumerate(w):
         r -= wi
         if r <= 0:
-            return min(4, i)
+            return min(SACRED, i)
     return 0
 
 

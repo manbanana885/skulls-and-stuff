@@ -217,7 +217,7 @@ class Support:
         self.p.setdefault("size", 1.0)
         self.p["capacity"] = int(round(self.p.get("capacity", 0)))
         self.elem = rng.choice(ELEMENTS[kind]) if kind in ELEMENTS else None
-        if rarity == 4:
+        if rarity >= 4:
             self.name = '"%s"' % rng.choice(UNIQUE[kind])
         else:
             best = max((n for n in rolls if n != "size" or len(rolls) < 2), key=lambda n: rolls[n])
