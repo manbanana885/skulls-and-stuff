@@ -205,7 +205,7 @@ WP.MOD_BY_KEY["penetrating"]["fn"](wpn.st)
 check(wpn.st["pierce"] >= 2, "penetrating core adds pierce (%d)" % wpn.st["pierce"])
 tally = {None: 0, "pen": 0, "exp": 0}
 for i in range(4000):
-    wq = WP.generate(1, random.Random(i), arch=random.Random(i).choice(["pistol", "smg", "carbine", "shotgun"]), rarity=0)
+    wq = WP.generate(1, random.Random(i), arch=random.Random(i).choice(["pistol", "smg", "carbine", "assault"]), rarity=0)
     tally[wq.st["ammo"]] += 1
     assert not {"penetrating", "expanding"} & {m["key"] for m in wq.mods}
 print("  ammo on 4000 common bullet guns: standard %d, penetrating %d, expanding %d" % (tally[None], tally["pen"], tally["exp"]))

@@ -485,6 +485,7 @@ class Player:
             self.card_t = 3.0
             sfx.play("swap")
         if "reload" in pressed and self.weapon.start_reload():
+            w.on_reload(self, self.weapon)
             sfx.play("reload")
         for k_ in range(GEAR_SLOTS):         # D-pad / 1-4: only selects that slot
             if "slot%d" % (k_ + 1) in pressed:
@@ -521,6 +522,7 @@ class Player:
         infinite = "infinite" in self.buffs
         if wp.ammo <= 0 and not infinite:
             if wp.start_reload():
+                w.on_reload(self, wp)
                 sfx.play("reload")
             return
         su = wp.st.get("spinup", 0.0)
@@ -532,6 +534,7 @@ class Player:
         w._shooter = self
         w.fire_weapon(self, wp)
         if wp.ammo <= 0 and not infinite and wp.start_reload():
+            w.on_reload(self, wp)
             sfx.play("reload")
 
 
@@ -960,8 +963,8 @@ class Enemy:
         # ---------------- signature mechanics
         elif ai == "pinkgunner":      # rolls a real player weapon and fights with it
             if self.weapon is None:
-                light = ["pistol", "revolver", "smg", "shotgun", "carbine", "assault", "laser_pistol"]
-                heavy = ["plasma", "grenade", "flamer", "saw", "rocket"]
+                light = ["pistol", "revolver", "smg", "shotgun", "carbine", "assault", "laser_pistol", "shotgun_2"]
+                heavy = ["plasma", "grenade", "flamer", "saw", "rocket", "auto_shotgun", "shotgun_3", "shotgun_4"]
                 arch = rnd.choice(light if w.depth <= 2 else light + heavy)   # no launchers in the first sectors
                 self.weapon = WP.generate(w.depth, arch=arch, rarity=WP.roll_rarity(rnd, w.depth))
                 self.wshot = weapon_to_shot(self.weapon)
@@ -1382,6 +1385,7 @@ class World:
         self.beams = []            # [x1, y1, x2, y2, z, life, max, colour, width]
         self.hazards = []          # acid pools [x, y, r, life]
         self.particles = []
+        self.ejects = []               # [seconds left, shooter, casing kind] - spent casings still to fly out
         self.gibs = []
         self.decals = []
         self.messages = []         # [text, colour, life]
@@ -1804,8 +1808,17 @@ class World:
             p.salvo_wp, p.salvo_t, p.salvo_n = wp, 0.0, 0
             sfx.play("servo", 0.4)
             return
+        nbar = max(1, st["barrels"])
         for i in range(count):
-            if st["pellets"] > 1 or kind in WP.SPRAYS:
+            bar_off = 0.0
+            if st["shell"]:                   # slugs: one per barrel, side by side; multishot extras fan out
+                a = rnd.uniform(-spread, spread)
+                if nbar > 1:
+                    bar_off = ((i % nbar) - (nbar - 1) / 2) * 0.055
+                if i >= st["pellets"]:
+                    j = i - st["pellets"] + 1
+                    a += ((j + 1) // 2) * 0.11 * (1 if j % 2 else -1)
+            elif st["pellets"] > 1 or kind in WP.SPRAYS:
                 a = rnd.uniform(-spread, spread)
             elif i == 0:
                 a = rnd.uniform(-spread, spread)
@@ -1813,7 +1826,7 @@ class World:
                 a = ((i + 1) // 2) * 0.13 * (1 if i % 2 else -1)
             dx, dy = rot(ax, ay, a)
             for lane in lanes:
-                ox, oy = mx + dy * lane, my - dx * lane
+                ox, oy = mx + dy * (lane + bar_off), my - dx * (lane + bar_off)
                 if kind == "beam":
                     self.fire_beam(ox, oy, mz, dx, dy, dmg, st, wp)
                     continue
@@ -1833,6 +1846,9 @@ class World:
                 if kind == "jet":
                     pr.effect = "jet:" + st["jet"]
                     pr.r = 0.11
+                if st["shell"]:
+                    pr.effect = st["shell"]
+                    pr.r = 0.17 if st["shell"] == "dumdum" else 0.08
                 pr.tier_leech = st["tier_leech"]
                 if st["acid"]:
                     pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * st["pellets"]))
@@ -1857,11 +1873,28 @@ class World:
                 ex, ey = rot(ax, ay, a)
                 v = rnd.uniform(3, 9)
                 self.add(Particle("glow", mx, my, mz, ex * v, ey * v, rnd.uniform(-0.5, 1.5), 0.3, st["color"], 2))
-        if kind in ("bullet", "pellet", "slug"):
-            s = rnd.uniform(2.0, 3.0)
-            self.add(Particle("shell", p.x + ax * 0.3, p.y + ay * 0.3, 1.1, -ay * s + rnd.uniform(-0.4, 0.4),
-                              ax * s + rnd.uniform(-0.4, 0.4), rnd.uniform(2.5, 4), 2.5,
-                              (200, 50, 40) if kind == "pellet" else (230, 180, 60), 2))
+        if WP.is_shotgun(wp.arch):
+            if st["barrels"]:                 # break-action: every spent hull pops out as it cracks open
+                for i in range(nbar):
+                    self.eject(p, "hull_drop", 0.28 + i * 0.03)
+            elif wp.arch == "auto_shotgun":
+                self.eject(p, "hull")
+            else:                             # pump: the hull flies out on the pump stroke
+                self.eject(p, "hull", 0.34)
+        elif kind in ("bullet", "slug") and wp.arch != "revolver":     # revolvers keep their brass until reload
+            self.eject(p, "brass")
+        if st["shell"] == "sabot":            # the plastic petals peel off the steel core just past the muzzle
+            for i in range(min(8, count * 2)):
+                side = 1 if i % 2 else -1
+                v = rnd.uniform(2.5, 4.5)
+                self.add(Particle("shell", mx + ax * 0.15, my + ay * 0.15, mz, ax * v * 0.8 - ay * side * v * 0.6,
+                                  ay * v * 0.8 + ax * side * v * 0.6, rnd.uniform(1.0, 2.5), 0.8, (225, 225, 215), 2))
+        elif st["shell"] == "dumdum":
+            for _ in range(5 * nbar):
+                a = rnd.uniform(-0.25, 0.25)
+                ex, ey = rot(ax, ay, a)
+                v = rnd.uniform(1.5, 4)
+                self.add(Particle("smoke", mx, my, mz, ex * v, ey * v, 0.6, 0.7, (70, 64, 58), 0.3))
         for _ in range(3 if kind not in WP.SPRAYS else 1):
             a = rnd.uniform(-0.5, 0.5)
             ex, ey = rot(ax, ay, a)
@@ -1874,6 +1907,58 @@ class World:
             p.kby -= ay * kick * 0.6
         if st["sound"]:
             sfx.play(st["sound"])
+
+    # ---- spent casings
+    def eject(self, who, kind, delay=0.0):
+        if delay <= 0:
+            self.spawn_casing(who, kind)
+        else:
+            self.ejects.append([delay, who, kind])
+
+    def spawn_casing(self, who, kind):
+        """brass (rifle / pistol case), hull (shotgun shell), hull_drop (falls out of a broken-open action), battery (laser cell)."""
+        ax, ay = who.aim
+        x, y = who.x + ax * 0.3, who.y + ay * 0.3
+        if kind == "battery":            # the spent cell drops out of the grip
+            self.add(Particle("shell", x, y, 1.0, -ay * 0.8 + rnd.uniform(-0.3, 0.3), ax * 0.8 + rnd.uniform(-0.3, 0.3),
+                              rnd.uniform(0.5, 1.5), 4.0, (70, 78, 92), 4.2))
+            for _ in range(4):
+                self.add(Particle("spark", x, y, 1.0, rnd.uniform(-2, 2), rnd.uniform(-2, 2), rnd.uniform(0.5, 2), 0.25, (255, 90, 90), 2))
+            return
+        if kind == "hull_drop":
+            s = rnd.uniform(0.6, 1.6)
+            self.add(Particle("shell", x, y, 1.15, -ay * s - ax * 1.0 + rnd.uniform(-0.4, 0.4), ax * s - ay * 1.0 + rnd.uniform(-0.4, 0.4),
+                              rnd.uniform(2.0, 3.2), 3.0, (200, 50, 40), 2.7))
+            return
+        s = rnd.uniform(2.0, 3.0)
+        hull = kind == "hull"
+        self.add(Particle("shell", x, y, 1.1, -ay * s + rnd.uniform(-0.4, 0.4), ax * s + rnd.uniform(-0.4, 0.4), rnd.uniform(2.5, 4),
+                          3.0 if hull else 2.5, (200, 50, 40) if hull else (230, 180, 60), 2.7 if hull else 2.0))
+
+    def on_reload(self, who, wp):
+        """A reload just started: revolvers dump their brass, laser guns drop their spent battery."""
+        if wp.arch == "revolver":
+            for i in range(max(1, wp.st["mag"] - wp.ammo)):
+                self.eject(who, "brass", 0.05 + i * 0.02)
+        elif wp.arch in ("laser_pistol", "laser_rifle"):
+            self.eject(who, "battery", 0.05)
+
+    def dumdum_hit(self, e, b):
+        """An expanding slug mushrooms inside its target: a big shove and a spray out the back."""
+        sp = math.hypot(b.vx, b.vy) or 1
+        ux, uy = b.vx / sp, b.vy / sp
+        if isinstance(e, Enemy) and e.kind not in ("spider", "brute", "turret", "walker"):
+            e.vx += ux * 5.0
+            e.vy += uy * 5.0
+        col = getattr(e, "blood", None)
+        if not (isinstance(col, tuple) and len(col) == 3):
+            col = RED
+        hz = e.st["hz"] if isinstance(e, Enemy) else 0.9
+        for _ in range(10):
+            a = rnd.uniform(-0.45, 0.45)
+            v = rnd.uniform(3, 7)
+            ex, ey = rot(ux, uy, a)
+            self.add(Particle("blood", e.x + ux * 0.3, e.y + uy * 0.3, hz, ex * v, ey * v, rnd.uniform(0.5, 3), 1.5, col, rnd.uniform(3, 6)))
 
     def fire_missile(self, p, wp, i):
         """One missile of a barrage salvo, from barrel i of the 4x2 pod; fans out, then homes in."""
@@ -2567,6 +2652,15 @@ class World:
         self.spawners = [s for s in self.spawners if s.alive]
         for g in self.gibs:
             g.update(self, dt)
+        if self.ejects:
+            keep = []
+            for ej in self.ejects:
+                ej[0] -= dt
+                if ej[0] <= 0:
+                    self.spawn_casing(ej[1], ej[2])
+                else:
+                    keep.append(ej)
+            self.ejects = keep
         self.particles = [q for q in self.particles if q.update(self, dt)]
         for bm in self.beams:
             bm[5] -= dt
@@ -3169,12 +3263,16 @@ class World:
                                 a = rnd.random() * math.tau
                                 self.add(Particle("spark", b.x, b.y, b.z, math.cos(a) * 4, math.sin(a) * 4, rnd.uniform(1, 3), 0.25, (255, 230, 160), 2))
                             self.snd("hit_metal", b.x, b.y, 0.6)
-                            return False      # deflected by the tower shield
+                            if not (b.ammo == "pen" or b.effect == "sabot" or k == "rail"):
+                                return False      # deflected by the tower shield
+                            # penetrating cores, sabots and rails punch straight through the shield into whoever holds it
                     if k in ("grenade", "rocket", "nuke", "missile"):
                         self.impact(b, b.x, b.y)
                         return False
                     b.hit.add(id(e))
                     self.hit_enemy(e, b.dmg, b.vx, b.vy, b)
+                    if b.effect == "dumdum":
+                        self.dumdum_hit(e, b)
                     if k == "plasma":
                         self.explode(b.x, b.y, b.blast, b.dmg * 0.4, (120, 255, 90), hurt_player=False, quiet=True, small=True, dtype=b.dtype)
                     if b.pierce <= 0:

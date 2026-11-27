@@ -604,7 +604,8 @@ class Support:
         if tg is None or abs(diff) > 0.2 or wp.reload_t > 0 or wp.cd > 0:
             return
         if wp.ammo <= 0:
-            wp.start_reload()
+            if wp.start_reload():
+                w.on_reload(px, wp)
             return
         wp.cd = 1.0 / (wp.st["rate"] * pl.mult("overdrive") * self.p["rate"])
         wp.ammo -= 1
