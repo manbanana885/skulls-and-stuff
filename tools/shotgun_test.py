@@ -46,7 +46,8 @@ for a in SHOTGUNS:
             bad_slugs += 1
     check(bad_mag == 0, "%-12s break-action always holds one load (%d bad)" % (a, bad_mag))
     check(bad_slugs == 0, "%-12s slug guns fire one slug per barrel with the shell's ammo (%d bad)" % (a, bad_slugs))
-    check(all(v > 150 for v in shells.values()), "%-12s shells rolled: %s" % (a, shells))
+    check(abs(shells[None] / 1500 - 0.7) < 0.04 and abs(shells["dumdum"] / 1500 - 0.2) < 0.03
+          and abs(shells["sabot"] / 1500 - 0.1) < 0.025, "%-12s shells rolled 70/20/10: %s" % (a, shells))
 sample = [WP.generate(3, random.Random(s), arch=a, rarity=1).name for s in range(40) for a in ("shotgun_2", "auto_shotgun")]
 print("  names:", ", ".join(sorted(set(n for n in sample if "Dum" in n or "Sabot" in n))[:6]))
 
@@ -278,6 +279,34 @@ for arch, shell, force_pen in (("shotgun", None, False), ("shotgun", "dumdum", F
     through = shell == "sabot" or force_pen
     print("    %-22s damage behind the shield %.1f" % (label, dealt))
     check((dealt > 0) == through, "%s %s the shield" % (label, "goes through" if through else "is stopped by"))
+
+# chemical jets splash off the shield into a puddle at the knight's feet
+print("jets vs shieldbearer, from the front")
+for arch in ("jet_napalm", "jet_cryo", "jet_rad"):
+    wp = WP.generate(1, random.Random(4), arch=arch, rarity=0)
+    p.weapons[p.cur] = wp
+    p.x, p.y = x0 + 0.5, y0 + 0.5
+    w.projs, w.particles, w.hazards = [], [], []
+    e = Enemy("shieldbearer", x0 + 4.5, y0 + 0.5, awake=True, depth=1)
+    e.hp = 1e6
+    e.speed = 0
+    e.target = p
+    w.enemies = [e]
+    wp.cd = wp.reload_t = 0
+    bot.aim, bot.fire = AIM, True
+    for _ in range(60):
+        g.update(1 / 60)
+        e.x, e.y = x0 + 4.5, y0 + 0.5
+    bot.fire = False
+    pools = [h for h in w.hazards if h[4] == "jet"]
+    near = [h for h in pools if math.hypot(h[0] - e.x, h[1] - e.y) < h[2] + e.r]
+    for _ in range(60):
+        g.update(1 / 60)
+        e.x, e.y = x0 + 4.5, y0 + 0.5
+    dealt = 1e6 - e.hp
+    print("    %-10s puddles %d (%d under the knight), damage %.1f, burning %s, frozen %s" % (
+        arch, len(pools), len(near), dealt, getattr(e, "burn", 0) > 0, getattr(e, "frozen", 0) > 0 or getattr(e, "chill", 0) > 0))
+    check(near and dealt > 0, "%s splashes off the shield into a puddle that hurts the knight" % arch)
 
 # weapon cards
 for a, shell in (("shotgun_3", "sabot"), ("auto_shotgun", "dumdum")):
