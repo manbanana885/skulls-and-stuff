@@ -402,8 +402,9 @@ class Player:
         self.kby *= decay
         before = self.walk
         self.walk += math.hypot(self.x - ox, self.y - oy)
-        if int(self.walk / 0.55) != int(before / 0.55):
-            sfx.play("step")
+        stepname = CH.CHARS[self.char]["step"]
+        if stepname and int(self.walk / 0.55) != int(before / 0.55):
+            sfx.play(stepname)
         for t in ("invuln", "flash", "muzzle"):
             setattr(self, t, max(0.0, getattr(self, t) - dt))
         for k in list(self.buffs):
@@ -1981,11 +1982,17 @@ class World:
         p.kbx, p.kby = (p.x - sx) / d * knock, (p.y - sy) / d * knock
         self.shake = 7
         self.hurt_flash = 0.25
-        for _ in range(8):
-            a = rnd.random() * math.tau
-            self.add(Particle("spark", p.x, p.y, 1.0, math.cos(a) * 4, math.sin(a) * 4, rnd.uniform(1, 3), 0.3, (255, 220, 120), 2))
-        self.spray(p.x, p.y, 1.0, OIL, 6, 2.5)
-        sfx.play("hurt")
+        C = CH.CHARS[p.char]                  # each body bleeds / sparks / sheds its own bits
+        if C["sparks"]:
+            for _ in range(8):
+                a = rnd.random() * math.tau
+                self.add(Particle("spark", p.x, p.y, 1.0, math.cos(a) * 4, math.sin(a) * 4, rnd.uniform(1, 3), 0.3, (255, 220, 120), 2))
+        self.spray(p.x, p.y, 1.0, C["fluid"], 6 if C["sparks"] else 14, 2.5 if C["sparks"] else 3.5)
+        if rnd.random() < 0.6:
+            g_ = Gib(rnd.choice(C["chips"]), p.x, p.y, 1.0, rnd.uniform(-2, 2) + (p.x - sx) * 2, rnd.uniform(-2, 2) + (p.y - sy) * 2,
+                     rnd.uniform(2, 4), C["fluid"], not C["sparks"])
+            self.gibs.append(g_)
+        sfx.play(C["hurt"])
         self.check_player_death(sx, sy, p)
 
     def check_player_death(self, sx, sy, p=None):
@@ -2004,8 +2011,8 @@ class World:
             p.alive = False
             self.gibs_from(CH.CHARS[p.char]["gibs"], p.x, p.y, 1.0, p.x - sx, p.y - sy, force=1.3)
             self.explode(p.x, p.y, 1.5, 0, (120, 230, 255), hurt_player=False, quiet=True)
-            sfx.play("player_death")
-            self.spray(p.x, p.y, 1.0, OIL, 30, 4.5)
+            sfx.play(CH.CHARS[p.char]["death"])
+            self.spray(p.x, p.y, 1.0, CH.CHARS[p.char]["fluid"], 30, 4.5)
             self.shake = 16
             self.hitstop = 0.12
             p.revive_t = 0.0
@@ -2294,6 +2301,7 @@ class World:
         for i, pl in enumerate(self.players):
             if pl.alive and i < len(inputs) and inputs[i] is not None:
                 pl.update(self, dt, inputs[i])
+        sfx.loop("tread_loop", any(pl.alive and pl.moving and pl.char == "canbot" for pl in self.players))
         for arch_, loop_ in (("flamer", "flame_loop"), ("chem", "chem_loop"), ("cryo", "cryo_loop")):
             sfx.loop(loop_, any(pl.alive and pl.spraying == arch_ for pl in self.players))
         alive = [pl for pl in self.players if pl.alive]

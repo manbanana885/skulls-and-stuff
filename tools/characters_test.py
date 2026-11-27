@@ -125,6 +125,45 @@ for ch in CH.ORDER:
 check(tbl["canbot"]["electrical"] > tbl["canbot"]["kinetic"] and tbl["mutant"]["chemical"] < tbl["mutant"]["kinetic"]
       and tbl["skelebot"]["fire"] > tbl["skelebot"]["kinetic"], "players feel their category's weaknesses (softened)")
 
+# per-body hit / death / movement feedback
+import sfx as SFX  # noqa: E402
+played = []
+loops = {}
+_play, _loop = SFX.play, SFX.loop
+SFX.play = lambda name, vol=1.0: played.append(name)
+SFX.loop = lambda name, on, vol=1.0: loops.__setitem__(name, on)
+for ch in CH.ORDER:
+    w, p, L = fresh(ch)
+    played.clear()
+    g0 = len(w.gibs)
+    p.hp = p.max_hp = 1000
+    for k in range(6):
+        p.invuln = 0
+        w.hurt_player(5, p.x + 1, p.y)
+    chips = {gb.sprite for gb in w.gibs[g0:]}
+    bot.move = (1.0, 0.0)
+    for _ in range(40):
+        g.update(1 / 60)
+    tread_on = loops.get("tread_loop", False)
+    bot.move = (0.0, 0.0)
+    for _ in range(5):
+        g.update(1 / 60)
+    tread_after = loops.get("tread_loop", False)
+    steps = [n_ for n_ in played if n_.startswith("step")]
+    p.hp = 0
+    p.alive = True
+    w.check_player_death(p.x + 1, p.y, p)
+    C = CH.CHARS[ch]
+    print("  %-9s hit sound %s, chips %s, steps %s, tread loop moving/stopped %s/%s, death %s" % (
+        ch, C["hurt"] in played, sorted(chips), sorted(set(steps)), tread_on, tread_after, C["death"] in played))
+    ok = C["hurt"] in played and chips and chips <= set(C["chips"]) and C["death"] in played
+    if ch == "canbot":
+        ok = ok and tread_on and not tread_after and not steps
+    else:
+        ok = ok and steps and set(steps) == {C["step"]} and not tread_on
+    check(bool(ok), "%s has its own hit sound, debris, movement sound and death" % ch)
+SFX.play, SFX.loop = _play, _loop
+
 # title screen: pick characters
 g.state = "title"
 g.chars = ["skelebot", "canbot"]

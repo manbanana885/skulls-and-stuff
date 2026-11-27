@@ -8,11 +8,17 @@ import damage as DM
 
 CHARS = {
     "skelebot": dict(name="SKELEBOT", cat="undead", speed=1.0, hp=1.0, legs="player_legs", torso="torso_", gibs="player",
-                     stride=1.1, desc="Cyborg skeleton. Balanced."),
+                     stride=1.1, desc="Cyborg skeleton. Balanced.",
+                     hurt="hurt", death="player_death", step="step", fluid=(28, 24, 32), chips=("gib_bone", "gib_rib", "gib_wire"),
+                     sparks=True),
     "canbot":   dict(name="CANBOT", cat="robot", speed=0.8, hp=1.2, legs="canbot_legs", torso="cbtorso_", gibs="walker",
-                     stride=0.9, desc="Armoured drum on tank treads. Slow and tough."),
+                     stride=0.9, desc="Armoured drum on tank treads. Slow and tough.",
+                     hurt="hurt_can", death="death_can", step=None, fluid=(28, 24, 32), chips=("gib_gear", "gib_metal", "gib_wire"),
+                     sparks=True),
     "mutant":   dict(name="SUPER MUTANT", cat="mutant", speed=1.2, hp=0.8, legs="mutant_legs", torso="mttorso_", gibs="pinkmelt",
-                     stride=1.1, desc="Melting, blistered brute. Fast and fragile."),
+                     stride=1.1, desc="Melting, blistered brute. Fast and fragile.",
+                     hurt="hurt_mutant", death="death_mutant", step="step_mutant", fluid=(190, 60, 110), chips=("gib_meat",),
+                     sparks=False),
 }
 ORDER = ["skelebot", "canbot", "mutant"]
 PLAYER_SCALE = 0.5

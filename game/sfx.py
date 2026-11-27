@@ -15,6 +15,7 @@ VOLUME = {
     "death_zombie": 0.55, "death_spider": 0.55, "death_leech": 0.5, "death_drone": 0.6, "lunge": 0.3,
     "spawn": 0.45, "hive_death": 0.9, "hurt": 0.7, "player_death": 1.0, "pickup": 0.5, "power": 0.55,
     "portal": 0.6, "step": 0.22, "start": 0.8,
+    "hurt_can": 0.7, "death_can": 1.0, "hurt_mutant": 0.7, "death_mutant": 1.0, "step_mutant": 0.28, "tread_loop": 0.32,
     "shot_pistol": 0.3, "shot_revolver": 0.42, "shot_smg": 0.24, "shot_shotgun": 0.5, "shot_assault": 0.3,
     "shot_sniper": 0.55, "shot_grenade": 0.45, "shot_rocket": 0.5, "shot_laser": 0.28, "shot_beam": 0.22,
     "shot_plasma": 0.4, "shot_flame": 0.22, "reload": 0.45, "empty": 0.4, "swap": 0.4, "weapon_pickup": 0.55,
@@ -54,7 +55,7 @@ def init():
         pygame.mixer.pre_init(44100, -16, 2, 512)
         pygame.mixer.init(44100, -16, 2, 512)
         pygame.mixer.set_num_channels(48)
-        pygame.mixer.set_reserved(4)
+        pygame.mixer.set_reserved(5)
     except pygame.error:
         return
     _enabled = True
@@ -84,7 +85,7 @@ def play(name, vol=1.0):
         ch.set_volume(min(1.0, VOLUME.get(name, 0.5) * vol * _rng.uniform(0.85, 1.0)))
 
 
-LOOP_CHANNEL = {"flame_loop": 0, "static_loop": 1, "chem_loop": 2, "cryo_loop": 3}
+LOOP_CHANNEL = {"flame_loop": 0, "static_loop": 1, "chem_loop": 2, "cryo_loop": 3, "tread_loop": 4}
 _loop_on = {}
 
 
