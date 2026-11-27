@@ -1736,6 +1736,19 @@ class Game:
                 pygame.draw.circle(s, (255, 200, 160), (hx, hy), sc(3.5))
                 return
             tl = {"bullet": 0.025, "pellet": 0.02, "slug": 0.045, "bolt": 0.035}[k]
+            if b.effect == "dumdum":          # a fat, glowing lump of lead with a short smoky tail
+                ta, tb = to_screen(b.x - b.vx * 0.035, b.y - b.vy * 0.035, b.z)
+                self.add_glow(hx, hy, sc(20), (c[0] // 2, c[1] // 3, c[2] // 4))
+                pygame.draw.line(s, (120, 90, 60), (ta + ox, tb + oy), (hx, hy), sc(6))
+                pygame.draw.circle(s, c, (hx, hy), sc(5))
+                pygame.draw.circle(s, (255, 250, 230), (hx, hy), sc(2.5))
+                return
+            if b.effect == "sabot":           # a long, thin, white-hot needle
+                ta, tb = to_screen(b.x - b.vx * 0.03, b.y - b.vy * 0.03, b.z)
+                self.add_glow(hx, hy, sc(10), (70, 80, 95))
+                pygame.draw.line(s, (150, 175, 210), (ta + ox, tb + oy), (hx, hy), sc(3))
+                pygame.draw.line(s, (255, 255, 255), (ta + ox, tb + oy), (hx, hy), max(1, sc(1.2)))
+                return
             ta, tb = to_screen(b.x - b.vx * tl, b.y - b.vy * tl, b.z)
             tx, ty = ta + ox, tb + oy
             wdt = {"slug": sc(4.5), "pellet": sc(2.5), "bolt": sc(3.5)}.get(k, sc(3))
@@ -2308,7 +2321,13 @@ class Game:
             sz = max(2, int(q.size * S))
             pygame.draw.rect(s, q.color, (x - sz / 2, y - sz / 2, sz, sz))
         elif kind == "shell":
-            pygame.draw.rect(s, q.color if not q.rest else (150, 115, 40), (x - sc(1.5), y - sc(1), sc(3), sc(2)))
+            c = q.color if not q.rest else (q.color[0] * 3 // 4, q.color[1] * 3 // 4, q.color[2] * 3 // 4)
+            wd, ht = max(2, int(sc(1.5 * q.size))), max(1, int(sc(q.size)))
+            pygame.draw.rect(s, c, (x - wd // 2, y - ht // 2, wd, ht))
+            if q.size >= 4:               # laser battery: a dying red charge strip
+                pygame.draw.rect(s, (255, 70, 60) if not q.rest else (110, 30, 30), (x - wd // 2 + 1, y - 1, max(1, wd // 3), 2))
+            elif q.size >= 2.5:           # shotgun hull: brass base
+                pygame.draw.rect(s, (200, 160, 60), (x - wd // 2, y - ht // 2, max(1, wd // 4), ht))
         elif kind == "spark":
             a, b = to_screen(q.x - q.vx * 0.025, q.y - q.vy * 0.025, q.z - q.vz * 0.025)
             pygame.draw.line(s, q.color, (a + ox, b + oy), (x, y), max(1, sc(1.5)))
@@ -2375,6 +2394,14 @@ class Game:
         main_ = st_["dtype"].upper() + ((" (%s)" % DM.AMMO_LABEL[st_["ammo"]]) if st_.get("ammo") else "")
         lines.append((self.small, [("DAMAGE: ", (130, 135, 150)), (main_, DM.COLOR[st_["dtype"]])]
                       + [x_ for t in sec for x_ in (("  +  ", (130, 135, 150)), (t.upper(), DM.COLOR[t]))], None))
+        if st_.get("shell"):
+            n_ = max(1, st_["barrels"])
+            lines.append((self.small, "SHELLS: %s  (%s)" % (WP.SHELLS[st_["shell"]]["label"],
+                          ("one slug" if n_ == 1 else "%d slugs, one per barrel" % n_)), (255, 215, 150)))
+        elif WP.is_shotgun(wp.arch):
+            lines.append((self.small, "SHELLS: Buckshot", (255, 215, 150)))
+        if st_.get("barrels"):
+            lines.append((self.small, "Break-action: all %d barrels fire at once, reload every shot" % st_["barrels"], (255, 200, 120)))
         if st_.get("ammo"):
             lines.append((self.small, "AMMO: " + {"pen": "Penetrating Core  (+2 pierce, x1.35 robots & constructs)",
                                                    "exp": "Expanding  (x1.35 undead & mutants, x0.75 robots & constructs)"}[st_["ammo"]],
@@ -2711,7 +2738,7 @@ class Game:
     def draw_char_row(self, s, who, row_y):
         """Character select: three bodies walking in place, tops spinning; a P1 / P2 tag over each player's pick."""
         t = self.time
-        guns = ("carbine", "shotgun", "rocket", "flamer", "sniper", "plasma", "chaingun", "coil_rifle")
+        guns = ("carbine", "shotgun_2", "rocket", "flamer", "sniper", "auto_shotgun", "plasma", "chaingun", "coil_rifle", "shotgun_4")
         arch = guns[int(t / 2.5) % len(guns)]
         for i, ch in enumerate(CH.ORDER):
             C = CH.CHARS[ch]

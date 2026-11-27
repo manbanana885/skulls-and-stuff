@@ -334,6 +334,46 @@ def shotgun(seed):
     return finish(mix((x, 0), (pump * 0.6, 0)), 9, 2, 6000, 0.09, 0.3)
 
 
+def auto_shotgun(seed):
+    """Snappier shotgun without the pump: it has to sit well at four shots a second."""
+    r = R(seed)
+    n = n_of(0.32)
+    t = tt(n)
+    blast = lp(noise(n, r), 2200) * expdec(n, 0.045) * 1.5 + bp(noise(n, r), 450, 1800) * expdec(n, 0.02) * 1.3
+    boom = sine(42 + 100 * np.exp(-t / 0.025), n) * expdec(n, 0.08) * 1.6
+    bolt = clicks(seed + 3, (0.07,), 1500) * 0.35
+    return finish(mix((drive(blast + boom, 2.5), 0), (bolt, 0)), 9, 2, 5500, 0.07, 0.22)
+
+
+def boomstick(seed):
+    """Every barrel at once: a deep, wide double-thump, then the action breaking open."""
+    r = R(seed)
+    n = n_of(0.9)
+    t = tt(n)
+    blast = lp(noise(n, r), 2000) * expdec(n, 0.09) * 1.8 + bp(noise(n, r), 350, 1600) * expdec(n, 0.035) * 1.6
+    boom = sine(30 + 90 * np.exp(-t / 0.04), n) * expdec(n, 0.2) * 2.2
+    second = np.zeros(n)
+    m = n_of(0.3)
+    place(second, sine(36 + 70 * np.exp(-tt(m) / 0.03), m) * expdec(m, 0.1) * 1.0 + lp(noise(m, r), 1200) * expdec(m, 0.04) * 0.8,
+          n_of(0.012))
+    x = drive(blast + boom + second, 2.8)
+    crack = clicks(seed + 5, (0.55, 0.63), 1300) * 0.5
+    return finish(mix((x, 0), (crack, 0)), 9, 2, 5000, 0.12, 0.35)
+
+
+def slug_shot(seed):
+    """One solid slug: tighter and punchier than buckshot, heavier crack."""
+    r = R(seed)
+    n = n_of(0.55)
+    t = tt(n)
+    crack = bp(noise(n, r), 700, 2600) * expdec(n, 0.02) * 1.8
+    boom = sine(34 + 130 * np.exp(-t / 0.028), n) * expdec(n, 0.15) * 2.0
+    tail = lp(noise(n, r), 900) * expdec(n, 0.09)
+    x = drive(crack + boom + tail, 2.7)
+    pump = clicks(seed + 1, (0.4, 0.5), 1800)
+    return finish(mix((x, 0), (pump * 0.55, 0)), 9, 2, 5500, 0.1, 0.3)
+
+
 def sniper(seed):
     r = R(seed)
     n = n_of(0.6)
@@ -986,6 +1026,7 @@ SOUNDS = {
     "shot_revolver": (lambda s: gun_shaped(s, R(s).uniform(0.7, 0.8), 0.6, 1.2, 1.4, 0.14, 3.0, 0.13, 0.35), 4),
     "shot_smg": (lambda s: gun_shaped(s, R(s).uniform(1.25, 1.4), 0.18, 0.8, 0.6, 0.035), 6),
     "shot_shotgun": (shotgun, 4),
+    "shot_autoshotgun": (auto_shotgun, 5), "shot_boomstick": (boomstick, 3), "shot_slug": (slug_shot, 4),
     "shot_assault": (lambda s: gun_shaped(s, R(s).uniform(0.9, 1.0), 0.32, 1.2, 1.1, 0.07), 6),
     "shot_sniper": (sniper, 3),
     "shot_grenade": (thoomp, 3),

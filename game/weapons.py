@@ -11,7 +11,7 @@ import damage as DM
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
                 heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None,
-                tier_leech=0.0, demonic_bonus=0.0, jet=None)
+                tier_leech=0.0, demonic_bonus=0.0, jet=None, barrels=0, shell=None)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
@@ -22,6 +22,18 @@ ARCH = {
                          kick=1.0, sound="shot_smg", color=(255, 225, 150), weight=9),
     "shotgun":      dict(label="Shotgun", dmg=0.95, rate=1.6, spread=0.32, pellets=8, speed=16, life=0.42, mag=6,
                          reload=1.6, proj="pellet", kick=6, sound="shot_shotgun", color=(255, 195, 95), weight=9),
+    # drum-fed automatic shotgun: holds the trigger like an assault rifle, long reload when the drum runs dry
+    "auto_shotgun": dict(label="Auto Shotgun", dmg=0.7, rate=4.2, spread=0.36, pellets=7, speed=16, life=0.42, mag=20,
+                         reload=2.6, proj="pellet", kick=3.5, sound="shot_autoshotgun", color=(255, 185, 90), weight=4),
+    # break-action guns: every barrel goes off at once, then you crack it open and reload
+    "shotgun_2":    dict(label="Double-Barrel Shotgun", dmg=0.95, rate=3.0, spread=0.4, pellets=16, speed=16, life=0.42, mag=1,
+                         reload=1.5, proj="pellet", kick=9, sound="shot_boomstick", color=(255, 195, 95), weight=6, barrels=2),
+    "shotgun_3":    dict(label="Triple-Barrel Shotgun", dmg=0.95, rate=3.0, spread=0.44, pellets=24, speed=16, life=0.42, mag=1,
+                         reload=1.9, proj="pellet", kick=11, sound="shot_boomstick", color=(255, 190, 90), weight=4, barrels=3,
+                         heavy=0.94),
+    "shotgun_4":    dict(label="Quad-Barrel Shotgun", dmg=0.95, rate=3.0, spread=0.48, pellets=32, speed=16, life=0.42, mag=1,
+                         reload=2.3, proj="pellet", kick=13, sound="shot_boomstick", color=(255, 185, 85), weight=3, barrels=4,
+                         heavy=0.86),
     "carbine":      dict(label="Carbine", dmg=1.25, rate=8, spread=0.035, speed=20, mag=25, reload=1.2, proj="bullet",
                          kick=1.5, sound="shot", color=(120, 230, 255), weight=8),
     "assault":      dict(label="Assault Rifle", dmg=1.35, rate=10, spread=0.06, speed=21, mag=32, reload=1.5,
@@ -88,6 +100,7 @@ MUZZLE = {
     "flamer": (1.0, 1.14), "tac_nuke": (0.76, 1.33), "nuke": (1.07, 1.36), "saw": (0.86, 1.23), "chem": (0.98, 1.14),
     "cryo": (0.98, 1.14), "chaingun": (1.2, 1.09), "railgun": (1.47, 1.15),
     "barrage": (0.98, 1.2), "coil_pistol": (0.74, 1.18), "coil_rifle": (1.12, 1.14), "coil_heavy": (1.22, 1.1),
+    "auto_shotgun": (1.04, 1.16), "shotgun_2": (1.0, 1.16), "shotgun_3": (1.0, 1.17), "shotgun_4": (0.99, 1.18),
     "microwave": (0.98, 1.13), "cluster": (1.0, 1.17), "jet_napalm": (1.0, 1.14), "jet_cryo": (0.98, 1.14), "jet_rad": (0.98, 1.14),
 }
 SHOULDER = {"rocket": 0.14, "tac_nuke": 0.14, "nuke": 0.15}   # sideways offset to the right shoulder
@@ -114,7 +127,8 @@ TIER_FX = {SACRED: dict(regen=1.0), ELDRITCH: dict(regen=-1.0, leech=0.08), DEMO
 GROUPS = {
     "pistol": {"sidearm"}, "revolver": {"sidearm"}, "laser_pistol": {"sidearm", "energy"}, "coil_pistol": {"sidearm", "energy"},
     "smg": {"auto"}, "carbine": {"auto"}, "assault": {"auto"}, "coil_rifle": {"auto", "energy"}, "chaingun": {"auto", "heavy"},
-    "shotgun": {"shotgun"},
+    "shotgun": {"shotgun"}, "auto_shotgun": {"shotgun", "auto"}, "shotgun_2": {"shotgun"}, "shotgun_3": {"shotgun"},
+    "shotgun_4": {"shotgun"},
     "sniper": {"precision"}, "railgun": {"precision", "heavy"}, "laser_rifle": {"precision", "energy"},
     "plasma": {"energy"}, "microwave": {"energy"}, "coil_heavy": {"energy", "heavy"},
     "flamer": {"sprayer"}, "chem": {"sprayer"}, "cryo": {"sprayer"},
@@ -261,6 +275,37 @@ def _expanding(st):
 BULLETS = ("bullet", "pellet", "slug")
 AMMO_MODS = {"penetrating", "expanding"}
 
+# ---------------------------------------------------------------- shotgun shells
+# Every shotgun rolls its shell: buckshot (a cloud of pellets) or a slug - one big projectile per barrel.
+#   dumdum: a fat, slow-ish expanding slug that hits like a truck and shoves what it hits (Expanding ammo)
+#   sabot:  a fast steel dart that punches through a whole line of monsters (Penetrating Core ammo)
+SHELLS = {
+    "dumdum": dict(word="Dum-Dum", label="Dum-Dum slugs", ammo="exp", share=1.0, speed=17.0, life=0.95, spread=0.035,
+                   pierce=0, kick=1.3),
+    "sabot":  dict(word="Sabot", label="Discarding-sabot steel cores", ammo="pen", share=0.8, speed=44.0, life=0.5,
+                   spread=0.012, pierce=4, kick=1.1),
+}
+SHELL_ODDS = (("dumdum", 0.2), ("sabot", 0.2))       # the rest is buckshot
+
+
+def is_shotgun(arch):
+    return "shotgun" in GROUPS.get(arch, ())
+
+
+def _load_slugs(st, shell):
+    """Turn buckshot stats into slug stats: one projectile per barrel carrying a share of the whole load."""
+    sh = SHELLS[shell]
+    n = max(1, st["barrels"])
+    st["dmg"] *= st["pellets"] / n * sh["share"]
+    st["pellets"] = n
+    st["proj"] = "slug"
+    st["speed"], st["life"], st["spread"] = sh["speed"], sh["life"], sh["spread"]
+    st["pierce"] += sh["pierce"]
+    st["kick"] *= sh["kick"]
+    st["shell"] = shell
+    if st["sound"] == "shot_shotgun":
+        st["sound"] = "shot_slug"
+
 
 def _explosive(st):
     st["blast"] = max(st["blast"], 0.75)
@@ -278,11 +323,12 @@ MODS = [
     _m("expanding", "Expanding", "x1.35 vs undead & mutants, x0.75 vs robots & constructs",
        _expanding, lambda a: False),
     _m("ricochet", "Ricochet", "Bounces off walls", _add(bounce=1), lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "bolt", "slug", "plasma", "saw", "arc")),
-    _m("twin", "Twin-Linked", "Fires a second parallel shot", _set_twin, lambda a: ARCH[a]["proj"] not in SPRAYS | {"nuke", "missile"}),
+    _m("twin", "Twin-Linked", "Fires a second parallel shot", _set_twin,
+       lambda a: ARCH[a]["proj"] not in SPRAYS | {"nuke", "missile"} and not ARCH[a].get("barrels")),
     _m("rapid", "Rapid", "+35% fire rate", _mul(rate=1.35, dmg=0.88)),
     _m("heavy", "Heavy", "+45% damage, slower", _mul(dmg=1.45, rate=0.85, kick=1.5)),
     _m("precise", "Precise", "Halved spread", _mul(spread=0.5), lambda a: ARCH[a]["spread"] > 0.02),
-    _m("drum", "Drum-Fed", "+75% magazine", _mul(mag=1.75)),
+    _m("drum", "Drum-Fed", "+75% magazine", _mul(mag=1.75), lambda a: not ARCH[a].get("barrels")),   # break-actions hold one load
     _m("quick", "Quickload", "40% faster reloads", _mul(reload=0.6)),
     _m("vampiric", "Vampiric", "Heals 3 integrity per kill", _add(lifesteal=3)),
     _m("shock", "Shocking", "Arcs to nearby enemies", _add(shock=1), lambda a: ARCH[a]["proj"] != "arc"),
@@ -325,14 +371,25 @@ class Weapon:
         if st["salvo"]:
             st["salvo"] = rng.randint(*st["salvo"])
             st["dmg"] *= (10.0 / st["salvo"]) ** 0.35     # small salvos hit a little harder per missile
+        self.shell = None
+        if is_shotgun(arch):
+            r_ = rng.random()
+            for shell, odds in SHELL_ODDS:
+                if r_ < odds:
+                    self.shell = shell
+                    _load_slugs(st, shell)
+                    break
+                r_ -= odds
         options = brands_for(arch, rarity)
         self.brand = rng.choices([n for n, _ in options], weights=[w for _, w in options])[0]
         B = BRANDS[self.brand]
         for k, v in B["mul"].items():
             st[k] *= v
         for k, v in B["add"].items():
-            if k == "pellets" and st["pellets"] <= 1:
+            if k == "pellets" and (st["pellets"] <= 1 or st["shell"]):
                 continue
+            if k == "pellets":
+                v *= max(1, st["barrels"])        # choked barrels: every barrel gets the extra shot
             if k == "chain" and not st["chain"]:
                 continue
             if k == "bounce" and st["proj"] not in ("bullet", "pellet", "bolt", "slug", "plasma", "saw", "arc"):
@@ -342,7 +399,10 @@ class Weapon:
             st["heavy"] = 1.0 - (1.0 - st["heavy"]) * 0.5
         # bullet guns always roll an ammo type: standard 50%, Penetrating Core 25%, Expanding 25%
         self.ammo_type = None
-        if ARCH[arch]["proj"] in BULLETS:
+        if self.shell:                               # a slug's ammo type comes with the shell
+            self.ammo_type = SHELLS[self.shell]["ammo"]
+            MOD_BY_KEY["penetrating" if self.ammo_type == "pen" else "expanding"]["fn"](st)
+        elif ARCH[arch]["proj"] in BULLETS:
             r_ = rng.random()
             pen_w = 0.25 * (2.0 if self.brand == "Graveline" else 1.0)
             self.ammo_type = "pen" if r_ < pen_w else ("exp" if r_ < pen_w + 0.25 else None)
@@ -370,7 +430,7 @@ class Weapon:
             st["dmg"] *= 1 + st["demonic_bonus"]
         st["tier_leech"] = TIER_FX.get(rarity, {}).get("leech", 0.0)
         st["dmg"] *= (1 + 0.07 * rarity) * {LEGENDARY: 1.35, MYTHICAL: 1.7, DEMONIC: 1.85, ELDRITCH: 2.0, SACRED: 2.4}.get(rarity, 1.0) * (1 + 0.2 * (level - 1))
-        st["mag"] = max(1, int(round(st["mag"])))
+        st["mag"] = 1 if st["barrels"] else max(1, int(round(st["mag"])))
         st["pellets"] = int(round(st["pellets"]))
         self.st = st
         if rarity == SACRED:
@@ -385,7 +445,7 @@ class Weapon:
             self.name = '"%s"' % rng.choice(UNIQUE_NAMES)
         else:
             adj = self.mods[0]["adj"] + " " if self.mods else ""
-            ammo_word = {"pen": "Penetrating ", "exp": "Expanding "}.get(self.ammo_type, "")
+            ammo_word = (SHELLS[self.shell]["word"] + " ") if self.shell else {"pen": "Penetrating ", "exp": "Expanding "}.get(self.ammo_type, "")
             self.name = "%s%s%s" % (adj, ammo_word, st["label"])
         self.ammo = st["mag"]
         self.reload_t = 0.0
