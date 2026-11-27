@@ -100,6 +100,7 @@ class Guest:
         self.conn = conn
         self.slot = None
         self.char = "skelebot"
+        self.name = ""
         self.ready = False
         self.input = RemoteInput()
         self.in_game = False          # has been sent the current world
@@ -133,6 +134,8 @@ class HostSession:
         self.status = ""
         self.name = net.random_name()    # the game name guests must type (it's the password)
         self.editing = False
+        self.editing_me = False         # typing your own player name (N)
+        self.before_me = ""
         self.typed = False
         self.before = self.name
         self.fails = {}                  # ip -> times of wrong game names
@@ -207,6 +210,8 @@ class HostSession:
                 elif kind == "c":
                     if d.get("char") in CH.CHARS:
                         gu.char = d["char"]
+                    if "name" in d:
+                        gu.name = net.clean_player_name(d.get("name", ""))
                     if d.get("ready") and not gu.ready:
                         gu.ready = True
                         if g.state != "lobby" and g.world is not None:
@@ -255,16 +260,17 @@ class HostSession:
             return
         gu.slot = free[0]
         gu.hello = True
+        gu.name = net.clean_player_name(d.get("name", ""))
         if d.get("char") in CH.CHARS:
             gu.char = d["char"]
         gu.conn.send_json("w", {"slot": gu.slot, "v": self.version})
         self.lobby_t = 0.0
 
     def lobby_info(self, g):
-        ps = [{"slot": 0, "char": g.chars[0], "ready": True, "host": True}]
+        ps = [{"slot": 0, "char": g.chars[0], "ready": True, "host": True, "name": g.player_name}]
         for gu in self.guests:
             if gu.hello:
-                ps.append({"slot": gu.slot, "char": gu.char, "ready": gu.ready, "host": False})
+                ps.append({"slot": gu.slot, "char": gu.char, "ready": gu.ready, "host": False, "name": gu.name})
         return {"players": sorted(ps, key=lambda p: p["slot"]), "state": "lobby" if g.state == "lobby" else "play",
                 "depth": g.world.depth if g.world else 0}
 
@@ -280,10 +286,10 @@ class HostSession:
 
     def start_run(self, g):
         from world import Player
-        players = [Player(0, 0, 0, g.chars[0])]
+        players = [Player(0, 0, 0, g.chars[0], g.player_name)]
         for gu in self.guests:
             if gu.hello and gu.ready:
-                players.append(Player(0, 0, gu.slot, gu.char))
+                players.append(Player(0, 0, gu.slot, gu.char, gu.name))
         players.sort(key=lambda p: p.idx)
         g.new_world(1, player=players)
         g.state = "play"
@@ -291,7 +297,7 @@ class HostSession:
     def drop_in(self, g, gu):
         w = g.world
         if all(p.idx != gu.slot for p in w.players):
-            w.add_player(gu.char, idx=gu.slot, limit=net.MAX_PLAYERS)
+            w.add_player(gu.char, idx=gu.slot, limit=net.MAX_PLAYERS, name=gu.name)
         self.send_world(g, gu)
 
     def send_world(self, g, gu):
@@ -402,7 +408,7 @@ class HostSession:
             for gu in self.guests:
                 if gu.hello and gu.ready:
                     if all(p.idx != gu.slot for p in w.players):
-                        w.add_player(gu.char, idx=gu.slot, limit=net.MAX_PLAYERS)
+                        w.add_player(gu.char, idx=gu.slot, limit=net.MAX_PLAYERS, name=gu.name)
                     self.send_world(g, gu)
         local = g.inputs[0]
         if g.state in ("play", "pause") and "start" in local.pressed:
@@ -476,11 +482,31 @@ class HostSession:
         if ev.key == pygame.K_F1:
             net.open_link(net.TAILSCALE_SHARE if self.tailscale.state == "on" else net.TAILSCALE_DOWNLOAD)
             return True
+        if self.editing_me:
+            self.typed = True
+            if ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB):
+                g.player_name = net.clean_player_name(g.player_name)
+                g.save_settings()
+                self.editing_me = False
+                self.lobby_t = 0.0
+            elif ev.key == pygame.K_ESCAPE:
+                g.player_name = self.before_me
+                self.editing_me = False
+            elif ev.key == pygame.K_BACKSPACE:
+                g.player_name = g.player_name[:-1]
+            elif ev.unicode and len(g.player_name) < 14 and net.name_char_ok(ev.unicode):
+                g.player_name += ev.unicode
+            return True
         if not self.editing:
             if ev.key == pygame.K_TAB:
                 self.editing = True
                 self.before = self.name
                 self.name = ""
+                self.typed = True
+                return True
+            if ev.key == pygame.K_n:
+                self.editing_me = True
+                self.before_me = g.player_name
                 self.typed = True
                 return True
             return False
@@ -500,7 +526,7 @@ class HostSession:
 
     def update_lobby(self, g):
         inp = g.inputs[0]
-        if self.editing or self.typed:
+        if self.editing or self.editing_me or self.typed:
             self.typed = False
             return
         g.pick_char(0, inp)
@@ -534,8 +560,9 @@ class HostSession:
         g.center_text(s, g.font, "GAME NAME  (friends type this to get in - only share it with them)", g.sc(98), (150, 170, 200))
         g.center_text(s, g.big, (self.name + caret) if (self.name or self.editing) else "-", g.sc(132),
                       (255, 230, 120) if self.editing else (120, 230, 255))
-        g.center_text(s, g.font, ("type a name, ENTER to keep it, ESC to undo" if self.editing else
-                                   "TAB type your own name (keyboard)   -   Y / Q new random name"), g.sc(160), (150, 160, 180))
+        g.center_text(s, g.font, ("type a game name, ENTER to keep it, ESC to undo" if self.editing else
+                                  "TAB type your own game name   -   Y / Q new random one   -   N change YOUR name"),
+                      g.sc(160), (150, 160, 180))
         self.draw_addresses(g, s, port)
         draw_lobby_players(g, s, info, 0)
         g.center_text(s, g.font, "LEFT / RIGHT your body   -   START / A begin   -   B / ESC stop hosting"
@@ -602,7 +629,10 @@ def draw_lobby_players(g, s, info, me):
             s.blit(t, t.get_rect(center=r.center))
             continue
         pygame.draw.rect(s, col, r, max(1, g.sc(2)))
-        who = "P%d%s%s" % (i + 1, "  HOST" if p["host"] else "", "  (YOU)" if i == me else "")
+        nm = p.get("name") or "P%d" % (i + 1)
+        if i == me and getattr(g.net, "editing_me", False):
+            nm = (g.player_name or "") + ("_" if int(g.time * 2) % 2 == 0 else " ")
+        who = "%s%s%s" % (nm, "  HOST" if p["host"] else "", "  (YOU)" if i == me else "")
         t = g.font.render(who, True, col)
         s.blit(t, (r.x + g.sc(8), r.y + g.sc(6)))
         st = CH.CHARS[p["char"]]["name"] + ("" if p["ready"] else "  -  picking")
@@ -636,7 +666,8 @@ class GuestSession:
             self.last_rx = time.monotonic()
             if kind == "n":
                 nonce = net.read_json(payload).get("nonce", "")
-                self.conn.send_json("h", {"v": self.version, "char": self.char0, "p": net.name_proof(self.name, nonce)})
+                self.conn.send_json("h", {"v": self.version, "char": self.char0, "p": net.name_proof(self.name, nonce),
+                                          "name": g.player_name})
             elif kind == "w":
                 d = net.read_json(payload)
                 self.slot = int(d.get("slot", 1))
@@ -843,7 +874,7 @@ class GuestSession:
             changed = True
             sfx.play("start")
         if changed:
-            self.conn.send_json("c", {"char": g.chars[0], "ready": self.ready})
+            self.conn.send_json("c", {"char": g.chars[0], "ready": self.ready, "name": g.player_name})
         if "deploy" in inp.pressed or "back" in inp.pressed:
             g.leave_net()
 
@@ -862,7 +893,7 @@ class GuestSession:
         if self.slot is None:
             g.center_text(s, g.mid, "Talking to the host...", g.sc(140), (150, 170, 200))
         else:
-            mine = {"slot": self.slot, "char": g.chars[0], "ready": self.ready, "host": False}
+            mine = {"slot": self.slot, "char": g.chars[0], "ready": self.ready, "host": False, "name": g.player_name}
             info = dict(lob, players=[p for p in lob.get("players", []) if p["slot"] != self.slot] + [mine])
             draw_lobby_players(g, s, info, self.slot)
             if lob.get("state") == "play":
@@ -907,6 +938,10 @@ class JoinScreen:
     def name_row(self):
         return len(self.games) + 1
 
+    @property
+    def me_row(self):
+        return len(self.games) + 2
+
     def key(self, g, ev):
         """Keyboard typing into the address / game-name boxes. Returns True if the key was used here."""
         if ev.key == pygame.K_F1:
@@ -917,6 +952,12 @@ class JoinScreen:
         self.typed = True                 # a typed letter also shows up as a menu press (W, S, F...) this frame: ignore that
         if ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_TAB):
             self.advance(g)
+            return True
+        if self.sel == self.me_row:
+            if ev.key == pygame.K_BACKSPACE:
+                g.player_name = g.player_name[:-1]
+            elif ev.unicode and len(g.player_name) < 14 and net.name_char_ok(ev.unicode):
+                g.player_name += ev.unicode
             return True
         field = "name" if self.sel != self.addr_row else "addr"
         if self.sel < self.addr_row:      # typing while a listed game is picked: that's the name
@@ -942,6 +983,8 @@ class JoinScreen:
             self.sel = self.name_row
             if not self.name.strip():
                 return
+        elif self.sel == self.me_row:
+            self.sel = self.name_row
         if not self.addr.strip():
             self.error = "Type the host's address first."
             self.sel = self.addr_row
@@ -961,11 +1004,12 @@ class JoinScreen:
         if not any(self.addr.strip().split(":")[0] == ip for ip, _ in self.games):
             g.last_host = self.addr.strip()
         g.last_name = self.name.strip()
+        g.player_name = net.clean_player_name(g.player_name)
         g.save_settings()
 
     def update(self, g, dt):
         self.games = self.finder.poll()
-        self.sel = min(self.sel, self.name_row)
+        self.sel = min(self.sel, self.me_row)
         inp = g.inputs[0]
         pressed = set() if self.typed else inp.pressed
         self.typed = False
@@ -980,7 +1024,7 @@ class JoinScreen:
             if "deploy" in pressed or "back" in pressed:
                 self.connector = None
             return True
-        n = self.name_row + 1
+        n = self.me_row + 1
         if "nav_up" in pressed:
             self.sel = (self.sel - 1) % n
         if "nav_down" in pressed:
@@ -1030,6 +1074,8 @@ class JoinScreen:
         self.box(g, s, y, "ADDRESS", self.addr, self.sel == self.addr_row, "host's address (or pick a listed game)")
         y += g.sc(50)
         self.box(g, s, y, "GAME NAME", self.name, self.sel == self.name_row, "the name the host gave you")
+        y += g.sc(50)
+        self.box(g, s, y, "YOUR NAME", g.player_name, self.sel == self.me_row, "what the others see (optional)")
         y += g.sc(46)
         if self.connector is not None:
             g.center_text(s, g.mid, "Connecting to %s:%d ..." % (self.connector.host, self.connector.port), y, (120, 230, 255))

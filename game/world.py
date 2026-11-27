@@ -280,8 +280,9 @@ class Player:
     R = 0.28
     SPEED = 4.4
 
-    def __init__(self, x, y, idx=0, char="skelebot"):
+    def __init__(self, x, y, idx=0, char="skelebot", name=""):
         self.idx = idx
+        self.name = name             # shown over your head / in the lobby (net play); '' -> "P1".."P4"
         self.char = char if char in CH.CHARS else "skelebot"
         self.cat = CH.CHARS[self.char]["cat"]
         self.spraying = None
@@ -1455,7 +1456,7 @@ class World:
                 return t
         return p
 
-    def add_player(self, char=None, idx=None, limit=2):
+    def add_player(self, char=None, idx=None, limit=2, name=""):
         """Drop-in co-op: a new player appears next to the first living one."""
         if len(self.players) >= limit:
             return None
@@ -1464,13 +1465,13 @@ class World:
             char = CH.ORDER[(CH.ORDER.index(host.char) + 1) % len(CH.ORDER)]
         if idx is None:
             idx = next(i for i in range(limit + 1) if all(p.idx != i for p in self.players))
-        pl = Player(host.x, host.y, idx=idx, char=char)
+        pl = Player(host.x, host.y, idx=idx, char=char, name=name)
         pl.x, pl.y = resolve(self.level, host.x + 0.6, host.y + 0.6, pl.R)
         pl.max_hp = int(round(pl.max_hp * host.max_hp / (100 * CH.CHARS[host.char]["hp"])))   # match grafts so far
         pl.hp = pl.max_hp
         self.players.append(pl)
         self.players.sort(key=lambda p_: p_.idx)
-        self.message("PLAYER %d JOINED" % (idx + 1), (90, 230, 230))
+        self.message("%s JOINED" % (name or "PLAYER %d" % (idx + 1)), (90, 230, 230))
         sfx.play("weapon_pickup")
         return pl
 
@@ -1485,7 +1486,7 @@ class World:
                 t.owner = self.player
         if self._shooter is gone[0]:
             self._shooter = self.player
-        self.message("PLAYER %d LEFT" % (idx + 1), (150, 160, 180))
+        self.message("%s LEFT" % (getattr(gone[0], "name", "") or "PLAYER %d" % (idx + 1)), (150, 160, 180))
 
     def listeners(self):
         """Players whose ears are at this machine."""
@@ -2530,7 +2531,7 @@ class World:
                         pl.hp = pl.max_hp * 0.4
                         pl.invuln = 2.0
                         pl.revive_t = 0.0
-                        self.message("PLAYER %d REVIVED" % (pl.idx + 1), (120, 230, 255))
+                        self.message("%s REVIVED" % (getattr(pl, "name", "") or "PLAYER %d" % (pl.idx + 1)), (120, 230, 255))
                         sfx.play("power")
                 else:
                     pl.revive_t = max(0.0, pl.revive_t - dt)

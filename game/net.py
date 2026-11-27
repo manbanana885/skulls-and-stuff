@@ -290,6 +290,16 @@ _NOUN = ("otter", "skull", "crow", "jackal", "lantern", "coffin", "badger", "rav
          "pickle", "wombat", "goblet", "beetle", "hatchet", "moth", "toad", "kettle", "spleen")
 
 
+def name_char_ok(c):
+    return len(c) == 1 and (c.isalnum() or c in " -_.'!?")
+
+
+def clean_player_name(text):
+    """A display name: printable, no more than 14 characters ('' if nothing usable)."""
+    out = "".join(c for c in str(text) if c.isalnum() or c in " -_.'!?")
+    return " ".join(out.split())[:14]
+
+
 def random_name():
     return "%s-%s-%02d" % (secrets.choice(_ADJ), secrets.choice(_NOUN), secrets.randbelow(100))
 

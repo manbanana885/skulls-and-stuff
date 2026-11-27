@@ -87,6 +87,10 @@ host, hb = make_game()
 games.append((host, hb))
 host.chars[0] = "skelebot"
 host.net = NP.HostSession(host, PORT)
+host.player_name = ""
+for k, ch in [(pygame.K_n, "n")] + [(0, c) for c in "Bone Boss"] + [(pygame.K_RETURN, "")]:
+    host.net.key(host, pygame.event.Event(pygame.KEYDOWN, key=k, unicode=ch))   # N, type a name, ENTER
+check(host.player_name == "Bone Boss" and not host.net.editing_me, "the host types their name with N (%r)" % host.player_name)
 check(host.state == "lobby" and host.net.addresses, "hosting: lobby open, address %s" % host.net.addresses)
 host.draw()
 pygame.image.save(host.screen, os.path.join(out, "net_host_lobby.png"))
@@ -94,6 +98,7 @@ pygame.image.save(host.screen, os.path.join(out, "net_host_lobby.png"))
 guest, gb = make_game()
 games.append((guest, gb))
 guest.chars[0] = "canbot"
+guest.player_name = "Ana"
 guest.net = NP.JoinScreen(guest)
 NAME = host.net.name
 check(len(net.norm_name(NAME)) >= 6, "the host gets a random game name (%s)" % NAME)
@@ -106,6 +111,8 @@ guest.net.connect(guest)
 check(until(lambda: isinstance(guest.net, NP.GuestSession) and guest.net.slot is not None),
       "guest connects and gets a slot (%s)" % getattr(guest.net, "slot", None))
 check(until(lambda: guest.net.lobby is not None and len(guest.net.lobby["players"]) == 2), "both appear in the lobby")
+check(sorted(p.get("name") for p in guest.net.lobby["players"]) == ["Ana", "Bone Boss"], "with their names (%s)"
+      % [p.get("name") for p in guest.net.lobby["players"]])
 frames(1, (gb, {"nav_right"}))
 frames(5, (gb, {"a"}))
 check(until(lambda: any(gu.ready and gu.char == "mutant" for gu in host.net.guests)),
@@ -125,6 +132,9 @@ gw = guest.world
 check(sorted(p.idx for p in gw.players) == [0, 1] and next(p for p in gw.players if p.idx == 1).char == "mutant",
       "guest sees both players, itself as the mutant")
 check(guest.local_players()[0].idx == 1 and host.local_players()[0].idx == 0, "each machine knows which player is theirs")
+check({p.idx: p.name for p in guest.world.players} == {0: "Bone Boss", 1: "Ana"} == {p.idx: p.name for p in host.world.players},
+      "both machines show both names in the game")
+check(host.pname(next(p for p in host.world.players if p.idx == 1)) == "Ana", "tags and bars use the name")
 
 print("== guest controls drive its player on the host")
 hp1 = next(p for p in host.world.players if p.idx == 1)
@@ -250,6 +260,7 @@ for k, ch in enumerate(("skelebot", "mutant")):
     g3, b3 = make_game()
     games.append((g3, b3))
     g3.chars[0] = ch
+    g3.player_name = "Guest %d" % (k + 3)
     g3.net = NP.JoinScreen(g3)
     g3.net.addr, g3.net.name = "127.0.0.1:%d" % PORT, NAME
     g3.net.connect(g3)
@@ -260,6 +271,9 @@ for k, ch in enumerate(("skelebot", "mutant")):
     check(ok, "guest %d dropped into the running game" % (k + 2))
 frames(10)
 check(len(host.world.players) == 4 and sorted(p.idx for p in host.world.players) == [0, 1, 2, 3], "4 players on the host")
+check(next(p for p in host.world.players if p.idx == 3).name == "Guest 4"
+      and any("Guest 4 JOINED" in m[0] for m in guest.world.messages + host.world.messages),
+      "drop-in players keep their names, and everyone sees who joined")
 check(all(len(g_.world.players) == 4 for g_, _ in games), "every machine sees 4 players")
 g5, b5 = make_game()
 games.append((g5, b5))

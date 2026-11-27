@@ -92,7 +92,8 @@ same place at the same time. Windows, Mac and Linux players can play together.
 
 **Hosting:** on the title screen, choose **HOST NET GAME**. The lobby shows your **game name** (a random
 one like `grim-otter-47`) and your address (for example `192.168.1.20`). The game name is the password, so
-only give it to the people you want in. Press TAB to type your own name, or Y / Q for a new random one.
+only give it to the people you want in. Press TAB to type your own game name, or Y / Q for a new random one. Press **N** to set **your player
+name**: it's shown over your head and in everyone's lobby.
 Pick your body, wait for friends to show up, then press START / A to begin. Friends can also drop into a
 game that's already running.
 
@@ -113,7 +114,8 @@ game that's already running.
   the **INTERNET** address from the lobby (the game gets it from the router or from ipify.org). This doesn't work on some internet connections (CGNAT). Remove
   the forward when you're done playing.
 
-Then type the **game name** the host gave you; capitals, spaces and dashes don't matter. Pick a body with
+Then type the **game name** the host gave you; capitals, spaces and dashes don't matter. Put your own
+name in **YOUR NAME** if you like. Pick a body with
 LEFT / RIGHT and press A when you're ready.
 
 **Safety:** the game name never crosses the network. Your game proves it knows the name instead. Five wrong

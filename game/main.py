@@ -532,6 +532,7 @@ class Game:
         self.chars = ["skelebot", "canbot"]  # character picked by P1 / P2 on the title screen
         self.last_host = ""                 # last address typed on the join screen
         self.last_name = ""                 # ... and the game name
+        self.player_name = ""               # your name in net games
         try:
             with open(SAVE) as fh:
                 data = json.load(fh)
@@ -540,6 +541,7 @@ class Game:
                 self.chars = [c if c in CH.CHARS else d for c, d in zip(data.get("chars", self.chars), self.chars)]
                 self.last_host = str(data.get("last_host", ""))[:60]
                 self.last_name = str(data.get("last_name", ""))[:40]
+                self.player_name = str(data.get("player_name", ""))[:14]
         except Exception:
             pass
         self.minimap = None
@@ -661,6 +663,11 @@ class Game:
             return w.players
         return [p for p in w.players if p.idx in self.net.local] or w.players[:1]
 
+    @staticmethod
+    def pname(p):
+        """A player's display name: what they typed, else P1..P4."""
+        return getattr(p, "name", "") or "P%d" % (p.idx + 1)
+
     def leave_net(self):
         if self.net is not None:
             self.net.leave(self)
@@ -684,7 +691,8 @@ class Game:
         try:
             with open(SAVE, "w") as fh:
                 json.dump({"best": self.best, "damage_numbers": self.damage_numbers, "chars": self.chars,
-                           "last_host": self.last_host, "last_name": self.last_name}, fh)
+                           "last_host": self.last_host, "last_name": self.last_name,
+                           "player_name": self.player_name}, fh)
         except Exception:
             pass
 
@@ -989,7 +997,7 @@ class Game:
         cur = p.inv_cur
         cy = y
         for row in range(self.INV_ROWS):
-            label = {0: ("P%d  " % (p.idx + 1) if coop else "") + "WEAPONS", 1: "MODULES", 2: "BACKPACK"}.get(row)
+            label = {0: (self.pname(p) + "  " if coop else "") + "WEAPONS", 1: "MODULES", 2: "BACKPACK"}.get(row)
             if label:
                 f_ = self.mid if row < 2 else self.small
                 s.blit(f_.render(label, True, col if row < 2 else (140, 145, 160)), (x, cy))
@@ -1769,7 +1777,7 @@ class Game:
         c = self.PLAYER_COLORS[pl.idx % 4]
         tip = (x, y - sc(84))
         pygame.draw.polygon(self.screen, c, [(tip[0] - sc(7), tip[1] - sc(10)), (tip[0] + sc(7), tip[1] - sc(10)), tip])
-        lbl = self.small.render("P%d" % (pl.idx + 1), True, c)
+        lbl = self.small.render(self.pname(pl), True, c)
         self.screen.blit(lbl, (x - lbl.get_width() / 2, tip[1] - sc(28)))
 
     def draw_revive(self, pl, x, y):
@@ -1781,7 +1789,7 @@ class Game:
         if pl.revive_t > 0:
             pygame.draw.arc(self.screen, c, rect.inflate(sc(6), sc(4)), 0, math.tau * min(1.0, pl.revive_t / 2.5), max(2, sc(4)))
         if int(self.time * 3) % 2:
-            lbl = self.small.render("P%d DOWN" % (pl.idx + 1), True, c)
+            lbl = self.small.render("%s DOWN" % self.pname(pl), True, c)
             self.screen.blit(lbl, (x - lbl.get_width() / 2, y - sc(60)))
 
     def draw_eels(self, e, ox, oy):
@@ -2534,7 +2542,7 @@ class Game:
         w = self.world
         bw = sc(180)
         c = self.PLAYER_COLORS[p.idx % 4] if len(w.players) > 1 else (150, 210, 230)
-        tag = ("P%d  " % (p.idx + 1)) if len(w.players) > 1 else ""
+        tag = (self.pname(p) + "  ") if len(w.players) > 1 else ""
         label = self.font.render("%sINTEGRITY  %d / %d" % (tag, max(0, p.hp), p.max_hp) if p.alive else "%sDOWN" % tag, True, c)
         x = W - sc(16) - max(bw + sc(4), label.get_width()) if right else sc(16)
         y = sc(260) if right else sc(14)
@@ -2633,7 +2641,7 @@ class Game:
             cx = min(max(sc(10), cx), W - sc(385))
             cy = min(max(sc(70), cy), H - sc(260))
             key = "[E / A]" if p.idx == 0 else "[A]"
-            who = ("P%d " % (p.idx + 1)) if len(w.players) > 1 else ""
+            who = (self.pname(p) + " ") if len(w.players) > 1 else ""
             if lt.kind == "support":
                 free = next((i for i, g in enumerate(p.gear) if g is None), None)
                 if free is not None:
@@ -2658,7 +2666,7 @@ class Game:
         y = sc(54)
         for p in others:
             c = self.PLAYER_COLORS[p.idx % 4]
-            txt = "P%d  %s" % (p.idx + 1, CH.CHARS[p.char]["name"]) + ("" if p.alive else "  -  DOWN")
+            txt = "%s  %s" % (self.pname(p), CH.CHARS[p.char]["name"]) + ("" if p.alive else "  -  DOWN")
             img = self.small.render(txt, True, c)
             s.blit(img, (sc(16), y))
             frac = max(0.0, p.hp / p.max_hp) if p.alive else 0.0
