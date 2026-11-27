@@ -133,3 +133,8 @@ for _b, _k in _SIG.items():
 # explosive barrels (fire / chemical / radiation / shrapnel kinds are rolled per barrel in World)
 for _b in ("nuclear", "chemical", "biotech", "heresy", "violence"):
     BIOMES[_b]["solids"].append("barrel")
+
+# the soundtrack (tools/make_soundtrack.py): which track plays in which sector
+MUSIC = {"combat": "nightcrawler", "deep": "bone_dance", "dread": "requiem", "frost": "turbo", "inferno": "black_mass"}
+for _b in BIOMES.values():
+    _b["music"] = MUSIC.get(_b["music"], _b["music"])

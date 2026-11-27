@@ -223,13 +223,14 @@ bot.pressed = {"interact"}
 g.update(1 / 60)
 bot.pressed = set()
 check(p.gear[1] is b_ and not w.loot, "a second module goes into the next free slot")
-# fill all 3 slots + the 6-slot backpack, then one more swaps with slot 1
-for k in range(7):
+# fill all module slots + the backpack, then one more swaps with slot 1
+import world as WD  # noqa: E402
+for k in range(WD.GEAR_SLOTS - 2 + WD.PACK_SIZE):
     w.loot = [Loot("support", p.x + 0.3, p.y, SU.generate(2, random.Random(100 + k)))]
     bot.pressed = {"interact"}
     g.update(1 / 60)
     bot.pressed = set()
-check(all(p.gear) and len(p.pack) == 6, "slots fill first, then the backpack (gear %d, pack %d)" % (len(p.equipped()), len(p.pack)))
+check(all(p.gear) and len(p.pack) == WD.PACK_SIZE, "slots fill first, then the backpack (gear %d, pack %d)" % (len(p.equipped()), len(p.pack)))
 extra = SU.generate(2, random.Random(200))
 first = p.gear[0]
 w.loot = [Loot("support", p.x + 0.3, p.y, extra)]
@@ -263,7 +264,7 @@ for name in ("nav_right", "nav_down"):
     bot.pressed = {name}
     g.update(1 / 60)
 bot.pressed = set()
-check(p.inv_cur == (0, 3), "cursor moves with the navigation keys (at %s)" % (p.inv_cur,))
+check(p.inv_cur == (3, 3), "cursor moves with the navigation keys (at %s)" % (p.inv_cur,))
 # guns row: highlight the stowed gun and take it in hand
 p.inv_cur = (0, 0)
 held = p.cur

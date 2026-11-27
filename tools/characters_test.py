@@ -73,6 +73,9 @@ def fresh(char="skelebot", depth=2):
     L = w.level
     p = w.player
     cx, cy = int(L.start[0]), int(L.start[1])
+    for pos in [q for q in w.barrels if abs(q[0] - cx) < 10 and abs(q[1] - cy) < 10]:
+        del w.barrels[pos]
+        L.props.pop(pos, None)
     for x in range(max(1, cx - 9), min(L.W - 1, cx + 10)):
         for y in range(max(1, cy - 9), min(L.H - 1, cy + 10)):
             i = L.i(x, y)
@@ -93,7 +96,7 @@ def fresh(char="skelebot", depth=2):
 print("== characters")
 for ch in CH.ORDER:
     C = CH.CHARS[ch]
-    missing = [a for a in WP.ARCH if (C["torso"] + a) not in g.spr]
+    missing = [a for a in WP.ARCH if (C["torso"] + WP.sprite_arch(a)) not in g.spr]
     check(C["legs"] in g.spr and not missing, "%s has legs and a torso for every gun (missing %s)" % (ch, missing))
 speeds = {}
 for ch in CH.ORDER:
@@ -204,7 +207,7 @@ mg = SU.generate(2, random.Random(3), kind="mgturret", rarity=2)
 p.give(mg)
 p.aim = (1.0, 0.0)
 press("deploy")
-check(mg.deployed is not None and w.turrets, "F / B deploys the MG turret")
+check(mg.deployed is not None and w.turrets and mg not in p.gear, "F / B deploys the MG turret (and it leaves the inventory)")
 tr = mg.deployed
 e = Enemy("zombie", tr.x + 5, tr.y + 0.5, awake=True, depth=1)
 e.hp = 1e6
@@ -226,7 +229,7 @@ check(tr.hp < hp0, "monster hits land on the turret (%d -> %d)" % (hp0, tr.hp))
 w.enemies = []
 p.x, p.y = tr.x + 1, tr.y
 press("deploy")
-check(mg.deployed is None and not w.turrets, "pressing again next to it packs it up")
+check(mg.deployed is None and not w.turrets and mg in p.gear, "pressing again next to it packs it back into the inventory")
 press("deploy")
 check(mg.deployed is not None, "and it deploys again")
 
@@ -244,11 +247,57 @@ for _ in range(3):
     g.update(1 / 60)
 g.draw()
 pygame.image.save(g.screen, os.path.join(out, "turret_boom.png"))
-print("  destroyed turret: walls nearby %d -> %d, player lost %.0f, rebuild %.0fs" % (walls0, walls1, 1000 - p.hp, mg.rebuild_t))
-check(walls1 < walls0 and p.hp < 1000 and mg.rebuild_t > 0 and mg.deployed is None,
-      "a destroyed turret blows like a tac-nuke: breaks walls, hurts you, then needs rebuilding")
+print("  destroyed turret: walls nearby %d -> %d, player lost %.0f" % (walls0, walls1, 1000 - p.hp))
+check(walls1 < walls0 and p.hp < 1000 and mg.deployed is None and mg not in p.gear,
+      "a destroyed turret blows like a tac-nuke (walls, player damage) and its module is lost")
+
+# D-pad slots: deploy a turret from its slot, and it leaves your back while deployed
+w, p, L = fresh()
+mo2 = SU.generate(2, random.Random(5), kind="mortar", rarity=1)
+jets = SU.generate(2, random.Random(6), kind="jets", rarity=1)
+p.give(jets)
+p.give(mo2)
+slot_m = p.gear.index(mo2) + 1
+press("slot%d" % slot_m)
+check(mo2.deployed is None and mo2 in p.gear and p.sel == slot_m - 1,
+      "a D-pad direction only selects its slot (slot %d selected, nothing deployed)" % slot_m)
 press("deploy")
-check(mg.deployed is None, "can't redeploy while rebuilding")
+check(mo2.deployed is not None and mo2 not in p.gear, "F / B uses the selected module (mortar deployed from slot %d)" % slot_m)
+p.x -= 4                                   # out of pack-up range of the mortar, or F / B would pack it up
+x0 = p.x
+p.aim = (1.0, 0.0)
+press("slot%d" % (p.gear.index(jets) + 1))
+press("deploy", frames=20)
+check(abs(p.x - x0) > 1.0, "with the jump jets selected, F / B dashes")
+
+# F / B next to a world barrel picks it up as a barrel module of the same kind
+w, p, L = fresh()
+pos = (int(p.x) + 1, int(p.y))
+L.props[pos] = "barrel_rad"
+L.solid[L.i(*pos)] = 2
+w.barrels[pos], w.barrel_kind[pos] = 3, "rad"
+p.aim = (1.0, 0.0)
+press("deploy")
+got = [g_ for g_ in p.gear + p.pack if g_ is not None and g_.kind == "barrel"]
+check(pos not in w.barrels and pos not in L.props and got and got[0].elem == "rad" and L.solid[L.i(*pos)] == 0,
+      "F / B next to a barrel picks it up as a Rad Barrel module")
+if got:
+    p.sel = p.gear.index(got[0])
+    press("deploy")
+    check(any(nm == "barrel_rad" for nm in L.props.values()) and got[0] not in p.gear, "and F / B puts it back down")
+
+# pistols are light: faster than a carbine
+spd = {}
+for arch in ("pistol", "carbine"):
+    w, p, L = fresh()
+    p.weapons[p.cur] = WP.generate(1, random.Random(1), arch=arch, rarity=0)
+    x0 = p.x
+    bot.move = (1.0, 0.0)
+    for _ in range(30):
+        g.update(1 / 60)
+    bot.move = (0.0, 0.0)
+    spd[arch] = abs(p.x - x0)
+check(spd["pistol"] > spd["carbine"] * 1.15, "pistols speed you up (%.2f vs %.2f tiles in 0.5s)" % (spd["pistol"], spd["carbine"]))
 
 # mortar: lobs over walls
 w, p, L = fresh()
@@ -270,6 +319,78 @@ for f in range(300):
         g.draw()
         pygame.image.save(g.screen, os.path.join(out, "turret_mortar.png"))
 check(1e6 - e.hp > 0, "mortar lobs shells over a wall onto a monster (dealt %.1f)" % (1e6 - e.hp))
+
+# grenade modules: thrown from their slot, cooldown, hurt monsters, walls and a careless player
+for kind in ("hex", "nuke", "incendiary", "cryo", "corrosive", "shrapnel"):
+    w, p, L = fresh()
+    gm = SU.generate(3, random.Random(9), kind="grenade", rarity=3)
+    gm.elem = kind
+    gm.label = SU.ELEMENT_LABEL[kind]
+    p.give(gm)
+    x0, y0 = int(p.x), int(p.y)
+    for dy in range(-2, 3):
+        L.solid[L.i(x0 + 4, y0 + dy)] = 1
+    g.floor_layer.chunks.clear()
+    e = Enemy("zombie", x0 + 3.2, y0 + 0.5, awake=True, depth=1)
+    e.hp = 1e6
+    w.enemies = [e]
+    p.hp = p.max_hp = 1000
+    p.aim = (1.0, 0.0)
+    walls0 = sum(L.solid[L.i(x0 + 4, y0 + dy)] == 1 for dy in range(-2, 3))
+    press("deploy")
+    cd0 = gm.cd
+    press("deploy")
+    thrown = sum(1 for b_ in w.projs if (b_.effect or "").startswith("gmod:"))
+    for f in range(150):
+        e.x, e.y, e.vx, e.vy = x0 + 3.2, y0 + 0.5, 0, 0
+        p.x, p.y = x0 + 1.7, y0 + 0.5
+        p.invuln = 0
+        g.update(1 / 60)
+    walls1 = sum(L.solid[L.i(x0 + 4, y0 + dy)] == 1 for dy in range(-2, 3))
+    print("  %-11s grenade: monster took %.0f, player 1.5 tiles away lost %.0f, walls %d -> %d, cooldown %.0fs, thrown %d"
+          % (kind, 1e6 - e.hp, 1000 - p.hp, walls0, walls1, cd0, thrown))
+    check(1e6 - e.hp > 0 and p.hp < 1000 and cd0 >= 10 and thrown == 1,
+          "%s grenade hurts monsters and a nearby player, and has a cooldown" % kind)
+
+# barrel modules: placed from a slot, used up, then go off like any barrel
+w, p, L = fresh()
+bm = SU.generate(3, random.Random(2), kind="barrel", rarity=1)
+p.give(bm)
+p.aim = (1.0, 0.0)
+press("deploy")
+placed = [pos for pos, nm in L.props.items() if nm == "barrel_" + bm.elem]
+check(placed and bm not in p.gear and w.barrel_kind.get(placed[0]) == bm.elem,
+      "a barrel module is placed from its slot and used up (%s)" % bm.label)
+if placed:
+    w.damage_barrel(placed[0], 99)
+    check(placed[0] not in L.props, "and it detonates when shot")
+
+# chain lightning off a shootable trap turret (crashed: traps have no monster stats)
+import traps as TR
+w, p, L = fresh()
+tt = TR.Turret(w.biome if hasattr(w, "biome") else "default", p.x + 2, p.y)
+w.shootables = [tt]
+mon = Enemy("zombie", p.x + 3, p.y, awake=True, depth=1)
+w.enemies = [mon]
+w.grid = {}
+try:
+    w.hit_enemy(tt, 5, 1, 0, {"shock": 1, "dtype": "electrical", "burn": 1, "chill": 1, "slow": 1})
+    ok_ = True
+except Exception as ex:
+    print("  ", repr(ex))
+    ok_ = False
+check(ok_, "a shock / burn / chill hit on a wall-turret trap doesn't crash")
+
+# rare-loot test mode
+WP.RARE_ONLY = True
+rr = random.Random(4)
+tiers = {WP.roll_rarity(rr, 3) for _ in range(400)}
+start = [wq.rarity for wq in __import__("world").Player(0, 0).weapons]
+mod_r = SU.generate(2).rarity
+WP.RARE_ONLY = False
+print("  rare-loot mode: tiers rolled %s, starting guns %s, a module %s" % (sorted(tiers), start, mod_r))
+check(tiers == {WP.MYTHICAL, WP.DEMONIC, WP.ELDRITCH, WP.SACRED} and min(start) >= WP.MYTHICAL and mod_r >= WP.MYTHICAL,
+      "run_loot_test.bat: every roll (drops, starting guns, modules) is one of the four rarest tiers")
 
 # soak: each body with turrets, random fights
 errs = 0

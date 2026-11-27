@@ -11,13 +11,13 @@ import damage as DM
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
                 heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None,
-                tier_leech=0.0, demonic_bonus=0.0)
+                tier_leech=0.0, demonic_bonus=0.0, jet=None)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
-                         kick=1.2, sound="shot_pistol", color=(255, 215, 130), weight=10),
+                         kick=1.2, sound="shot_pistol", color=(255, 215, 130), heavy=1.2, weight=10),
     "revolver":     dict(label="Revolver", dmg=4.6, rate=2.2, spread=0.015, speed=24, mag=6, reload=1.4, proj="bullet",
-                         pierce=1, kick=4, sound="shot_revolver", color=(255, 205, 110), weight=7),
+                         pierce=1, kick=4, sound="shot_revolver", color=(255, 205, 110), heavy=1.2, weight=7),
     "smg":          dict(label="SMG", dmg=0.85, rate=13, spread=0.09, speed=18, mag=36, reload=1.3, proj="bullet",
                          kick=1.0, sound="shot_smg", color=(255, 225, 150), weight=9),
     "shotgun":      dict(label="Shotgun", dmg=0.95, rate=1.6, spread=0.32, pellets=8, speed=16, life=0.42, mag=6,
@@ -33,7 +33,7 @@ ARCH = {
     "rocket":       dict(label="Rocket Launcher", dmg=13, rate=0.9, spread=0.0, speed=6, life=2.5, mag=3, reload=2.4,
                          proj="rocket", blast=2.2, kick=6, sound="shot_rocket", color=(255, 150, 50), weight=3),
     "laser_pistol": dict(label="Laser Pistol", dmg=1.6, rate=6, spread=0.01, speed=32, mag=16, reload=1.0, proj="bolt",
-                         kick=0.8, sound="shot_laser", color=(255, 60, 60), weight=6),
+                         kick=0.8, sound="shot_laser", color=(255, 60, 60), heavy=1.2, weight=6),
     "laser_rifle":  dict(label="Laser Rifle", dmg=1.25, rate=9, spread=0.0, speed=0, mag=30, reload=1.6, proj="beam",
                          pierce=99, kick=0.8, sound="shot_beam", color=(255, 50, 80), weight=5),
     "plasma":       dict(label="Plasma Gun", dmg=3.6, rate=3, spread=0.03, speed=9, life=1.5, mag=14, reload=1.6,
@@ -61,7 +61,7 @@ ARCH = {
                          blast=1.6, cluster=(5, 9), kick=5, sound="shot_grenade", color=(255, 160, 60), weight=3),
     # coil guns: instant lightning that ricochets off walls and chains between monsters
     "coil_pistol":  dict(label="Coil Pistol", dmg=2.4, rate=3.6, spread=0.04, speed=0, mag=12, reload=1.1, proj="arc",
-                         chain=2, bounce=1, arc_range=8.0, kick=1.0, sound="shot_coil", color=(150, 190, 255), weight=6),
+                         chain=2, bounce=1, arc_range=8.0, kick=1.0, sound="shot_coil", color=(150, 190, 255), heavy=1.2, weight=6),
     "coil_rifle":   dict(label="Coil Rifle", dmg=1.5, rate=7, spread=0.05, speed=0, mag=28, reload=1.5, proj="arc",
                          chain=3, bounce=2, arc_range=11.0, kick=1.2, sound="shot_coil", color=(140, 175, 255), weight=5),
     "coil_heavy":   dict(label="Storm Coil", dmg=3.2, rate=5.5, spread=0.06, speed=0, mag=60, reload=2.8, proj="arc",
@@ -69,6 +69,13 @@ ARCH = {
     # microwave emitter: expanding rings that sweep a cone and cook everything in it
     "microwave":    dict(label="Microwave Emitter", dmg=2.6, rate=3.2, spread=0.0, speed=8.5, life=0.75, mag=18, reload=1.7,
                          proj="wave", pierce=99, cone=0.5, burn=0.5, kick=1.0, sound="shot_microwave", color=(235, 130, 255), weight=5),
+    # chemical jets: a fast, narrow stream that spatters where it lands and leaves a hazardous puddle
+    "jet_napalm":   dict(label="Napalm Jet", dmg=2.4, rate=9, spread=0.02, speed=17, life=0.55, mag=60, reload=2.0, proj="jet",
+                         burn=1.0, kick=0.6, sound="shot_chem_jet", color=(255, 120, 30), weight=3, jet="napalm"),
+    "jet_cryo":     dict(label="Cryo Jet", dmg=2.0, rate=9, spread=0.02, speed=17, life=0.55, mag=60, reload=2.0, proj="jet",
+                         chill=0.06, kick=0.6, sound="shot_chem_jet", color=(140, 210, 255), weight=3, jet="cryo"),
+    "jet_rad":      dict(label="Rad-Waste Jet", dmg=2.2, rate=9, spread=0.02, speed=17, life=0.55, mag=60, reload=2.0, proj="jet",
+                         kick=0.6, sound="shot_chem_jet", color=(170, 255, 60), weight=3, jet="rad"),
     "flamer":       dict(label="Flamethrower", dmg=0.42, rate=24, spread=0.15, speed=12, life=0.65, mag=90, reload=2.0,
                          proj="flame", pierce=99, burn=1.2, kick=0.4, sound=None, color=(255, 140, 40), weight=4),
 }
@@ -81,9 +88,17 @@ MUZZLE = {
     "flamer": (1.0, 1.14), "tac_nuke": (0.76, 1.33), "nuke": (1.07, 1.36), "saw": (0.86, 1.23), "chem": (0.98, 1.14),
     "cryo": (0.98, 1.14), "chaingun": (1.2, 1.09), "railgun": (1.47, 1.15),
     "barrage": (0.98, 1.2), "coil_pistol": (0.74, 1.18), "coil_rifle": (1.12, 1.14), "coil_heavy": (1.22, 1.1),
-    "microwave": (0.98, 1.13), "cluster": (1.0, 1.17),
+    "microwave": (0.98, 1.13), "cluster": (1.0, 1.17), "jet_napalm": (1.0, 1.14), "jet_cryo": (0.98, 1.14), "jet_rad": (0.98, 1.14),
 }
 SHOULDER = {"rocket": 0.14, "tac_nuke": 0.14, "nuke": 0.15}   # sideways offset to the right shoulder
+
+# archetypes that borrow another gun's models (torso / floor pickup sprites)
+SPRITE_ARCH = {"jet_napalm": "flamer", "jet_cryo": "cryo", "jet_rad": "chem"}
+
+
+def sprite_arch(arch):
+    return SPRITE_ARCH.get(arch, arch)
+
 
 RARITY = [("Common", (205, 205, 205)), ("Uncommon", (80, 225, 95)), ("Rare", (70, 145, 255)),
           ("Epic", (195, 85, 255)), ("Legendary", (255, 155, 30)), ("Mythical", (40, 230, 255)), ("Demonic", (255, 50, 40)),
@@ -103,6 +118,7 @@ GROUPS = {
     "sniper": {"precision"}, "railgun": {"precision", "heavy"}, "laser_rifle": {"precision", "energy"},
     "plasma": {"energy"}, "microwave": {"energy"}, "coil_heavy": {"energy", "heavy"},
     "flamer": {"sprayer"}, "chem": {"sprayer"}, "cryo": {"sprayer"},
+    "jet_napalm": {"sprayer"}, "jet_cryo": {"sprayer"}, "jet_rad": {"sprayer"},
     "grenade": {"explosive"}, "rocket": {"explosive"}, "barrage": {"explosive", "heavy"}, "cluster": {"explosive"},
     "tac_nuke": {"explosive"}, "nuke": {"explosive"},
     "saw": {"exotic"},
@@ -426,7 +442,12 @@ class Weapon:
         return False
 
 
+RARE_ONLY = False      # run_loot_test.bat: every roll is Mythical / Demonic / Eldritch / Sacred
+
+
 def roll_rarity(rng, level, bonus=0):
+    if RARE_ONLY:
+        return rng.choice((MYTHICAL, DEMONIC, ELDRITCH, SACRED))
     w = [60, 26, 10, 3.5, 0.8, 0.012, 0.005, 0.003, 0.0008]
     shift = min(level - 1, 8) * 0.35 + bonus
     for i in range(len(w)):

@@ -56,6 +56,7 @@ WEAPON_TYPE = {
     "nuke": "explosive", "saw": "kinetic", "chaingun": "kinetic", "railgun": "kinetic", "barrage": "explosive", "cluster": "explosive",
     "flamer": "fire", "laser_pistol": "fire", "laser_rifle": "fire",
     "chem": "chemical", "cryo": "cryo",
+    "jet_napalm": "fire", "jet_cryo": "cryo", "jet_rad": "radiation",
     "plasma": "radiation", "microwave": "radiation",
     "coil_pistol": "electrical", "coil_rifle": "electrical", "coil_heavy": "electrical",
 }
