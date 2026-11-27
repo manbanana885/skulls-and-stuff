@@ -1797,6 +1797,11 @@ class Game:
             elif kind == "magnet" and su.beam:
                 n += 1
                 items.append((pkey + 0.05, n, None, lambda su=su: self.draw_magnet_pull(su, ground), 0))
+            if kind == "gunarm":                 # grows out of the backpack; drawn in front of / behind the body
+                front = (su.tx + su.ty) > pkey
+                n += 1
+                items.append((pkey + (0.03 if front else -0.03), n, None, lambda su=su, pl=pl: self.draw_gun_arm(su, pl, ground), 0))
+                continue
             # the module body
             if kind == "skull" and su.state == "reform":
                 continue
@@ -1850,35 +1855,38 @@ class Game:
                 mx_, my_ = ground(su.x + su.aim[0] * 0.3, su.y + su.aim[1] * 0.3, su.z - 0.1)
                 n += 1
                 items.append((key + 0.01, n, None, lambda mx_=mx_, my_=my_: self.add_glow(mx_, my_, sc(16), (120, 70, 40)), 0))
-            elif kind == "gunarm":
-                n += 1
-                items.append((max(key, su.tx + su.ty) + 0.02, n, None, lambda su=su, pl=pl: self.draw_gun_arm(su, pl, ground), 0))
             elif kind == "jets" and su.trail_t > 0:
                 n += 1
                 items.append((key + 0.01, n, None, lambda hx=hx, hy=hy: self.add_glow(hx, hy + sc(14), sc(30), (120, 60, 10)), 0))
         return n
 
     def draw_gun_arm(self, su, pl, ground):
-        """Segmented pipe arm from the back mount to the gun it holds; the gun is the stowed weapon's floor sprite."""
+        """Pipe arm bolted to the backpack: mount -> raised elbow -> wrist, holding the stowed gun's floor sprite."""
         s = self.screen
         wp = pl.weapons[1 - pl.cur]
+        bob = -abs(math.sin(pl.walk / 1.1 * math.tau)) * sc(2) if pl.moving else 0
         bx, by = ground(su.x, su.y, su.z)
-        ex, ey = ground(su.tx, su.ty, su.z - 0.15)
-        mx_, my_ = (bx + ex) / 2, min(by, ey) - sc(16)
-        pts = [(bx, by), (mx_, my_), (ex, ey)]
-        for wd, c in ((sc(9), (20, 20, 24)), (sc(6), (90, 92, 100)), (sc(2), (170, 172, 180))):
-            pygame.draw.lines(s, c, False, pts, max(1, wd))
-        pygame.draw.circle(s, (220, 160, 40), (int(mx_), int(my_)), max(2, sc(5)))
+        by += bob
+        ex_ = su.x + (su.tx - su.x) * 0.45
+        ey_ = su.y + (su.ty - su.y) * 0.45
+        mx_, my_ = ground(ex_, ey_, su.z + 0.22)
+        my_ += bob
+        wx, wy = ground(su.tx, su.ty, su.z - 0.05)
+        pts = [(bx, by), (mx_, my_), (wx, wy)]
+        for wd, c in ((sc(5.5), (16, 16, 20)), (sc(3.5), (92, 94, 104)), (sc(1.2), (180, 182, 190))):
+            pygame.draw.lines(s, c, False, pts, max(1, int(wd)))
+        for (px_, py_), r_, c in (((bx, by), sc(3.5), (60, 62, 70)), ((mx_, my_), sc(2.8), (220, 160, 40)), ((wx, wy), sc(2.2), (150, 152, 160))):
+            pygame.draw.circle(s, (12, 12, 14), (int(px_), int(py_)), int(r_) + 1)
+            pygame.draw.circle(s, c, (int(px_), int(py_)), int(r_))
         gsp = self.spr.get("gun_" + wp.arch)
         if gsp:
             a = math.atan2(su.aim[1], su.aim[0])
-            img = gsp.get("idle", 0, int(round(a / (math.tau / 8))) % 8)
-            img = self.scaled(img, 0.8)
-            ga, gb = ground(su.tx, su.ty, su.z - 0.45)
-            s.blit(img, (ga - gsp.ax * 0.8, gb - gsp.ay * 0.8))
+            img = self.scaled(gsp.get("idle", 0, int(round(a / (math.tau / 8))) % 8), 0.8)
+            ga, gb = ground(su.tx, su.ty, su.z - 0.35)
+            s.blit(img, (ga - gsp.ax * 0.8, gb - gsp.ay * 0.8 + bob))
         if su.muzzle > 0:
             mf = WP.MUZZLE[wp.arch][0] * 0.5
-            gx_, gy_ = ground(su.tx + su.aim[0] * mf, su.ty + su.aim[1] * mf, su.z - 0.15)
+            gx_, gy_ = ground(su.tx + su.aim[0] * mf, su.ty + su.aim[1] * mf, su.z - 0.05)
             self.add_glow(gx_, gy_, sc(22), wp.st["color"])
 
     def draw_tongue(self, su, e, grow, ground):

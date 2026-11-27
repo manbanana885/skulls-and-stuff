@@ -493,7 +493,13 @@ class Support:
     # ---- gun arm
     def update_gunarm(self, w, dt, pl):
         from traps import los
-        self.station(w, dt, pl, 1.35)
+        # bolted to the top corner of the backpack (right shoulder; a second arm takes the left, a third the middle)
+        ax, ay = pl.aim
+        side = (-1, 1, 0)[getattr(self, "slot", 0) % 3]
+        self.x = pl.x - ax * 0.2 - ay * 0.13 * side
+        self.y = pl.y - ay * 0.2 + ax * 0.13 * side
+        self.z = 1.32 if side else 1.42
+        self.side = side
         wp = pl.weapons[1 - pl.cur]
         if getattr(wp, "_arm_t", None) != w.time:         # the stowed gun cools down / reloads here (once per frame)
             wp._arm_t = w.time
@@ -509,7 +515,10 @@ class Support:
         diff = (want - cur + math.pi) % math.tau - math.pi
         cur += max(-self.p["track"] * dt, min(self.p["track"] * dt, diff))
         self.aim = (math.cos(cur), math.sin(cur))
-        self.tx, self.ty = self.x + self.aim[0] * reach, self.y + self.aim[1] * reach
+        out = 0.22 * (self.side if self.side else 0)          # reach out past the shoulder so the gun clears the body
+        lx, ly = -ay, ax
+        self.tx = self.x + lx * out + self.aim[0] * reach
+        self.ty = self.y + ly * out + self.aim[1] * reach
         px = self.proxy
         if px is None or px.pl is not pl:
             px = self.proxy = ArmProxy(pl)
