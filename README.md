@@ -21,7 +21,7 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - Deployable MG and mortar turret modules (F / B) that draw monsters, take damage, and go up like a tactical nuke
 - Explosive barrels in four kinds: red (fire + burning ground), green (toxic gas + acid), yellow (radiation
   fallout) and orange (shrapnel) - they hurt monsters and you alike, and chain off each other. Pick one up
-  with F / B and put it down somewhere better
+  with E / A and put it down somewhere better
 - Drop-in local co-op for 2 players
 
 ## How to play (Windows, no Python experience needed)
@@ -57,10 +57,17 @@ It clashes with `pygame-ce`.
 
 ## Controls
 
-WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). E / A picks things up, Q / Y swaps guns,
-SHIFT / LB dashes (with Jump Jets equipped). The D-pad (or keys 1-4) selects a module slot, and F / B uses
-the selected module (throw a grenade, deploy a turret, put a barrel down). F / B also packs up your turret
-when you stand next to it, and picks up a barrel you're standing next to. ENTER / START pauses: the pause screen shows your two guns (E / A takes the
+WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). Q / Y swaps guns, SHIFT / LB dashes
+(with Jump Jets equipped).
+
+- **Pick up: E, or the bottom face button** (A on Xbox, B on a SNES-style pad). Takes whatever you're next to
+  and facing: a gun, a module, a barrel, or your own deployed turret. A turret packs into the selected D-pad
+  slot, which has to be empty.
+- **Select a module slot: the D-pad, or keys 1-4.**
+- **Use the selected module: F, or the right face button** (B on Xbox, A on a SNES-style pad), **or RB.**
+  Throws a grenade, deploys a turret, puts a barrel down, and so on. It never picks anything up.
+
+ENTER / START pauses: the pause screen shows your two guns (E / A takes the
 highlighted one in hand) and your modules (arrows / D-pad to move, E / A to equip or unequip, R / X to drop).
 Player 2 joins any time by pressing BACK / SELECT on a second controller, then picks a body with LEFT / RIGHT
 and confirms with A / START (B / BACK backs out). The game waits while they choose.

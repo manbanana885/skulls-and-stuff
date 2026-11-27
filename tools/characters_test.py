@@ -228,10 +228,19 @@ w.hurt_player(10, tr.x - 0.8, tr.y)
 check(tr.hp < hp0, "monster hits land on the turret (%d -> %d)" % (hp0, tr.hp))
 w.enemies = []
 p.x, p.y = tr.x + 1, tr.y
+p.aim = (-1.0, 0.0)
 press("deploy")
-check(mg.deployed is None and not w.turrets and mg in p.gear, "pressing again next to it packs it back into the inventory")
+check(mg.deployed is tr and len(w.turrets) == 1, "F / B next to your turret doesn't pack it up (it only uses the selected slot)")
+filler = SU.generate(2, random.Random(11), kind="sawbot", rarity=0)
+p.gear[0] = filler
+press("interact")
+check(mg.deployed is tr, "E / A won't pack it into a full selected slot")
+p.gear[0] = None
+p.sel = 2
+press("interact")
+check(mg.deployed is None and not w.turrets and p.gear[2] is mg, "E / A with an empty slot selected packs it into that slot (slot 3)")
 press("deploy")
-check(mg.deployed is not None, "and it deploys again")
+check(mg.deployed is not None, "and F / B deploys it again")
 
 # destruction: nuke-like, walls broken, nearby player hurt, rebuild timer
 tr = mg.deployed
@@ -270,7 +279,7 @@ press("slot%d" % (p.gear.index(jets) + 1))
 press("deploy", frames=20)
 check(abs(p.x - x0) > 1.0, "with the jump jets selected, F / B dashes")
 
-# F / B next to a world barrel picks it up as a barrel module of the same kind
+# E / A next to a world barrel picks it up as a barrel module of the same kind
 w, p, L = fresh()
 pos = (int(p.x) + 1, int(p.y))
 L.props[pos] = "barrel_rad"
@@ -278,9 +287,14 @@ L.solid[L.i(*pos)] = 2
 w.barrels[pos], w.barrel_kind[pos] = 3, "rad"
 p.aim = (1.0, 0.0)
 press("deploy")
+check(pos in w.barrels, "F / B doesn't pick up barrels")
+g.update(1 / 60)
+g.draw()
+pygame.image.save(g.screen, os.path.join(out, "pickup_prompt.png"))
+press("interact")
 got = [g_ for g_ in p.gear + p.pack if g_ is not None and g_.kind == "barrel"]
 check(pos not in w.barrels and pos not in L.props and got and got[0].elem == "rad" and L.solid[L.i(*pos)] == 0,
-      "F / B next to a barrel picks it up as a Rad Barrel module")
+      "E / A next to a barrel picks it up as a Rad Barrel module")
 if got:
     p.sel = p.gear.index(got[0])
     press("deploy")

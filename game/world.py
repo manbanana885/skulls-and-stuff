@@ -351,37 +351,40 @@ class Player:
     DPAD_SHOW = 3.5
 
     def use_button(self, w):
-        """F / B: pack up your turret if you're standing by it, else pick up a barrel next to you,
-        else use the module in the selected slot."""
-        mine = [t for t in w.turrets if t.alive and getattr(t, "owner", None) is self
-                and math.hypot(t.x - self.x, t.y - self.y) < 2.5]
-        if mine:
-            t = min(mine, key=lambda t_: math.hypot(t_.x - self.x, t_.y - self.y))
-            t.mod.pack_up(w, self)
-            return
-        if self.pick_up_barrel(w):
-            return
+        """F / B / RB: use the module in the selected slot (it never picks anything up)."""
         g = self.gear[self.sel]
         if g is None:
             w.message("Slot %d (%s) is empty" % (self.sel + 1, SLOT_DIRS[self.sel]), (160, 165, 180))
         else:
             g.activate(w, self)
 
-    def pick_up_barrel(self, w):
-        """An explosive barrel within reach (the one you're facing first) becomes a barrel module of the same kind."""
+    def pickup_target(self, w):
+        """What E / A would take: the nearest (and faced) of floor loot, a barrel, or your own deployed turret.
+        Returns ("loot", Loot) / ("barrel", (x, y)) / ("turret", Turret) or None."""
         ax, ay = self.aim
+        al = math.hypot(ax, ay) or 1.0
         best = None
-        for pos in w.barrels:
-            cx, cy = pos[0] + 0.5, pos[1] + 0.5
-            d = math.hypot(cx - self.x, cy - self.y)
-            if d < 1.3:
-                facing = ((cx - self.x) * ax + (cy - self.y) * ay) / max(d, 1e-6)
-                score = d - facing * 0.4
+
+        def consider(kind, obj, x, y, reach):
+            nonlocal best
+            d = math.hypot(x - self.x, y - self.y)
+            if d < reach:
+                facing = ((x - self.x) * ax + (y - self.y) * ay) / (max(d, 1e-6) * al)
+                score = d - facing * 0.3
                 if best is None or score < best[0]:
-                    best = (score, pos)
-        if best is None:
-            return False
-        pos = best[1]
+                    best = (score, kind, obj)
+        for lt in w.loot:
+            if lt.kind in ("weapon", "support"):
+                consider("loot", lt, lt.x, lt.y, 0.9)
+        for pos in w.barrels:
+            consider("barrel", pos, pos[0] + 0.5, pos[1] + 0.5, 1.3)
+        for t in w.turrets:
+            if t.alive and getattr(t, "owner", None) is self:
+                consider("turret", t, t.x, t.y, 1.4)
+        return best[1:] if best else None
+
+    def pick_up_barrel(self, w, pos):
+        """A barrel on the floor becomes a barrel module of the same kind."""
         if all(g is not None for g in self.gear) and len(self.pack) >= PACK_SIZE:
             w.message("No room to carry the barrel", (255, 140, 120))
             return True
@@ -2656,8 +2659,6 @@ class World:
         self.shootables = [t for t in self.traps if t.shootable]
 
         # loot (per player)
-        self.near_loot_by = {}
-        bests = {}
         for lt in self.loot[:]:
             lt.t += dt
             if lt.vz or lt.z > 0:
@@ -2671,10 +2672,7 @@ class World:
             for pl in alive:
                 d = math.hypot(lt.x - pl.x, lt.y - pl.y)
                 if lt.kind in ("weapon", "support"):
-                    if d < bests.get(pl.idx, 0.9):
-                        bests[pl.idx] = d
-                        self.near_loot_by[pl.idx] = lt
-                    continue
+                    continue                  # taken with E / A (see pickup_target below)
                 if d >= 0.6 or lt not in self.loot:
                     continue
                 self.loot.remove(lt)
@@ -2688,14 +2686,31 @@ class World:
                     a = rnd.random() * math.tau
                     self.add(Particle("glow", lt.x, lt.y, 0.4, math.cos(a) * 2.5, math.sin(a) * 2.5, rnd.uniform(1, 3), 0.6,
                                       (255, 255, 255), 2))
+        # E / A picks up whatever's nearest / faced: floor loot, a barrel, or your own turret
+        self.near_loot_by = {}
+        self.pickup_by = {}
+        for pl in alive:
+            tg = pl.pickup_target(self)
+            if tg is None:
+                continue
+            self.pickup_by[pl.idx] = tg
+            if tg[0] == "loot":
+                self.near_loot_by[pl.idx] = tg[1]
         self.near_loot = self.near_loot_by.get(0)
         for i, pl in enumerate(self.players):
-            lt = self.near_loot_by.get(i)
-            if lt is not None and lt in self.loot and pl.alive and i < len(inputs) and "interact" in getattr(inputs[i], "pressed", ()):
-                if lt.kind == "support":
-                    self.take_support(lt, pl)
+            tg = self.pickup_by.get(i)
+            if tg is None or not pl.alive or i >= len(inputs) or "interact" not in getattr(inputs[i], "pressed", ()):
+                continue
+            kind, obj = tg
+            if kind == "loot" and obj in self.loot:
+                if obj.kind == "support":
+                    self.take_support(obj, pl)
                 else:
-                    self.take_weapon(lt, pl)
+                    self.take_weapon(obj, pl)
+            elif kind == "barrel" and obj in self.barrels:
+                pl.pick_up_barrel(self, obj)
+            elif kind == "turret" and obj.alive:
+                obj.mod.pack_up(self, pl, pl.sel)
 
         ex, ey = L.exit
         if not self.bosses and any(math.hypot(ex - pl.x, ey - pl.y) < 0.6 for pl in alive):

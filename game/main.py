@@ -157,7 +157,7 @@ class Input:
         self.edge("start", bool(start) or keys[pygame.K_RETURN])
         self.edge("a", bool(a))
         self.edge("reload", bool(bx) or keys[pygame.K_r])
-        self.edge("swap", bool(by or rb) or keys[pygame.K_q])
+        self.edge("swap", bool(by) or keys[pygame.K_q])
         self.edge("dash", bool(lb) or keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT])
         bb = False
         try:
@@ -167,7 +167,7 @@ class Input:
                 bb = self.joy.get_numbuttons() > 1 and self.joy.get_button(1)
         except Exception:
             pass
-        self.edge("deploy", bool(bb) or keys[pygame.K_f])
+        self.edge("deploy", bool(bb or rb) or keys[pygame.K_f])
         self.edge("interact", bool(a) or keys[pygame.K_e])
         self.edge("back", bool(back))
         up = dn = lf = rg = False
@@ -2507,6 +2507,28 @@ class Game:
         other = p.weapons[1 - p.cur]
         s.blit(self.small.render("[Q / Y]  %s" % other.name if p.idx == 0 else "[Y]  %s" % other.name, True,
                                  tuple(int(c_ * 0.7) for c_ in other.color)), (ax, oy_))
+        # a barrel / your turret in reach: say what E / A will do with it
+        tg = getattr(w, "pickup_by", {}).get(p.idx)
+        if tg is not None and tg[0] in ("barrel", "turret") and p.alive:
+            import support as SU
+            key = "[E / A]" if p.idx == 0 else "[A]"
+            if tg[0] == "barrel":
+                bx_, by_ = tg[1][0] + 0.5, tg[1][1] + 0.5
+                elem = w.barrel_kind.get(tg[1], "chem")
+                name = {"fire": "Fire Barrel", "chem": "Chem Barrel", "rad": "Rad Barrel", "shrap": "Shrapnel Barrel"}.get(elem, "Barrel")
+                txt, col = "%s  PICK UP %s" % (key, name), SU.ELEMENT_COLOR.get(elem, (230, 230, 230))
+            else:
+                bx_, by_ = tg[1].x, tg[1].y
+                if p.gear[p.sel] is None:
+                    txt, col = "%s  PACK UP %s  ->  slot %d" % (key, tg[1].mod.label, p.sel + 1), (170, 230, 140)
+                else:
+                    txt, col = "Select an empty D-pad slot to pack up the %s" % tg[1].mod.label, (255, 170, 130)
+            ox, oy = self.last_o
+            gx, gy = to_screen(bx_, by_, 1.6)
+            img = self.font.render(txt, True, col)
+            r_ = img.get_rect(midbottom=(gx + ox, gy + oy - sc(8)))
+            self.panel(s, r_.inflate(sc(14), sc(8)), 190)
+            s.blit(img, r_)
         # nearby loot comparison
         lt = w.near_loot_by.get(p.idx)
         if lt is not None and p.alive:
@@ -2726,8 +2748,8 @@ class Game:
         self.center_text(s, self.font, "an isometric twin-stick shooter  -  procedurally generated sectors", sc(112), (150, 170, 200))
         dev = self.input.device_name
         lines = [
-            "Gamepad: L-STICK move  -  R-STICK aim & fire  -  RT fire  -  A take  -  X reload  -  Y/RB swap  -  LB dash  -  D-PAD select module  -  B use it  -  START pause",
-            "Keyboard: WASD move  -  MOUSE aim  -  CLICK fire  -  E take  -  R reload  -  Q/wheel swap  -  SHIFT dash  -  1-4 select module  -  F use it  -  ENTER pause",
+            "Gamepad: L-STICK move  -  R-STICK aim & fire  -  RT fire  -  A pick up  -  X reload  -  Y swap  -  LB dash  -  D-PAD select module  -  B/RB use it  -  START pause",
+            "Keyboard: WASD move  -  MOUSE aim  -  CLICK fire  -  E pick up  -  R reload  -  Q/wheel swap  -  SHIFT dash  -  1-4 select module  -  F use it  -  ENTER pause",
             ("Controller detected: %s" % dev) if dev else "No controller detected (plug one in any time)",
             "CO-OP: player 2 presses BACK / SELECT on a controller to join and picks a body - here or any time in game"
             + ("   (P2 READY)" if len(self.inputs) > 1 else ""),

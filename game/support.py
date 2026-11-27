@@ -349,8 +349,8 @@ class Support:
                 "jets": "Dash with SHIFT / LB, leaving a burning trail",
                 "tether": "Beam to your partner (or a satellite) that burns monsters",
                 "magnet": "Pulls health and power-ups to you",
-                "mgturret": "Deploy / pack up with F / B: auto-firing machine gun",
-                "mortar": "Deploy / pack up with F / B: lobs shells over walls",
+                "mgturret": "F / B deploys it; E / A packs it into an empty slot: auto-firing machine gun",
+                "mortar": "F / B deploys it; E / A packs it into an empty slot: lobs shells over walls",
                 "grenade": "Select its slot, F / B to throw; hurts you too if you're close",
                 "barrel": "Select its slot, F / B to put down (used up); shoot it to set it off"}[self.kind]
 
@@ -932,7 +932,7 @@ class Support:
                 self.beam.append((lt.x, lt.y))
 
 
-    # ---- deployable turrets (deploy / pack up from Player.update via use_button)
+    # ---- deployable turrets (deployed with the use button, packed up with the pick-up button)
     def update_mgturret(self, w, dt, pl):
         self.update_turret_module(w, dt, pl)
 
@@ -999,11 +999,14 @@ class Support:
         w.snd("servo", x, y, 0.8)
         w.message("%s deployed" % self.label, (170, 180, 110))
 
-    def pack_up(self, w, pl):
+    def pack_up(self, w, pl, slot):
+        """Back into the (empty) gear slot it's packed into."""
         tr = self.deployed
-        if pl.give(self) is None:
-            w.message("No room to pack up the %s" % self.label, (255, 140, 120))
+        if pl.gear[slot] is not None:
+            w.message("Select an empty D-pad slot to pack up the %s" % self.label, (255, 140, 120))
             return False
+        pl.gear[slot] = self
+        self.attach(pl, slot)
         self.armor = tr.hp
         tr.alive = False
         if tr in w.turrets:
