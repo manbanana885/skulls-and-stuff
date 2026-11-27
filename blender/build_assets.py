@@ -2878,5 +2878,6 @@ def main():
 exec(open(os.path.join(HERE, "expansion.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "traps.py"), encoding="utf-8").read())
 exec(open(os.path.join(HERE, "heavy_guns.py"), encoding="utf-8").read())
+exec(open(os.path.join(HERE, "support_items.py"), encoding="utf-8").read())
 
 main()

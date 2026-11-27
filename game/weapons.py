@@ -8,7 +8,7 @@ import random
 # ---------------------------------------------------------------- archetypes
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
-                heavy=1.0, spinup=0.0, wallpierce=0)
+                heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
@@ -50,6 +50,19 @@ ARCH = {
                          kick=1.3, heavy=0.62, spinup=0.7, sound="shot_chaingun", color=(255, 200, 110), weight=3),
     "railgun":      dict(label="Railgun", dmg=34, rate=0.55, spread=0.0, speed=60, life=0.6, mag=4, reload=2.6, proj="rail",
                          pierce=99, wallpierce=5, kick=10, heavy=0.6, sound="shot_railgun", color=(110, 220, 255), weight=3),
+    # barrage launcher: one trigger pull = a rippling salvo of 4-16 small homing missiles
+    "barrage":      dict(label="Barrage Launcher", dmg=4.0, rate=0.6, spread=0.2, speed=7, life=2.2, mag=3, reload=3.0, proj="missile",
+                         blast=1.4, homing=0.7, salvo=(4, 16), kick=2.5, heavy=0.6, sound="shot_barrage", color=(255, 165, 70), weight=3),
+    # coil guns: instant lightning that ricochets off walls and chains between monsters
+    "coil_pistol":  dict(label="Coil Pistol", dmg=2.4, rate=3.6, spread=0.04, speed=0, mag=12, reload=1.1, proj="arc",
+                         chain=2, bounce=1, arc_range=8.0, kick=1.0, sound="shot_coil", color=(150, 190, 255), weight=6),
+    "coil_rifle":   dict(label="Coil Rifle", dmg=1.5, rate=7, spread=0.05, speed=0, mag=28, reload=1.5, proj="arc",
+                         chain=3, bounce=2, arc_range=11.0, kick=1.2, sound="shot_coil", color=(140, 175, 255), weight=5),
+    "coil_heavy":   dict(label="Storm Coil", dmg=3.2, rate=5.5, spread=0.06, speed=0, mag=60, reload=2.8, proj="arc",
+                         chain=6, bounce=3, arc_range=13.0, kick=2.0, heavy=0.62, sound="shot_coil", color=(170, 150, 255), weight=3),
+    # microwave emitter: expanding rings that sweep a cone and cook everything in it
+    "microwave":    dict(label="Microwave Emitter", dmg=2.6, rate=3.2, spread=0.0, speed=8.5, life=0.75, mag=18, reload=1.7,
+                         proj="wave", pierce=99, cone=0.5, burn=0.5, kick=1.0, sound="shot_microwave", color=(235, 130, 255), weight=5),
     "flamer":       dict(label="Flamethrower", dmg=0.42, rate=24, spread=0.15, speed=12, life=0.65, mag=90, reload=2.0,
                          proj="flame", pierce=99, burn=1.2, kick=0.4, sound=None, color=(255, 140, 40), weight=4),
 }
@@ -61,6 +74,8 @@ MUZZLE = {
     "rocket": (0.88, 1.33), "laser_pistol": (0.73, 1.18), "laser_rifle": (1.1, 1.14), "plasma": (0.98, 1.13),
     "flamer": (1.0, 1.14), "tac_nuke": (0.76, 1.33), "nuke": (1.07, 1.36), "saw": (0.86, 1.23), "chem": (0.98, 1.14),
     "cryo": (0.98, 1.14), "chaingun": (1.2, 1.09), "railgun": (1.47, 1.15),
+    "barrage": (0.98, 1.2), "coil_pistol": (0.74, 1.18), "coil_rifle": (1.12, 1.14), "coil_heavy": (1.22, 1.1),
+    "microwave": (0.98, 1.13),
 }
 SHOULDER = {"rocket": 0.14, "tac_nuke": 0.14, "nuke": 0.15}   # sideways offset to the right shoulder
 
@@ -76,8 +91,8 @@ BRANDS = {
     "Graveline": dict(spread=0.6, dmg=1.05),
 }
 
-NO_PROJ_SPEED = {"beam"}
-EXPLOSIVE = {"grenade", "rocket", "tac_nuke", "nuke"}
+NO_PROJ_SPEED = {"beam", "arc"}
+EXPLOSIVE = {"grenade", "rocket", "tac_nuke", "nuke", "barrage"}
 SPRAYS = {"flame", "chem", "cryo"}
 
 
@@ -110,19 +125,19 @@ def _explosive(st):
 
 MODS = [
     _m("incendiary", "Incendiary", "Sets targets ablaze", _add(burn=1.2)),
-    _m("explosive", "Explosive", "Rounds explode on impact", _explosive, lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam"} and a not in EXPLOSIVE),
-    _m("piercing", "Piercing", "Punches through 2 more targets", _add(pierce=2), lambda a: a not in EXPLOSIVE and ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail"}),
-    _m("ricochet", "Ricochet", "Bounces off walls", _add(bounce=1), lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "bolt", "slug", "plasma", "saw")),
-    _m("twin", "Twin-Linked", "Fires a second parallel shot", _set_twin, lambda a: ARCH[a]["proj"] not in SPRAYS | {"nuke"}),
+    _m("explosive", "Explosive", "Rounds explode on impact", _explosive, lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "wave"} and a not in EXPLOSIVE),
+    _m("piercing", "Piercing", "Punches through 2 more targets", _add(pierce=2), lambda a: a not in EXPLOSIVE and ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail", "arc", "wave"}),
+    _m("ricochet", "Ricochet", "Bounces off walls", _add(bounce=1), lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "bolt", "slug", "plasma", "saw", "arc")),
+    _m("twin", "Twin-Linked", "Fires a second parallel shot", _set_twin, lambda a: ARCH[a]["proj"] not in SPRAYS | {"nuke", "missile"}),
     _m("rapid", "Rapid", "+35% fire rate", _mul(rate=1.35, dmg=0.88)),
     _m("heavy", "Heavy", "+45% damage, slower", _mul(dmg=1.45, rate=0.85, kick=1.5)),
     _m("precise", "Precise", "Halved spread", _mul(spread=0.5), lambda a: ARCH[a]["spread"] > 0.02),
     _m("drum", "Drum-Fed", "+75% magazine", _mul(mag=1.75)),
     _m("quick", "Quickload", "40% faster reloads", _mul(reload=0.6)),
     _m("vampiric", "Vampiric", "Heals 3 integrity per kill", _add(lifesteal=3)),
-    _m("shock", "Shocking", "Arcs to nearby enemies", _add(shock=1)),
-    _m("seeking", "Seeking", "Projectiles home in", _add(homing=1), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail"}),
-    _m("velocity", "High-Velocity", "+50% projectile speed", _mul(speed=1.5), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam"}),
+    _m("shock", "Shocking", "Arcs to nearby enemies", _add(shock=1), lambda a: ARCH[a]["proj"] != "arc"),
+    _m("seeking", "Seeking", "Projectiles home in", _add(homing=1), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "saw", "rail", "arc", "wave"}),
+    _m("velocity", "High-Velocity", "+50% projectile speed", _mul(speed=1.5), lambda a: ARCH[a]["proj"] not in SPRAYS | {"beam", "arc"}),
     _m("cryo", "Cryo", "Chills and slows targets", _add(slow=1)),
 ]
 MOD_BY_KEY = {m["key"]: m for m in MODS}
@@ -144,6 +159,9 @@ class Weapon:
         for k in ("dmg", "rate", "mag", "reload", "speed"):
             st[k] *= rng.uniform(0.88, 1.12)
         st["spread"] *= rng.uniform(0.8, 1.2)
+        if st["salvo"]:
+            st["salvo"] = rng.randint(*st["salvo"])
+            st["dmg"] *= (10.0 / st["salvo"]) ** 0.35     # small salvos hit a little harder per missile
         self.brand = rng.choice(list(BRANDS))
         for k, v in BRANDS[self.brand].items():
             st[k] *= v
@@ -175,7 +193,7 @@ class Weapon:
         return RARITY[self.rarity][0]
 
     def projectiles_per_shot(self):
-        return self.st["pellets"] * (2 if self.st["twin"] else 1)
+        return self.st["pellets"] * (2 if self.st["twin"] else 1) * (self.st["salvo"] or 1)
 
     def dps(self):
         st = self.st
@@ -184,6 +202,10 @@ class Weapon:
             per_shot += st["rad"][1] * st["rad"][2] * 0.5
         if st["saw_bounces"]:
             per_shot *= 2.5
+        if st["chain"]:
+            per_shot *= 1 + st["chain"] * 0.55
+        if st["proj"] == "wave":
+            per_shot *= 2.0
         cycle = st["mag"] / st["rate"] + st["reload"]
         return per_shot * st["mag"] / cycle
 

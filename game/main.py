@@ -858,6 +858,14 @@ class Game:
                 items.append((key, n, None, lambda gx=gx, gy=gy, c=col, r=rar: self.draw_pillar(gx, gy, c, r), 0))
                 n += 1
                 items.append((key, n, sp.get("idle", 0, lt.t * 8), gx - sp.ax, gy - sp.ay + bob))
+            elif lt.kind == "support":
+                sp = spr["sup_" + lt.item.kind]
+                col, rar = lt.item.color, lt.item.rarity
+                n += 1
+                items.append((key, n, None, lambda gx=gx, gy=gy, c=col, r=rar: self.draw_pillar(gx, gy, c, r), 0))
+                img = sp.get(sp.first_anim, int(lt.t * 2), lt.t * 8)
+                n += 1
+                items.append((key, n, img, gx - sp.ax, gy - sp.ay + bob - sc(26)))
             else:
                 if lt.kind == "buff":
                     sp = spr["power"]
@@ -976,6 +984,8 @@ class Game:
                 n += 1
                 items.append((plkey + 0.01, n, None, lambda mx=mx, my=my, c=mc: self.add_glow(mx, my, sc(24), c), 0))
 
+        n = self.support_items(w, items, n, ground, on_screen)
+
         # flying gibs
         for g in w.gibs:
             if g.rest:
@@ -1021,6 +1031,8 @@ class Game:
                 surf.blit(img, (round(x), round(y)))
         for bm in w.beams:
             self.draw_beam(bm, ox, oy)
+        for a_ in w.arcs:
+            self.draw_arc(a_, ox, oy)
 
         if self.ambient:
             last = getattr(self, "_last_cam", tuple(self.cam))
@@ -1494,6 +1506,14 @@ class Game:
             if int(b.age * 8) % 2 == 0:
                 pygame.draw.circle(s, (255, 60, 40), (hx, hy - sc(2)), sc(1.8))
                 self.add_glow(hx, hy, sc(10), (90, 20, 10))
+        elif k == "missile":
+            ta, tb = to_screen(b.x - b.vx * 0.025, b.y - b.vy * 0.025, b.z)
+            tx, ty = ta + ox, tb + oy
+            pygame.draw.line(s, (60, 62, 60), (tx, ty), (hx, hy), max(2, sc(3.5)))
+            pygame.draw.circle(s, c, (hx, hy), max(1, sc(2)))
+            self.add_glow(tx, ty, sc(12), (c[0] // 2, c[1] // 3, c[2] // 4))
+        elif k == "wave":
+            self.draw_wave(b, ox, oy)
         elif k == "rocket":
             ta, tb = to_screen(b.x - b.vx * 0.03, b.y - b.vy * 0.03, b.z)
             tx, ty = ta + ox, tb + oy
@@ -1504,6 +1524,218 @@ class Game:
             self.add_glow(hx, hy, sc(16), (40, 110, 20))
             pygame.draw.circle(s, (130, 255, 70), (hx, hy), sc(5))
             pygame.draw.circle(s, (220, 255, 180), (hx - sc(1.5), hy - sc(1.5)), sc(1.8))
+
+    def draw_wave(self, b, ox, oy):
+        """Microwave ring: an arc of the circle around the muzzle; segments behind walls are shadowed out."""
+        s = self.screen
+        c = b.color
+        rad = math.hypot(b.x - b.ox, b.y - b.oy)
+        base = math.atan2(b.vy, b.vx)
+        k = max(0.0, min(1.0, b.life / 0.35))
+        n, m = len(b.reach), 15
+        runs, cur = [], []
+        for j in range(m):
+            u = j / (m - 1)
+            f = u * (n - 1)
+            i0 = int(f)
+            i1 = min(n - 1, i0 + 1)
+            reach = b.reach[i0] + (b.reach[i1] - b.reach[i0]) * (f - i0)
+            a = base - b.cone + 2 * b.cone * u
+            if rad <= reach:
+                p_ = to_screen(b.ox + math.cos(a) * rad, b.oy + math.sin(a) * rad, b.z * 0.8)
+                cur.append((p_[0] + ox, p_[1] + oy))
+            elif cur:
+                runs.append(cur)
+                cur = []
+        if cur:
+            runs.append(cur)
+        dim = (int(c[0] * 0.55 * k), int(c[1] * 0.55 * k), int(c[2] * 0.55 * k))
+        hot = tuple(min(255, int((v * 0.5 + 128) * k)) for v in c)
+        for run in runs:
+            if len(run) < 2:
+                continue
+            pygame.draw.lines(s, dim, False, run, max(2, int(sc(9) * k)))
+            pygame.draw.lines(s, hot, False, run, max(1, int(sc(3) * k)))
+            mid = run[len(run) // 2]
+            self.add_glow(mid[0], mid[1], int(sc(18) + rad * sc(6)), (c[0] // 5, c[1] // 6, c[2] // 5))
+
+    def draw_arc(self, a_, ox, oy):
+        """Coil lightning: a jagged bolt re-randomised every frame through all its bounce / chain points."""
+        pts, life, mx, c, wf = a_
+        k = max(0.0, life / mx)
+        scr = []
+        for (x, y, z) in pts:
+            p_ = to_screen(x, y, z)
+            scr.append((p_[0] + ox, p_[1] + oy))
+        path = [scr[0]]
+        for (x1, y1), (x2, y2) in zip(scr, scr[1:]):
+            L_ = math.hypot(x2 - x1, y2 - y1)
+            m = max(2, int(L_ / sc(16)))
+            nx_, ny_ = (-(y2 - y1) / (L_ or 1), (x2 - x1) / (L_ or 1))
+            for j in range(1, m):
+                u = j / m
+                jit = rnd.uniform(-1, 1) * sc(9) * math.sin(u * math.pi) ** 0.5
+                path.append((x1 + (x2 - x1) * u + nx_ * jit, y1 + (y2 - y1) * u + ny_ * jit))
+            path.append((x2, y2))
+        s = self.screen
+        if len(path) >= 2:
+            pygame.draw.lines(s, (int(c[0] * 0.5 * k), int(c[1] * 0.5 * k), int(c[2] * 0.6 * k)), False, path, max(2, int(sc(7) * wf * k)))
+            pygame.draw.lines(s, (230, 235, 255), False, path, max(1, int(sc(2.2) * wf * k)))
+        for p_ in scr[1:]:
+            self.add_glow(p_[0], p_[1], sc(26), (c[0] // 3, c[1] // 3, c[2] // 3))
+        self.add_glow(scr[0][0], scr[0][1], sc(20), (c[0] // 3, c[1] // 3, c[2] // 3))
+
+    # ------------------------------------------------------------ support gadgets
+    def scaled(self, img, k):
+        if abs(k - 1.0) < 0.03:
+            return img
+        key = ("scale", id(img), round(k, 2))
+        out = self._tint.get(key)
+        if out is None:
+            w_, h_ = img.get_size()
+            out = self._tint[key] = pygame.transform.smoothscale(img, (max(1, int(w_ * k)), max(1, int(h_ * k))))
+        return out
+
+    def support_items(self, w, items, n, ground, on_screen):
+        spr = self.spr
+        t = self.time
+        for pl in w.players:
+            su = pl.support
+            if su is None or not pl.alive:
+                continue
+            pkey = pl.x + pl.y
+            if su.kind == "shield":
+                n += 1
+                items.append((pkey - 0.02, n, None, lambda su=su, pl=pl: self.draw_shield(su, pl, ground, False), 0))
+                n += 1
+                items.append((pkey + 0.35, n, None, lambda su=su, pl=pl: self.draw_shield(su, pl, ground, True), 0))
+                continue
+            gx, gy = ground(su.x, su.y)
+            if not on_screen(gx, gy):
+                continue
+            sp = spr["sup_" + su.kind]
+            k = su.size * (1.2 if su.kind == "sawbot" else 1.0)
+            if su.kind == "sawbot":
+                img = sp.get("spin", 0, t * 30)
+            elif su.kind == "medbot":
+                img = sp.get("hover", dir_index(su.aim[0], su.aim[1], 8), t * 8)
+            else:
+                img = sp.get("hover", dir_index(su.aim[0], su.aim[1], 16), t * 8)
+            img = self.scaled(img, k)
+            hx, hy = ground(su.x, su.y, su.z)
+            rx = int(sc(11) * k)
+            surf_key = su.x + su.y
+            n += 1
+            items.append((surf_key - 0.3, n, None, lambda gx=gx, gy=gy, rx=rx: self.screen.blit(shadow(rx), (gx - rx, gy - rx // 2)), 0))
+            n += 1
+            items.append((surf_key, n, img, hx - sp.ax * k, hy - sp.ay * k))
+            if su.flash > 0:
+                n += 1
+                items.append((surf_key, n, sp.flash(img), hx - sp.ax * k, hy - sp.ay * k))
+            if su.kind == "medbot":
+                n += 1
+                items.append((surf_key + 0.01, n, None, lambda hx=hx, hy=hy: self.add_glow(hx, hy, sc(18), (20, 70, 35)), 0))
+                if su.healing:
+                    px_, py_ = ground(pl.x, pl.y, 0.95)
+                    n += 1
+                    items.append((max(surf_key, pkey) + 0.02, n, None,
+                                  lambda a=(hx, hy), b=(px_, py_): self.draw_heal_beam(a, b), 0))
+            elif su.kind == "gunbot" and su.muzzle > 0:
+                mx_, my_ = ground(su.x + su.aim[0] * 0.3, su.y + su.aim[1] * 0.3, su.z - 0.1)
+                n += 1
+                items.append((surf_key + 0.01, n, None, lambda mx_=mx_, my_=my_: self.add_glow(mx_, my_, sc(16), (120, 70, 40)), 0))
+            elif su.kind == "sawbot":
+                n += 1
+                items.append((surf_key + 0.01, n, None, lambda hx=hx, hy=hy: self.add_glow(hx, hy, sc(14), (60, 45, 15)), 0))
+        return n
+
+    def draw_heal_beam(self, a, b):
+        s = self.screen
+        ph = 0.5 + 0.5 * math.sin(self.time * 9)
+        pygame.draw.line(s, (30, int(110 + 60 * ph), 55), a, b, max(2, sc(4)))
+        pygame.draw.line(s, (190, 255, 210), a, b, max(1, sc(1.5)))
+        self.add_glow(b[0], b[1], int(sc(14) + sc(8) * ph), (20, 80, 35))
+
+    def draw_shield(self, su, pl, ground, front):
+        """Partial energy ring orbiting the player; drawn in two halves so it wraps around the body in depth."""
+        r = su.radius()
+        half = su.p["arc"] / 2
+        m = 16
+        down = su.down > 0
+        if down and int(self.time * 12) % 3:
+            return
+        frac = max(0.0, su.charge / max(1, su.p["capacity"]))
+        if su.flash > 0:
+            col = (235, 250, 255)
+        elif down:
+            col = (70, 60, 90)
+        else:
+            col = tuple(int(a + (b - a) * frac) for a, b in zip((255, 110, 110), (110, 200, 255)))
+        lo, hi = [], []
+        for j in range(m + 1):
+            a = su.ang - half + 2 * half * j / m
+            x, y = pl.x + math.cos(a) * r, pl.y + math.sin(a) * r
+            in_front = (x + y) > (pl.x + pl.y)
+            lo.append((ground(x, y, 0.3), in_front))
+            hi.append((ground(x, y, 1.25), in_front))
+        s = self.screen
+        segs = [j for j in range(m) if lo[j][1] == front or lo[j + 1][1] == front]
+        if not segs:
+            return
+        xs = [p_[0][0] for p_ in lo + hi]
+        ys = [p_[0][1] for p_ in lo + hi]
+        x0, y0 = int(min(xs)) - 2, int(min(ys)) - 2
+        box_ = pygame.Surface((int(max(xs)) - x0 + 4, int(max(ys)) - y0 + 4))
+        fill = (col[0] // 7, col[1] // 6, col[2] // 5)
+        for j in segs:
+            quad = [(lo[j][0][0] - x0, lo[j][0][1] - y0), (lo[j + 1][0][0] - x0, lo[j + 1][0][1] - y0),
+                    (hi[j + 1][0][0] - x0, hi[j + 1][0][1] - y0), (hi[j][0][0] - x0, hi[j][0][1] - y0)]
+            pygame.draw.polygon(box_, fill, quad)
+        s.blit(box_, (x0, y0), special_flags=pygame.BLEND_ADD)
+        wd = max(1, sc(3))
+        for j in segs:
+            pygame.draw.line(s, col, hi[j][0], hi[j + 1][0], wd)
+            pygame.draw.line(s, tuple(c_ // 2 for c_ in col), lo[j][0], lo[j + 1][0], max(1, sc(2)))
+            if j % 3 == 0:
+                pygame.draw.line(s, tuple(c_ // 3 for c_ in col), lo[j][0], hi[j][0], 1)
+        for j in (0, m):        # emitter nodes at the tips
+            if lo[j][1] == front:
+                e1, e2 = lo[j][0], hi[j][0]
+                pygame.draw.line(s, (40, 44, 52), e1, e2, max(2, sc(5)))
+                pygame.draw.circle(s, col, (int(e2[0]), int(e2[1])), max(2, sc(4)))
+                self.add_glow(e2[0], e2[1], sc(16), (col[0] // 4, col[1] // 4, col[2] // 4))
+        mid = hi[segs[len(segs) // 2]][0]
+        self.add_glow(mid[0], mid[1] + sc(14), sc(34), (col[0] // 8, col[1] // 7, col[2] // 6))
+
+    def support_card(self, s, su, x, y, compare=None, title=None):
+        import support as SU
+        lines = [(self.mid, su.name, su.color),
+                 (self.small, "%s %s  -  LVL %d" % (su.rarity_name, su.label, su.level), (170, 175, 190)),
+                 (self.small, "SUPPORT: " + su.blurb(), (150, 220, 160))]
+        stats = su.card_lines()
+        rows = (len(stats) + 2) // 3
+        h = sc(12) + sum(f.get_height() + sc(2) for f, _, _ in lines) + sc(22) * rows + (sc(20) if title else 0)
+        rect = pygame.Rect(x, y, sc(370), h)
+        self.panel(s, rect)
+        pygame.draw.rect(s, su.color, (x, y, sc(4), h))
+        cy = y + sc(6)
+        if title:
+            s.blit(self.small.render(title, True, (255, 220, 120)), (x + sc(12), cy))
+            cy += sc(20)
+        for f, txt, col in lines:
+            s.blit(f.render(txt, True, col), (x + sc(12), cy))
+            cy += f.get_height() + sc(2)
+        params = list(SU.KINDS[su.kind]["params"].items())
+        for i, ((lbl, val), (name, (lo, hi, _, _))) in enumerate(zip(stats, params)):
+            col = (230, 230, 230)
+            if compare is not None and compare.kind == su.kind and abs(su.p[name] - compare.p[name]) > 1e-6:
+                better = (su.p[name] > compare.p[name]) == (hi > lo)
+                col = (110, 255, 120) if better else (255, 100, 90)
+            col_x = x + sc(12) + (i % 3) * sc(118)
+            row_y = cy + (i // 3) * sc(22)
+            s.blit(self.small.render(lbl, True, (130, 135, 150)), (col_x, row_y))
+            s.blit(self.small.render(val, True, col), (col_x + sc(66), row_y))
+        return rect
 
     def draw_ring(self, gx, gy, q):
         k = max(0.0, q.life / q.max)
@@ -1563,6 +1795,13 @@ class Game:
                  (self.small, "%s %s %s  -  LVL %d" % (wp.rarity_name, wp.brand, wp.st["label"], wp.level), (170, 175, 190))]
         for m in wp.mods:
             lines.append((self.small, "+ %s: %s" % (m["adj"], m["desc"]), (150, 220, 160)))
+        st_ = wp.st
+        if st_.get("salvo"):
+            lines.append((self.small, "Fires %d-missile homing barrages" % st_["salvo"], (255, 200, 120)))
+        if st_.get("chain"):
+            lines.append((self.small, "Lightning chains %d targets, ricochets %d walls" % (st_["chain"], st_["bounce"]), (170, 190, 255)))
+        if st_["proj"] == "wave":
+            lines.append((self.small, "Rings sweep a %d deg cone, hitting everything" % round(math.degrees(st_["cone"] * 2)), (235, 160, 255)))
         if wp.st.get("heavy", 1.0) < 1.0:
             extra = "  -  spins up" if wp.st.get("spinup") else ("  -  pierces %d walls" % wp.st["wallpierce"] if wp.st.get("wallpierce") else "")
             lines.append((self.small, "HEAVY: -%d%% move speed%s" % (round((1 - wp.st["heavy"]) * 100), extra), (255, 170, 90)))
@@ -1618,6 +1857,17 @@ class Game:
             by += sc(22)
         if p.perm_dmg > 1.001:
             s.blit(self.small.render("CALIBRATED  +%d%% dmg" % round((p.perm_dmg - 1) * 100), True, (255, 180, 80)), (x, by))
+            by += sc(22)
+        su = p.support
+        if su is not None:
+            s.blit(self.small.render(su.name, True, su.color), (x, by))
+            if su.kind == "shield":
+                cap = max(1, su.p["capacity"])
+                k = 1 - su.down / su.p["recharge"] if su.down > 0 else su.charge / cap
+                pygame.draw.rect(s, (30, 34, 44), (x, by + sc(16), bw, sc(4)))
+                pygame.draw.rect(s, (90, 90, 120) if su.down > 0 else (110, 200, 255), (x, by + sc(16), int(bw * k), sc(4)))
+            elif su.kind == "medbot" and su.healing:
+                s.blit(self.small.render("+%.1f/s" % su.p["heal"], True, (120, 255, 150)), (x + bw - sc(40), by))
         # weapon panel
         wp = p.weapon
         rect = self.weapon_card(s, wp, sc(16), H * 3)          # measure off-screen
@@ -1652,8 +1902,12 @@ class Game:
             cx = min(max(sc(10), cx), W - sc(385))
             cy = min(max(sc(70), cy), H - sc(260))
             key = "[E / A]" if p.idx == 0 else "[A]"
-            self.weapon_card(s, lt.item, int(cx), int(cy), compare=wp, title="%s%s  TAKE  (swaps with %s)" % (
-                ("P%d " % (p.idx + 1)) if len(w.players) > 1 else "", key, wp.name))
+            who = ("P%d " % (p.idx + 1)) if len(w.players) > 1 else ""
+            if lt.kind == "support":
+                swap = ("swaps with %s" % p.support.name) if p.support else "support slot empty"
+                self.support_card(s, lt.item, int(cx), int(cy), compare=p.support, title="%s%s  DEPLOY  (%s)" % (who, key, swap))
+            else:
+                self.weapon_card(s, lt.item, int(cx), int(cy), compare=wp, title="%s%s  TAKE  (swaps with %s)" % (who, key, wp.name))
 
     def draw_hud(self, s):
         w = self.world

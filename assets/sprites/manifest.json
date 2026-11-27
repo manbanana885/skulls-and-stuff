@@ -3995,5 +3995,221 @@
    96.0,
    103.51510153071851
   ]
+ },
+ "torso_barrage": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.2
+  ]
+ },
+ "torso_coil_pistol": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.74,
+   1.18
+  ]
+ },
+ "torso_coil_rifle": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.12,
+   1.14
+  ]
+ },
+ "torso_coil_heavy": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   1.22,
+   1.0999999999999999
+  ]
+ },
+ "torso_microwave": {
+  "dirs": 16,
+  "anims": {
+   "idle": 1
+  },
+  "size": [
+   256,
+   256
+  ],
+  "anchor": [
+   128.0,
+   175.03020306143702
+  ],
+  "muzzle": [
+   0.98,
+   1.13
+  ]
+ },
+ "gun_barrage": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ },
+ "gun_coil_pistol": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ },
+ "gun_coil_rifle": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ },
+ "gun_coil_heavy": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ },
+ "gun_microwave": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   192,
+   160
+  ],
+  "anchor": [
+   96.0,
+   103.51510153071851
+  ]
+ },
+ "sup_sawbot": {
+  "dirs": 1,
+  "anims": {
+   "spin": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_shield": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_medbot": {
+  "dirs": 8,
+  "anims": {
+   "hover": 4
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_gunbot": {
+  "dirs": 16,
+  "anims": {
+   "hover": 4
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
  }
 }

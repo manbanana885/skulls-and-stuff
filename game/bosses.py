@@ -432,3 +432,4 @@ def drop_boss_loot(w, b):
         w.loot.append(Loot("weapon", b.x + rnd.uniform(-0.5, 0.5), b.y + rnd.uniform(-0.5, 0.5), WP.generate(w.depth, bonus=2.5), pop=True))
     w.loot.append(Loot("buff", b.x, b.y, WP.roll_buff(level=w.depth + 2), pop=True))
     w.loot.append(Loot("health", b.x, b.y, pop=True))
+    w.drop_support(b.x + rnd.uniform(-0.6, 0.6), b.y + rnd.uniform(-0.6, 0.6), 2.0)
