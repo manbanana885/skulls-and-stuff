@@ -13,6 +13,7 @@ Everything is non-blocking and polled from the game loop: no threads.
 import errno
 import hashlib
 import hmac
+import copyreg
 import io
 import json
 import os
@@ -373,12 +374,24 @@ def registry():
 
 
 class _Pickler(pickle.Pickler):
-    def __init__(self, f, world):
+    def __init__(self, f, world, refs=None):
         super().__init__(f, protocol=5)
         self.world = world
         self.reg = registry().by_id
+        self.refs = refs            # id(obj) -> ("O", net id): objects the receiver already holds a copy of
+
+    def reducer_override(self, obj):
+        """Classes with a NET_SKIP table travel without those (host-only) attributes."""
+        skip = getattr(type(obj), "NET_SKIP", None)
+        if skip is None or isinstance(obj, type):
+            return NotImplemented
+        return copyreg.__newobj__, (type(obj),), {k: v for k, v in obj.__dict__.items() if k not in skip}
 
     def persistent_id(self, obj):
+        if self.refs:
+            r = self.refs.get(id(obj))
+            if r is not None:
+                return r
         if obj is self.world:
             return "W"
         if self.world is not None and obj is self.world.level:
@@ -389,14 +402,20 @@ class _Pickler(pickle.Pickler):
 
 
 class _Unpickler(pickle.Unpickler):
-    def __init__(self, f, world):
+    def __init__(self, f, world, objs=None):
         super().__init__(f)
         self.world = world
         self.reg = registry().by_path
+        self.objs = objs            # net id -> this side's copy of a synced object
 
     def persistent_load(self, pid):
         if pid == "W":
             return self.world
+        if isinstance(pid, tuple) and len(pid) == 2 and pid[0] == "O" and self.objs is not None:
+            try:
+                return self.objs[pid[1]]
+            except (KeyError, TypeError):
+                raise pickle.UnpicklingError("unknown synced object %r" % (pid,))
         if pid == "L":
             return self.world.level
         try:
@@ -422,6 +441,22 @@ def pack(obj, world=None):
 
 def unpack(data, world=None):
     return _Unpickler(io.BytesIO(data), world).load()
+
+
+def pack_pair(first, second, world=None, refs=None):
+    """Two pickles back to back: the second may point at objects the first one updates (refs)."""
+    f = io.BytesIO()
+    _Pickler(f, world).dump(first)
+    _Pickler(f, world, refs).dump(second)
+    return f.getvalue()
+
+
+def unpack_pair(data, world, on_first):
+    """Read the first pickle, let on_first(obj) apply it and return the net id -> object table, then read the second."""
+    f = io.BytesIO(data)
+    first = _Unpickler(f, world).load()
+    objs = on_first(first)
+    return first, _Unpickler(f, world, objs).load()
 
 
 # ================================================================ connection
@@ -522,7 +557,7 @@ class Conn:
 
     # snapshots: compressed against the previous one sent on this connection
     def send_delta(self, kind, raw):
-        z = zlib.compressobj(1, zdict=self.zprev[-32768:]) if self.zprev else zlib.compressobj(1)
+        z = zlib.compressobj(6, zdict=self.zprev[-32768:]) if self.zprev else zlib.compressobj(6)
         data = z.compress(raw) + z.flush()
         self.zprev = raw
         self.send(kind, data)

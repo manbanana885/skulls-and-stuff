@@ -243,6 +243,28 @@ sent = host.net.guests[0].conn.sent_bytes - s0
 print("  %d bytes to the guest over 2 s of fighting (%.1f KB/s)" % (sent, sent / 2 / 1024))
 check(sent / 2 < 120 * 1024, "under 120 KB/s per guest")
 
+# a crowd: 40 more monsters right on top of the players (snapshots only carry what changed per monster)
+s0 = host.net.guests[0].conn.sent_bytes
+for k in range(40):
+    host.world.enemies.append(Enemy("zombie", hp0.x + 3 + k % 8, hp0.y - 4 + k // 8, awake=True, depth=2))
+hb.fire = True
+for _ in range(120):
+    for p in host.world.players:
+        p.hp = p.max_hp
+    frames(1)
+hb.fire = False
+sent = host.net.guests[0].conn.sent_bytes - s0
+print("  crowd of %d monsters: %.1f KB/s" % (len(host.world.enemies), sent / 2 / 1024))
+check(sent / 2 < 120 * 1024, "a big crowd stays under 120 KB/s per guest")
+frames(2)
+hmap = {e.__dict__.get("_nid"): e for e in host.world.enemies}
+gmap = guest.net.objs
+pairs = [(gmap[n], hmap[n]) for n in hmap if n in gmap]
+worst = max((math.hypot(a.x - b.x, a.y - b.y) for a, b in pairs), default=99)
+hpgap = max((abs(a.hp - b.hp) for a, b in pairs), default=99)
+check(len(pairs) >= 20 and worst < 0.5 and hpgap < 1e-6 and all(a.kind == b.kind for a, b in pairs),
+      "the guest's copy of every nearby monster matches the host (%d monsters, worst %.2f tiles apart)" % (len(pairs), worst))
+
 print("== breach seen by the guest")
 hp1 = next(p for p in host.world.players if p.idx == 1)
 L = host.world.level
