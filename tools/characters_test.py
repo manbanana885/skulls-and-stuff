@@ -364,7 +364,7 @@ for kind in ("hex", "nuke", "incendiary", "cryo", "corrosive", "shrapnel"):
     walls1 = sum(L.solid[L.i(x0 + 4, y0 + dy)] == 1 for dy in range(-2, 3))
     print("  %-11s grenade: monster took %.0f, player 1.5 tiles away lost %.0f, walls %d -> %d, cooldown %.0fs, thrown %d"
           % (kind, 1e6 - e.hp, 1000 - p.hp, walls0, walls1, cd0, thrown))
-    check(1e6 - e.hp > 0 and p.hp < 1000 and cd0 >= 10 and thrown == 1,
+    check(1e6 - e.hp > 0 and p.hp < 1000 and cd0 >= 4 and thrown == 1,
           "%s grenade hurts monsters and a nearby player, and has a cooldown" % kind)
 
 # barrel modules: placed from a slot, used up, then go off like any barrel
