@@ -423,6 +423,16 @@ class Player:
             self.status[k_] -= dt
             if self.status[k_] <= 0:
                 del self.status[k_]
+        if self.alive and ("poison" in self.status or "burn" in self.status):
+            for k_, dps_, typ_, col_ in (("poison", 2.5, "chemical", (140, 220, 60)), ("burn", 4.0, "fire", (255, 130, 40))):
+                if k_ in self.status:
+                    if k_ == "poison" and "venom" in self.status:
+                        dps_ = 4.5
+                    self.hp -= dps_ * dt * self.mult("aegis") * CH.player_mult(self, typ_)
+                    if rnd.random() < dt * 10:
+                        w.add(Particle("fire" if k_ == "burn" else "glow", self.x + rnd.uniform(-0.2, 0.2), self.y + rnd.uniform(-0.2, 0.2),
+                                       rnd.uniform(0.4, 1.2), 0, 0, rnd.uniform(0.6, 1.4), 0.5, col_, 9 if k_ == "burn" else 2))
+            w.check_player_death(self.x, self.y, self)
         if "confuse" in self.status:
             mx, my = -mx, -my
         mag = min(1.0, math.hypot(mx, my)) * (0.5 if "chill" in self.status else 1.0) * (0.55 if "mire" in self.status else 1.0)
@@ -565,6 +575,7 @@ for _k, _d in BE.ENEMIES.items():
         FLYERS.add(_k)
     if _d["ai"] == "charger":
         WEAPON_DROP[_k] = 0.2
+DM.KIND_MULT.update(BE.KIND_RESIST)
 
 
 def weapon_to_shot(wp):
@@ -586,6 +597,17 @@ def weapon_to_shot(wp):
         sh.update(kind="cleaver", speed=9.0, dmg=10, r=0.24, rng=7.0)
     elif pk in WP.SPRAYS:
         sh.update(kind="orb", speed=8.0, dmg=3, count=4, spread=0.35, burst=4, gap=0.08, rng=4.5, r=0.16)
+    # heavy weapons (the Pink Heavy's arsenal): each keeps its character, with a tell you can react to
+    a = wp.arch
+    if a == "chaingun":       # spins up, then hoses a long stream
+        sh.update(kind="bolt", speed=13.0, dmg=9, burst=16, gap=0.065, jitter=0.13, windup=0.6, cd=(2.8, 3.8), rng=9.0, r=0.1)
+    elif a == "railgun":      # laser sight for a second, then a slug that goes through everything
+        sh.update(kind="slug", speed=34.0, dmg=30, burst=1, aimed=1.0, cd=(3.4, 4.4), rng=13.0, r=0.11, color=(140, 230, 255))
+    elif a == "barrage":      # a rippling salvo of slow homing rockets
+        sh.update(kind="rocket", speed=5.5, dmg=12, blast=1.0, homing=0.45, burst=6, gap=0.14, jitter=0.55, cd=(4.2, 5.6), rng=9.5)
+    elif a == "tac_nuke":     # a slow, glowing warhead: get out of its way
+        sh.update(kind="nuke", speed=4.0, dmg=55, blast=1.8, rad=(1.6, 6.0, 5.0, 2.0), burst=1, cd=(6.5, 8.5), rng=10.0, minr=4.0,
+                  r=0.24, color=(170, 255, 70))
     return sh
 
 
@@ -631,6 +653,8 @@ class Enemy:
         self.reach = self.bdef.get("reach", 2.5) if self.bdef else 0
         self.eel_t, self.eel_tx, self.eel_ty, self.eel_spin, self.eel_all = -1.0, 0.0, 0.0, 0.0, False
         self.aim_t = 0.0
+        self.bang = 0.0               # pit demon: where its fire breath is pointing
+        self.stx = self.sty = 0.0     # scorpion: where the tail is coming down
         self.chill = 0.0
         self.frozen = 0.0
         self.maxhp = self.hp
@@ -966,10 +990,21 @@ class Enemy:
                 light = ["pistol", "revolver", "smg", "shotgun", "carbine", "assault", "laser_pistol", "shotgun_2"]
                 heavy = ["plasma", "grenade", "flamer", "saw", "rocket", "auto_shotgun", "shotgun_3", "shotgun_4"]
                 arch = rnd.choice(light if w.depth <= 2 else light + heavy)   # no launchers in the first sectors
+                if bd.get("arsenal"):
+                    ars = [(a_, wt) for a_, wt in bd["arsenal"] if a_ != "tac_nuke" or w.depth >= 3]
+                    arch = rnd.choices([a_ for a_, _ in ars], weights=[wt for _, wt in ars])[0]
                 self.weapon = WP.generate(w.depth, arch=arch, rarity=WP.roll_rarity(rnd, w.depth))
                 self.wshot = weapon_to_shot(self.weapon)
             sh = self.wshot
             shooter = "spewer" if sh["rng"] < 5 else "gunner"
+            if bd.get("arsenal"):
+                shooter = "sniper" if sh.get("aimed") else "heavy"
+                if self.burst > 0 or self.aim_t > 0:
+                    speed *= 0.35          # plants its feet while it fires
+                if self.burst > 0 and sh.get("windup") and self.burst_t > sh["gap"] and rnd.random() < dt * 30:
+                    a_ = math.atan2(dy, dx)    # barrels spinning up: sparks at the muzzle
+                    w.add(Particle("spark", self.x + math.cos(a_) * 0.6, self.y + math.sin(a_) * 0.6, 1.0, rnd.uniform(-2, 2),
+                                   rnd.uniform(-2, 2), rnd.uniform(0, 2), 0.2, (255, 220, 140), 2))
         elif ai == "summoner":
             self.cd2 -= dt
             if self.cd2 <= 0 and self.los and d < 11 and self.children < bd["summon"][2]:
@@ -1116,13 +1151,142 @@ class Enemy:
                     self.ldx, self.ldy = ux, uy
                     self.cd = rnd.uniform(1.6, 2.4)
                     w.snd("stomp", self.x, self.y, 0.6)
+        elif ai == "snake":           # weaves in, coils (a tell), then strikes; cobras also spit venom
+            if self.lunge > 0:
+                self.lunge -= dt
+                tx, ty, speed = self.ldx, self.ldy, 9.5
+            elif self.state2 == "coil":
+                self.state_t -= dt
+                speed = 0.0
+                face = (dx, dy)
+                if int(self.state_t * 16) % 2 == 0:
+                    self.flash = 0.03
+                if self.state_t <= 0:
+                    self.state2 = None
+                    self.lunge = 0.26
+                    self.ldx, self.ldy = ux, uy
+                    w.snd("lunge", self.x, self.y, 0.7)
+            else:
+                wob = math.sin(w.time * 6 + self.phase) * 0.9
+                tx, ty = tx - ty * wob, ty + tx * wob
+                self.cd2 -= dt
+                if self.cd2 <= 0 and self.los and p.alive and d < 2.8:
+                    self.state2, self.state_t = "coil", 0.42
+                    self.cd2 = rnd.uniform(1.6, 2.4)
+                    w.snd("tongue", self.x, self.y, 0.6)
+            if sh and self.state2 is None and self.lunge <= 0 and d > 3.2:
+                shooter = "snake"
+        elif ai == "scorpion":        # front armour; a telegraphed tail sting at the spot you stood on
+            face = (dx, dy)
+            if self.state2 == "sting":
+                self.state_t -= dt
+                speed = 0.0
+                if int(self.state_t * 14) % 2 == 0:
+                    self.flash = 0.03
+                if self.state_t <= 0:
+                    self.state2 = None
+                    sx_, sy_ = self.stx, self.sty
+                    w.beams.append([self.x, self.y, sx_, sy_, 0.6, 0.18, 0.18, (170, 230, 60), 1.4])
+                    w.snd("tongue", self.x, self.y)
+                    for pl in w.players:
+                        if pl.alive and math.hypot(pl.x - sx_, pl.y - sy_) < 0.65:
+                            w.hurt_player(self.st["dmg"] * 1.8, self.x, self.y, who=pl, dtype="chemical")
+                            w.player_effect("venom", self, who=pl)
+                    for _ in range(8):
+                        a_ = rnd.random() * math.tau
+                        w.add(Particle("glow", sx_, sy_, 0.2, math.cos(a_) * 2, math.sin(a_) * 2, 1.5, 0.4, (170, 230, 60), 2))
+            else:
+                if self.los and d < 4.5:   # sidles round you, pincers first
+                    sgn = 1 if (int(w.time * 0.4 + self.phase) % 2) else -1
+                    tx, ty = tx * 0.6 - uy * sgn * 0.6, ty * 0.6 + ux * sgn * 0.6
+                self.cd2 -= dt
+                if self.cd2 <= 0 and self.los and p.alive and d < 2.6:
+                    self.state2, self.state_t = "sting", 0.55
+                    self.stx, self.sty = p.x, p.y
+                    self.cd2 = rnd.uniform(1.8, 2.6)
+                    w.warnings.append([p.x, p.y, 0.65, 0.55, 0.55, (170, 230, 60)])
+                    w.snd("stalker_screech", self.x, self.y, 0.5)
+        elif ai == "roach":           # skitters in jinks; dodges sideways when you aim at it
+            ax, ay = getattr(p, "aim", (1.0, 0.0))
+            watched = self.los and (-dx * ax - dy * ay) / d > 0.9
+            if watched:
+                sgn = 1 if (int(w.time * 2.5 + self.phase) % 2) else -1
+                tx, ty = -uy * sgn * 0.9 + ux * 0.25, ux * sgn * 0.9 + uy * 0.25
+                speed *= 1.25
+            else:
+                wob = math.sin(w.time * 13 + self.phase * 3) * 0.7
+                tx, ty = tx - ty * wob, ty + tx * wob
+        elif ai == "imp":             # flits about throwing fireballs, hopping away in a puff of flame
+            wob = math.sin(w.time * 5 + self.phase) * 0.8
+            tx, ty = tx - ty * wob, ty + tx * wob
+            self.cd2 -= dt
+            if self.cd2 <= 0 and self.los and d < 7:
+                self.cd2 = rnd.uniform(3.0, 5.0)
+                w.fire_puff(self.x, self.y, 10)
+                for _ in range(8):
+                    a_ = rnd.random() * math.tau
+                    x_, y_ = self.x + math.cos(a_) * rnd.uniform(1.2, 2.4), self.y + math.sin(a_) * rnd.uniform(1.2, 2.4)
+                    if not w.level.is_solid(int(x_), int(y_)) and w.level.line_of_sight(self.x, self.y, x_, y_):
+                        self.x, self.y = x_, y_
+                        break
+                w.fire_puff(self.x, self.y, 10)
+                w.snd("wretch_blink", self.x, self.y, 0.6)
+            shooter = "caster"
+        elif ai == "breather":        # pit demon: plods in and breathes a sweeping cone of fire
+            if self.state2 == "breath":
+                self.state_t -= dt
+                speed *= 0.25
+                diff = (math.atan2(dy, dx) - self.bang + math.pi) % math.tau - math.pi
+                self.bang += max(-1.1 * dt, min(1.1 * dt, diff))      # tracks you, but slowly: circle it
+                face = (math.cos(self.bang), math.sin(self.bang))
+                self.burst_t -= dt
+                if self.burst_t <= 0:
+                    self.burst_t = 0.04
+                    a_ = self.bang + rnd.uniform(-0.17, 0.17)
+                    c_, s_ = math.cos(a_), math.sin(a_)
+                    sp_ = rnd.uniform(6.5, 8.0)
+                    pr = Proj("flame", self.x + c_ * 0.55, self.y + s_ * 0.55, 1.2, c_ * sp_, s_ * sp_, 7, hostile=True, life=0.6,
+                              color=(255, 140, 40), r=0.2)
+                    pr.effect = "burn"
+                    pr.owner = self
+                    w.projs.append(pr)
+                if self.state_t <= 0:
+                    self.state2 = None
+                    self.cd2 = rnd.uniform(2.6, 3.6)
+            else:
+                self.cd2 -= dt
+                if self.cd2 <= 0 and self.los and p.alive and d < 4.4:
+                    self.state2, self.state_t = "breath", 1.7
+                    self.bang = math.atan2(dy, dx)
+                    self.burst_t = 0.35       # a beat of smoke and glow before the fire comes
+                    w.fire_puff(self.x + ux * 0.5, self.y + uy * 0.5, 6)
+                    w.snd("brute_roar", self.x, self.y, 0.8)
+                    w.snd("shot_flame", self.x, self.y, 0.8)
+        elif ai == "devil":           # hurls fans of hellfire; when you get close it vanishes, leaving the floor burning
+            self.cd2 -= dt
+            if self.cd2 <= 0 and p.alive and d < 2.6:
+                self.cd2 = rnd.uniform(3.5, 5.0)
+                w.fire_puff(self.x, self.y, 18)
+                w.hazards.append([self.x, self.y, 0.9, 3.5, "blaze", 10.0])
+                for _ in range(16):
+                    a_ = rnd.random() * math.tau
+                    r_ = rnd.uniform(4.0, 6.5)
+                    x_, y_ = p.x + math.cos(a_) * r_, p.y + math.sin(a_) * r_
+                    if (0 < x_ < w.level.W and 0 < y_ < w.level.H and not w.level.is_solid(int(x_), int(y_))
+                            and w.level.line_of_sight(p.x, p.y, x_, y_)):
+                        self.x, self.y = x_, y_
+                        break
+                w.fire_puff(self.x, self.y, 18)
+                w.snd("wretch_blink", self.x, self.y)
+                self.cd = min(self.cd, 0.5)       # and opens fire straight away
+            shooter = "caster"
         elif sh:
             shooter = ai
         # ---------------- shared ranged behaviour
         if shooter and sh and p.alive:
             rng_ = sh["rng"]
             keep = {"gunner": (3.0, 7.5), "sniper": (6.0, 11.0), "caster": (3.0, 8.0), "lobber": (2.5, 8.0), "spewer": (0.0, 3.2),
-                    "summoner": (5.0, 9.0)}.get(shooter, (3, 8))
+                    "summoner": (5.0, 9.0), "heavy": (4.0, 9.0), "snake": (0.0, 0.0)}.get(shooter, (3, 8))
             if speed > 0:
                 if self.los and d < keep[0]:
                     tx, ty = -ux, -uy
@@ -1136,14 +1300,16 @@ class Enemy:
                 tx = ty = 0.0
                 if self.aim_t <= 0:
                     w.enemy_shoot(self, sh, math.atan2(dy, dx))
-            elif self.cd <= 0 and self.los and d < rng_:
+            elif self.cd <= 0 and self.los and sh.get("minr", 0) < d < rng_:
                 self.cd = rnd.uniform(*sh["cd"])
                 if shooter == "sniper":
-                    self.aim_t = 0.8
+                    self.aim_t = sh.get("aimed", 0.8)
                     w.snd("turret_beep", self.x, self.y, 0.7)
                 else:
                     self.burst = sh["burst"]
-                    self.burst_t = 0.0
+                    self.burst_t = sh.get("windup", 0.0)
+                    if sh.get("windup"):
+                        w.snd("servo", self.x, self.y, 0.8)
             if self.burst > 0:
                 self.burst_t -= dt
                 if self.burst_t <= 0:
@@ -1156,6 +1322,8 @@ class Enemy:
                             off = math.tau * i / n
                         else:
                             off = sh["spread"] * (i / (n - 1) - 0.5) if n > 1 else rnd.uniform(-0.04, 0.04)
+                        if sh.get("jitter"):
+                            off += rnd.uniform(-sh["jitter"], sh["jitter"])
                         w.enemy_shoot(self, sh, base + off)
             face = (dx, dy) if self.los else None
         return tx, ty, speed, face
@@ -1545,8 +1713,24 @@ class World:
                   maxspeed=sh["speed"], gas=sh.get("gas", 0.0))
         pr.effect = sh.get("effect")
         pr.owner = e
+        pr.dtype = sh.get("dtype") or "kinetic"
+        if sh.get("rad"):
+            pr.rad = sh["rad"]
         self.projs.append(pr)
-        self.snd({"bolt": "turret_shot", "fireball": "fireball", "coin": "clatter"}.get(k, "enemy_shot"), e.x, e.y, 0.7)
+        snd = {"bolt": "turret_shot", "fireball": "fireball", "coin": "clatter"}.get(k, "enemy_shot")
+        if getattr(e, "weapon", None) is not None and e.weapon.st.get("sound"):
+            snd = e.weapon.st["sound"]          # a real gun sounds like itself
+        self.snd(snd, e.x, e.y, 0.7)
+
+    def fire_puff(self, x, y, n=10):
+        for _ in range(n):
+            a = rnd.random() * math.tau
+            s_ = rnd.uniform(0.8, 2.5)
+            self.add(Particle("fire", x, y, rnd.uniform(0.2, 1.0), math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(0.5, 2), 0.5,
+                              rnd.choice(((255, 200, 90), (255, 120, 30), (220, 60, 20))), rnd.uniform(8, 14)))
+        for _ in range(n // 2):
+            self.add(Particle("smoke", x + rnd.uniform(-0.2, 0.2), y + rnd.uniform(-0.2, 0.2), 0.6, rnd.uniform(-0.3, 0.3),
+                              rnd.uniform(-0.3, 0.3), rnd.uniform(0.6, 1.4), 1.2, (60, 50, 45), 0.35))
 
     def player_effect(self, kind, src=None, who=None):
         p = who or (self.nearest_player(src.x, src.y) if src is not None else self.player)
@@ -1562,6 +1746,16 @@ class World:
                 self.message("CHILLED - slowed" if kind == "chill" else "ENTHRALLED - controls reversed",
                              (150, 210, 255) if kind == "chill" else (255, 120, 200))
             p.status[kind] = 2.6
+        elif kind in ("poison", "venom"):       # snake bites and cobra spit: 4 s; a scorpion sting: 7 s and stronger
+            if "poison" not in p.status:
+                self.message("POISONED", (150, 230, 60))
+            p.status["poison"] = max(p.status.get("poison", 0), 7.0 if kind == "venom" else 4.0)
+            if kind == "venom":
+                p.status["venom"] = 7.0
+        elif kind == "burn":
+            if "burn" not in p.status:
+                self.message("ON FIRE", (255, 140, 40))
+            p.status["burn"] = max(p.status.get("burn", 0), 2.5)
 
     def boss_awake(self, b):
         self.message("%s AWAKENS" % b.title, b.color)
@@ -2130,6 +2324,16 @@ class World:
         if isinstance(fx, dict):   # beam stats come unscaled
             burn = burn * 1.4 * self._shooter.dmg_mult()
         e.last_hit_by = getattr(fx, "owner", None) if not isinstance(fx, dict) else self._shooter
+        armor = (getattr(e, "bdef", None) or {}).get("armor")
+        if armor and getattr(fx, "kind", None) != "rail" and ammo != "pen" and getattr(fx, "effect", None) != "sabot":
+            tg = getattr(e, "target", None) or self.player
+            fx_, fy_ = tg.x - e.x, tg.y - e.y
+            vl = math.hypot(vx, vy) or 1
+            if (vx * fx_ + vy * fy_) / ((math.hypot(fx_, fy_) or 1) * vl) < -0.35:     # hit from the front: the pincers take it
+                dmg *= armor
+                if rnd.random() < 0.5:
+                    self.add(Particle("spark", e.x, e.y, 0.5, -vx * 0.1, -vy * 0.1, rnd.uniform(1, 3), 0.25, (255, 230, 160), 2))
+                    self.snd("tink", e.x, e.y, 0.4)
         dealt = self.typed(e, dmg, dtype, ammo)
         e.hit(self, dealt, vx, vy)
         tl = get("tier_leech")
@@ -2319,8 +2523,10 @@ class World:
             self.snd("stalker_screech", e.x, e.y)
         elif e.bdef:
             bd = e.bdef
-            if e.weapon is not None and rnd.random() < 0.35:
+            if e.weapon is not None and rnd.random() < bd.get("drop", 0.35):     # gun-toting monsters drop what they carried
+                e.weapon.ammo = e.weapon.st["mag"]
                 self.loot.append(Loot("weapon", e.x, e.y, e.weapon, pop=True))
+                e.weapon = None
             if k == "chestmimic":
                 if rnd.random() < 0.6:
                     self.drop_weapon(e.x, e.y, 1.0)
@@ -3250,7 +3456,8 @@ class World:
                         if b.blast or k == "acid":
                             self.impact(b, b.x, b.y)
                         else:
-                            self.hurt_player(b.dmg, b.x - b.vx, b.y - b.vy, who=pl, dtype=CH.HOSTILE_TYPE.get(k, "kinetic"))
+                            self.hurt_player(b.dmg, b.x - b.vx, b.y - b.vy, who=pl,
+                                             dtype=b.dtype if b.dtype not in (None, "kinetic") else CH.HOSTILE_TYPE.get(k, "kinetic"))
                         if b.effect:
                             self.player_effect(b.effect, b.owner, who=pl)
                         if k == "chem" and b.gas:

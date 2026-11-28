@@ -85,6 +85,12 @@ def A(name, **kw):
 
 # Each boss: 3 phases (100-66%, 66-33%, 33-0%) of attack lists, escalating from simple to bullet hell.
 BOSSES = {
+    # a floating eye ringed with eyestalks: every stalk has its own ray (scorch / frost / venom / charm / death) and spits plasma
+    "ocularch": dict(title="THE OCULARCH", r=1.0, speed=0.85, fly=True, color=(205, 120, 255), stalks=8, phases=[
+        [A("eyebeams", n=2, sweep=0.4), A("eyeorbs", n=6), A("aimed", n=6, kind="bolt"), A("eyebeams", n=3, sweep=0.3)],
+        [A("eyebeams", n=4, sweep=0.8), A("eyeorbs", n=10, homing=0.6), A("laser", sweep=1.8), A("ring", count=18, kind="plasma")],
+        [A("eyebeams", n=6, sweep=1.3, duration=2.0), A("eyeorbs", n=16, homing=0.8, speed=6.5), A("laser", sweep=3.2),
+         A("spiral", arms=5, duration=5, kind="plasma"), A("blink")]]),
     # Limbo
     "gatekeeper": dict(title="THE GATEKEEPER", r=1.0, speed=1.0, fly=True, color=(160, 210, 255), phases=[
         [A("aimed", n=5), A("ring", count=14), A("summon", kind="shade", n=3)],
@@ -226,6 +232,38 @@ ENEMIES.update({
                           shot=dict(shot("chem", 9.0, 3, (190, 235, 40), 0.22, count=3, spread=0.4, burst=8, gap=0.07, cd=(2.4, 3.2), rng=4.5), gas=5.0)),
     "shieldbearer": dict(ai="shield", hp=28, speed=1.1, r=0.4, dmg=16, score=480, hz=1.1, blood=ASH, gibs=BONY + METAL),
 })
+# ---------------------------------------------------------------- heavy gunners, vermin and fire demons
+VENOM = (110, 190, 40)
+ROACH = (150, 125, 60)
+CHITIN = ["gib_chitin", "gib_chitin", "gib_spiderleg", "gib_gut", "gib_spiderleg"]
+SCALY = ["gib_meat", "gib_gut", "gib_bone", "gib_rib", "gib_meat"]
+DEVILISH = FLESHY + ["gib_bone", "gib_jaw"]
+ENEMIES.update({
+    # the Pink Melter's big brother: lugs a real heavy weapon (chaingun / railgun / barrage / tactical nuke) and may drop it
+    "pinkheavy": dict(ai="pinkgunner", hp=42, speed=0.95, r=0.5, dmg=18, score=950, hz=1.5, blood=PINK, gibs=FLESHY + ["gib_gut", "gib_meat"],
+                      melty=True, puddle=(200, 80, 140), stride=1.3, grip=(0.55, 1.05), drop=0.3,
+                      arsenal=[("chaingun", 3.0), ("railgun", 3.0), ("barrage", 2.0), ("tac_nuke", 1.6)]),
+    # snakes: weave in, coil, then strike; the bite poisons. The cobra also spits venom from range.
+    "viper": dict(ai="snake", hp=6, speed=2.4, r=0.3, dmg=10, score=180, hz=0.3, blood=RED, gibs=SCALY, on_hit="poison", stride=0.8),
+    "cobra": dict(ai="snake", hp=10, speed=2.0, r=0.33, dmg=11, score=280, hz=0.75, blood=RED, gibs=SCALY, on_hit="poison", stride=0.8,
+                  shot=dict(shot("orb", 8.0, 6, (150, 235, 50), 0.13, count=2, spread=0.16, cd=(2.6, 3.4), rng=6.5), effect="poison",
+                            dtype="chemical")),
+    # armoured pincers soak most of what hits it from the front; the tail sting is telegraphed, hits hard and poisons badly
+    "scorpion": dict(ai="scorpion", hp=18, speed=1.7, r=0.45, dmg=12, score=420, hz=0.5, blood=VENOM, gibs=CHITIN, armor=0.35, stride=1.0),
+    # giant cockroaches come in packs, jink sideways when you aim at them and shrug off radiation and blasts
+    "roach": dict(ai="roach", hp=4, speed=3.3, r=0.28, dmg=6, score=70, hz=0.25, blood=ROACH, gibs=CHITIN, pack=(3, 5), stride=0.6),
+    # fire demons: flitting imps throw fireballs, pit demons breathe fire, devils hurl volleys of hellfire and blink away
+    "imp": dict(ai="imp", hp=6, speed=2.6, r=0.26, dmg=8, score=170, hz=1.35, blood=RED, gibs=DEVILISH, fly=True, pack=(2, 3),
+                shot=dict(shot("fireball", 7.5, 7, (255, 130, 40), 0.15, cd=(1.5, 2.3), rng=8.0, blast=0.6), effect="burn")),
+    "pitdemon": dict(ai="breather", hp=34, speed=1.15, r=0.52, dmg=18, score=650, hz=1.45, blood=RED, gibs=DEVILISH + ["gib_gut"], stride=1.3),
+    "devil": dict(ai="devil", hp=24, speed=1.6, r=0.36, dmg=14, score=750, hz=1.25, blood=RED, gibs=DEVILISH,
+                  shot=dict(shot("fireball", 6.5, 12, (255, 100, 30), 0.24, count=3, spread=0.55, cd=(2.4, 3.2), rng=9.0, blast=1.0),
+                            effect="burn")),
+})
+# extra damage resistances for single monsters, on top of their category (damage.KIND_MULT)
+KIND_RESIST = {"roach": {"radiation": 0.15, "explosive": 0.5, "chemical": 0.5},
+               "imp": {"fire": 0.1}, "pitdemon": {"fire": 0.0}, "devil": {"fire": 0.1}}
+
 SIGNATURE = {"facility": "pinkmelt", "ossuary": "bonepriest", "otherworld": "rustbound", "outpost": "wendigo", "hell": "cinderfiend",
              "limbo": "mourner", "lust": "enthraller", "gluttony": "devourer", "greed": "chestmimic", "wrath": "boghag",
              "heresy": "flagellant", "violence": "hookman", "nuclear": "raddrone", "biotech": "clone", "sewer": "lurker",

@@ -2,6 +2,7 @@
 import random
 from collections import deque
 from biomes import BIOMES
+from bestiary import ENEMIES as _BEST
 
 # enemy types unlocked by depth: (min_depth, type, weight)
 ENEMY_TABLE = [
@@ -15,6 +16,26 @@ NOT_FROM_HIVES = {"turret", "walker", "brute", "mimic", "chestmimic", "mourner",
 ENEMY_TABLE += [(1, "pinkmelt", 1.0)] + [(2, k, 0.35) for k in (
     "bonepriest", "rustbound", "wendigo", "cinderfiend", "mourner", "enthraller", "devourer", "chestmimic", "boghag",
     "flagellant", "hookman", "raddrone", "clone", "lurker", "hazmatsprayer", "shieldbearer")]
+# vermin, fire demons and the Pink Heavy roam everywhere
+ENEMY_TABLE += [(1, "viper", 1.6), (1, "roach", 0.45), (2, "scorpion", 1.4), (3, "cobra", 1.2),
+                (2, "imp", 0.7), (3, "pitdemon", 1.0), (4, "devil", 0.9), (2, "pinkheavy", 1.0)]
+# (first depth, depth it reaches full strength): weight climbs (quadratically) in between - rare early, common later
+RAMP = {"pinkheavy": (2, 5), "pitdemon": (3, 5), "devil": (4, 6)}
+# where the new monsters like to live (on top of the biome's own bias)
+HOMES = {"pinkheavy": {"facility": 2.0, "nuclear": 1.5},
+         "viper": {"wrath": 3.0, "otherworld": 2.0, "ossuary": 1.5}, "cobra": {"wrath": 3.0, "otherworld": 2.0, "greed": 1.5},
+         "scorpion": {"hell": 2.5, "ossuary": 2.0, "violence": 2.0},
+         "roach": {"sewer": 4.0, "gluttony": 3.0, "nuclear": 2.5, "facility": 1.5, "biotech": 1.5},
+         "imp": {"hell": 4.0, "heresy": 3.0, "lust": 2.0, "wrath": 2.0, "violence": 2.0},
+         "pitdemon": {"hell": 3.0, "violence": 3.0, "heresy": 2.0}, "devil": {"hell": 3.0, "heresy": 3.0, "greed": 2.0}}
+
+
+def ramp(kind, depth):
+    r = RAMP.get(kind)
+    if not r:
+        return 1.0
+    a, b = r
+    return max(0.06, min(1.0, ((depth - a + 1) / (b - a + 1)) ** 2))
 
 
 def weighted(rng, items):
@@ -153,7 +174,8 @@ class Level:
         # --- populate rooms
         bias = B["bias"]
         sig = set(B["signature"])
-        kinds = [(k, w * bias.get(k, 1.0)) for d, k, w in ENEMY_TABLE if depth >= d or k in sig]
+        kinds = [(k, w * bias.get(k, 1.0) * HOMES.get(k, {}).get(biome, 1.0) * ramp(k, depth))
+                 for d, k, w in ENEMY_TABLE if depth >= d or k in sig]
         hive_kinds = [(k, w) for k, w in kinds if k not in NOT_FROM_HIVES]
         for r in rooms[1:]:
             free = [(x, y) for x, y in r.cells() if self.solid[self.i(x, y)] == 0 and (x, y) != (ex, ey)
@@ -177,7 +199,13 @@ class Level:
             for _ in range(rng.randint(1, 3 + depth)):
                 if free:
                     x, y = free.pop()
-                    self.enemies.append((weighted(rng, kinds), x + 0.5, y + 0.5))
+                    kind = weighted(rng, kinds)
+                    self.enemies.append((kind, x + 0.5, y + 0.5))
+                    pack = (_BEST.get(kind) or {}).get("pack")
+                    for _ in range(rng.randint(*pack) - 1 if pack else 0):     # roaches and imps come in packs
+                        if free:
+                            x, y = free.pop()
+                            self.enemies.append((kind, x + 0.5, y + 0.5))
             if free and rng.random() < 0.3:
                 x, y = free.pop()
                 self.pickups.append(("health", x + 0.5, y + 0.5))

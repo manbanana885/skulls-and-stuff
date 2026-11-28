@@ -15,7 +15,20 @@ STYLE = {
     "orb": ("orb", None, 0.18, 0.0), "bile": ("orb", (180, 160, 60), 0.2, 0.0), "fireball": ("fireball", (255, 120, 30), 0.22, 0.8),
     "coin": ("orb", (255, 215, 70), 0.14, 0.0), "thorn": ("orb", (190, 120, 80), 0.15, 0.0), "spore": ("orb", (90, 255, 210), 0.2, 0.0),
     "acid_orb": ("orb", (130, 240, 60), 0.2, 0.0), "rocket": ("rocket", (255, 90, 40), 0.18, 1.2), "bolt": ("bolt", None, 0.14, 0.0),
+    "plasma": ("plasma", (150, 255, 120), 0.2, 0.7),
 }
+
+# the Ocularch's eye-rays: colour, what the ray does to you, damage, damage type
+EYE_RAYS = {"scorch": ((255, 80, 40), "burn", 11, "fire"), "frost": ((140, 210, 255), "chill", 8, "cryo"),
+            "venom": ((150, 240, 70), "poison", 8, "chemical"), "charm": ((255, 120, 220), "confuse", 6, "electrical"),
+            "death": ((240, 240, 255), None, 18, "radiation")}
+
+
+def stalk_tip(b, k):
+    """World position (x, y, z) of eyestalk k's eye: a crown of stalks around the top of the body."""
+    n = b.sp.get("stalks", 8)
+    a = k * math.tau / n + b.dir * math.tau / 8
+    return b.x + math.cos(a) * b.r * 0.75, b.y + math.sin(a) * b.r * 0.75, b.hz + 0.7
 
 
 def eel_points(e, k, t, n=12):
@@ -228,6 +241,36 @@ def a_blink(b, w):
     yield 0.6
 
 
+def a_eyebeams(b, w, n=3, sweep=0.5, duration=1.5, tele=0.75):
+    """Several eyestalks each lock on with a thin sight-line, then fire their own kind of ray in a short sweep."""
+    a0 = aim(b, w)
+    sgn = rnd.choice((1, -1))
+    rays = list(EYE_RAYS)
+    rnd.shuffle(rays)
+    stalks = list(range(b.sp.get("stalks", 8)))
+    rnd.shuffle(stalks)
+    for i in range(n):
+        spread = (i - (n - 1) / 2) * 0.34
+        b.eyebeams.append(dict(k=stalks[i % len(stalks)], a0=a0 + spread - sgn * sweep / 2, sweep=sgn * sweep, t=-i * 0.12,
+                               tele=tele, dur=duration, ray=rays[i % len(rays)]))
+    sfx.play("turret_beep", 1.0)
+    yield tele + duration + 0.3 + n * 0.12
+
+
+def a_eyeorbs(b, w, n=6, speed=5.5, homing=0.0):
+    """Plasma balls spat from the eyestalks in turn."""
+    for i in range(n):
+        sx, sy, sz = stalk_tip(b, rnd.randrange(b.sp.get("stalks", 8)))
+        t = getattr(b, "target", None) or w.player
+        a = math.atan2(t.y - sy, t.x - sx) + rnd.uniform(-0.12, 0.12)
+        w.projs.append(Proj("plasma", sx, sy, sz, math.cos(a) * speed, math.sin(a) * speed, b.dmg, hostile=True, life=6.0,
+                            color=(150, 255, 120), r=0.2, blast=0.7, homing=homing, maxspeed=speed))
+        for _ in range(4):
+            w.add(Particle("glow", sx, sy, sz, rnd.uniform(-1, 1), rnd.uniform(-1, 1), 0, 0.3, (150, 255, 120), 2))
+        sfx.play("shot_plasma", 0.45)
+        yield 0.13
+
+
 def a_eel(b, w):
     for k in range(3 + b.phase):
         p = b.target or w.nearest_player(b.x, b.y)
@@ -240,7 +283,7 @@ def a_eel(b, w):
 
 ATTACKS = {"aimed": a_aimed, "fan": a_fan, "ring": a_ring, "spiral": a_spiral, "wave": a_wave, "homing": a_homing,
            "mortar": a_mortar, "charge": a_charge, "slam": a_slam, "laser": a_laser, "summon": a_summon, "flower": a_flower,
-           "blink": a_blink, "eel": a_eel}
+           "blink": a_blink, "eel": a_eel, "eyebeams": a_eyebeams, "eyeorbs": a_eyeorbs}
 
 
 # ---------------------------------------------------------------- boss
@@ -272,6 +315,7 @@ class Boss:
         self.charging = 0.0
         self.cvx = self.cvy = 0.0
         self.laser = None
+        self.eyebeams = []
         self.burn = self.burn_dps = self.slow = 0.0
         self.eels = sp.get("eels", 0)
         self.eel_color = sp.get("eel_color", self.color)
@@ -407,10 +451,38 @@ class Boss:
                     w.add(Particle("spark", self.x + ex * t, self.y + ey * t, 1.0, rnd.uniform(-2, 2), rnd.uniform(-2, 2), 2, 0.3, self.color, 2))
             else:
                 self.laser = None
+        if self.eyebeams:
+            self.update_eyebeams(w, dt)
         if self.eels:
             update_eels(self, w, dt, 16)
         if p.alive and d < self.r + 0.35:
             w.hurt_player(22 if self.charging > 0 else 14, self.x, self.y, knock=14)
+
+    def update_eyebeams(self, w, dt):
+        for L in self.eyebeams:
+            L["t"] += dt
+            if L["t"] < 0:
+                continue
+            col, eff, dmg, dtype = EYE_RAYS[L["ray"]]
+            sx, sy, sz = stalk_tip(self, L["k"])
+            if L["t"] < L["tele"]:
+                a = L["a0"]
+                w.beams.append([sx, sy, sx + math.cos(a) * 14, sy + math.sin(a) * 14, sz, 0.03, 0.03, col, 0.25])
+                continue
+            k = min(1.0, (L["t"] - L["tele"]) / L["dur"])
+            a = L["a0"] + L["sweep"] * k
+            ex, ey = math.cos(a), math.sin(a)
+            w.beams.append([sx, sy, sx + ex * 14, sy + ey * 14, sz, 0.03, 0.03, col, 1.5])
+            for pl in w.players:
+                qx, qy = pl.x - sx, pl.y - sy
+                if pl.alive and 0 < qx * ex + qy * ey < 14 and abs(qx * -ey + qy * ex) < 0.4:
+                    if pl.invuln <= 0 and eff:
+                        w.player_effect(eff, self, who=pl)
+                    w.hurt_player(dmg + self.phase * 2, sx, sy, knock=5, who=pl, dtype=dtype)
+            if rnd.random() < dt * 20:
+                t = rnd.uniform(0.5, 12)
+                w.add(Particle("spark", sx + ex * t, sy + ey * t, sz * 0.6, rnd.uniform(-2, 2), rnd.uniform(-2, 2), 2, 0.3, col, 2))
+        self.eyebeams = [L for L in self.eyebeams if L["t"] < L["tele"] + L["dur"]]
 
     def hit(self, w, dmg, vx, vy):
         if not self.alive:

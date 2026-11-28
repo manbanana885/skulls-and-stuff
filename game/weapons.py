@@ -517,7 +517,7 @@ RARE_ONLY = False      # run_loot_test.bat: every roll is Mythical / Demonic / E
 def roll_rarity(rng, level, bonus=0):
     if RARE_ONLY:
         return rng.choice((MYTHICAL, DEMONIC, ELDRITCH, SACRED))
-    w = [60, 26, 10, 3.5, 0.8, 0.012, 0.005, 0.003, 0.0008]
+    w = [60, 26, 10, 3.5, 0.8, 0.24, 0.1, 0.06, 0.016]      # mythical and up: rare, but you will find some
     shift = min(level - 1, 8) * 0.35 + bonus
     for i in range(len(w)):
         w[i] *= (1 + shift) ** (min(i, LEGENDARY) * 0.8)     # tiers above legendary keep a fixed ratio to it
