@@ -63,6 +63,7 @@ MAX_GIBS = 320
 HARD_GIBS = {"gib_bone", "gib_rib", "gib_skull", "gib_jaw", "gib_metal", "gib_gear", "gib_chrome", "gib_armor",
              "gib_barrel", "gib_wire", "gib_plank"}
 MAX_PARTICLES = 1800
+_fx_rng = random.Random()      # cosmetic thinning draws its own numbers, so it never shifts the game's
 
 
 def resolve(level, x, y, r):
@@ -1772,6 +1773,9 @@ class World:
             self.messages.pop(0)
 
     def add(self, p):
+        keep = perf.KEEP()                                       # lower demand modes skip some cosmetic particles
+        if keep < 1.0 and p.kind != "ring" and _fx_rng.random() > keep:
+            return
         if len(self.particles) < MAX_PARTICLES * perf.FX():      # this machine's cosmetic budget
             self.particles.append(p)
 
@@ -1972,14 +1976,18 @@ class World:
         sp = math.hypot(ivx, ivy)
         ux, uy = (ivx / sp, ivy / sp) if sp > 0 else (0.0, 0.0)
         picks = names if count is None else [rnd.choice(names) for _ in range(count)]
+        share = perf.GIBS()                                      # lower demand modes: fewer gibs
+        if share < 1.0:
+            picks = _fx_rng.sample(picks, max(1, round(len(picks) * share)))
         for name in picks:
             a = rnd.random() * math.tau
             s = rnd.uniform(1.2, 4.0) * force
             self.gibs.append(Gib(name, x + rnd.uniform(-0.15, 0.15), y + rnd.uniform(-0.15, 0.15), z * rnd.uniform(0.6, 1.1),
                                  math.cos(a) * s + ux * 2.5 * force, math.sin(a) * s + uy * 2.5 * force,
                                  rnd.uniform(3.5, 7.5) * (0.7 + 0.3 * force), blood, rnd.uniform(0.3, 0.9)))
-        if len(self.gibs) > MAX_GIBS:
-            extra = len(self.gibs) - MAX_GIBS
+        cap = int(MAX_GIBS * share)
+        if len(self.gibs) > cap:
+            extra = len(self.gibs) - cap
             keep = []
             for g in self.gibs:
                 if extra > 0 and g.rest:

@@ -123,5 +123,57 @@ g.time += 5.5
 g.draw_pointer(g.screen)
 check(g._cursor_vis is False, "...and it hides after 5 s still too")
 
+# ---- cosmetics: fewer particles and gibs on lower modes
+print("particles / gibs")
+from world import Particle  # noqa: E402
+got = {}
+for mode in ("high", "mid", "low"):
+    perf.local = mode
+    g.new_world(1)
+    w = g.world
+    w.particles = []
+    for i in range(400):
+        w.add(Particle("spark", 5, 5, 1, 0, 0, 0, 5.0, (255, 255, 255)))
+        if len(w.particles) >= 300:
+            w.particles = w.particles[:0]
+            got.setdefault(mode, [0, 0])[0] += 300
+    sparks = got.get(mode, [0, 0])[0] + len(w.particles)
+    w.particles = []
+    for i in range(20):
+        w.add(Particle("ring", 5, 5, 1, 0, 0, 0, 5.0, (255, 255, 255)))
+    rings = len(w.particles)
+    w.gibs = []
+    for i in range(10):
+        w.gibs_from("zombie", 5, 5, 1)
+    got[mode] = (sparks, rings, len(w.gibs))
+    print("    %-4s  %3d / 400 sparks   %2d / 20 rings   %3d gibs from 10 zombies" % ((mode,) + got[mode]))
+hi_, mi_, lo_ = got["high"], got["mid"], got["low"]
+check(hi_[0] == 400 and 0.35 < lo_[0] / 400 < 0.55 and lo_[0] < mi_[0] < hi_[0], "LOW spawns under half the particles, MID ~70%")
+check(lo_[1] == 20, "...but never skips rings (they show blast reach)")
+check(lo_[2] <= hi_[2] * 0.45 and lo_[2] < mi_[2] < hi_[2], "fewer gibs: MID %d, LOW %d vs HIGH %d" % (mi_[2], lo_[2], hi_[2]))
+perf.local = "high"
+
+# ---- LOW draws with half-size sprites at 960 x 540 (a fresh process: the sprite size is fixed at startup)
+import subprocess  # noqa: E402
+code = ("import assets, main; g = main.Game(windowed=True); "
+        "print('RES', assets.TILE_W, g.screen.get_size()[0], g.screen.get_size()[1], g.spr['zombie'].get('walk', 0).get_width())")
+res = {}
+for mode in ("low", "high"):
+    env = dict(os.environ, SKULLS_DEMAND=mode)
+    env.pop("SKULLS_RES", None)
+    o = subprocess.run([sys.executable, "-c", code], cwd=os.path.join(ROOT, "game"), env=env, capture_output=True, text=True).stdout
+    line = next((ln for ln in o.splitlines() if ln.startswith("RES")), "RES 0 0 0 0")
+    res[mode] = [int(v) for v in line.split()[1:]]
+print("    tile / screen / zombie width:  LOW %s   HIGH %s" % (res["low"], res["high"]))
+full = res["high"][0] >= 128
+if full:
+    check(res["low"][:3] == [res["high"][0] // 2, 960, 540] and abs(res["low"][3] * 2 - res["high"][3]) <= 2,
+          "LOW starts with half-size sprites at 960 x 540 (HIGH: %d x %d)" % tuple(res["high"][1:3]))
+else:
+    check(res["low"][0] == res["high"][0], "a small sprite set (Pi edition) is used as it is")
+perf.boot, perf.local = "high", "low"
+check(perf.needs_restart(), "switching to LOW in game asks for a restart to change the sprites")
+perf.local = "high"
+
 print("FAILED: %d" % len(fails) if fails else "all demand checks passed")
 sys.exit(1 if fails else 0)

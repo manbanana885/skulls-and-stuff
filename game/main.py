@@ -3504,7 +3504,7 @@ class Game:
         info = []
         if self.best:
             info.append("Best %d" % self.best)
-        info.append("Demand: %s" % perf.MODES[perf.local]["label"])
+        info.append("Demand: %s%s" % (perf.MODES[perf.local]["label"], "  (restart to apply sprite size)" if perf.needs_restart() else ""))
         dev = self.input.device_name
         info.append(("Controller: %s" % dev) if dev else "No controller (plug one in any time)")
         for i, ln in enumerate(info):
@@ -3551,6 +3551,9 @@ class Game:
         else:
             help_ = self.SETTING_HELP.get(key, "")
         self.center_text(s, self.font, help_, H - sc(48), (170, 185, 210))
+        if perf.needs_restart():
+            self.center_text(s, self.font, "Restart the game to switch to %s sprites." % (
+                "low-res" if perf.MODES[perf.local]["half"] else "full-res"), H - sc(72), (255, 170, 90))
 
     def draw_char_row(self, s, who, row_y, chars=None, tag_dy=128):
         """Character select: three bodies walking in place, tops spinning; a P1 / P2 tag over each player's pick."""

@@ -116,8 +116,9 @@ hides after 5 seconds without mouse movement.
   startup ("Tell me a new story" plays a fresh one any time). Everything is saved as you change it.
 - **Demand mode (Settings)** steps HIGH / MID / LOW. Lower modes put fewer monsters on the
   map to go easy on slower machines, and make up for it: MID has about 3/4 of the monsters with 1.4x health,
-  LOW about half with 2x health, and both make them quicker and more aggressive. Lower modes also use fewer
-  particles. A Raspberry Pi starts on LOW, a PC on HIGH. In a net game the whole session runs at the lowest
+  LOW about half with 2x health, and both make them quicker and more aggressive. Lower modes also spawn fewer
+  particles and gibs, and LOW draws with half-size sprites at 960 x 540, stretched to fill the screen (about a
+  third of the drawing work; switching to or from LOW changes the sprites at the next launch). A Raspberry Pi starts on LOW, a PC on HIGH. In a net game the whole session runs at the lowest
   mode anyone in it has (the lobby shows everyone's), so a Pi joining a PC game isn't buried in monsters.
 
 - **Pick up: E, or the bottom face button** (A on Xbox, B on a SNES-style pad). Takes whatever you're next to

@@ -19,7 +19,12 @@ def _read_manifest():
 
 
 _manifest = _read_manifest()
-TILE_W = (_manifest or {}).get("_meta", {}).get("tile_w", 64)
+_FULL_W = (_manifest or {}).get("_meta", {}).get("tile_w", 64)
+# LOW demand: half-size sprites (and so a 960 x 540 frame) from the full-size set; a set that's already small
+# (the Raspberry Pi edition's) is used as it is
+import perf  # noqa: E402
+HALF = perf.half_res() and _FULL_W >= 128
+TILE_W = _FULL_W // 2 if HALF else _FULL_W
 S = TILE_W / 64.0            # global pixel scale (1 = 64px tiles, 2 = 128px tiles)
 
 # 2:1 dimetric projection, must match the Blender camera (rot 60/0/135)
@@ -71,6 +76,8 @@ class Sprite:
         self.dirs = meta["dirs"]
         self.anims = meta["anims"]
         self.ax, self.ay = meta["anchor"]
+        if HALF:
+            self.ax, self.ay = self.ax / 2, self.ay / 2
         self.frames = {}
         for anim, n in self.anims.items():
             per_dir = []
@@ -79,6 +86,9 @@ class Sprite:
                 for f in range(n):
                     p = os.path.join(SPR_DIR, name, "%s_%02d_%02d.png" % (anim, d, f))
                     s = pygame.image.load(p).convert_alpha()
+                    if HALF:
+                        w, h = s.get_size()
+                        s = pygame.transform.smoothscale(s, (max(1, round(w / 2)), max(1, round(h / 2))))
                     if outline:
                         s = outlined(s)
                     fr.append(s)
