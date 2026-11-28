@@ -106,6 +106,8 @@ BIOMES.update({
 for _name, _bosses in (("facility", ["liquidator", "subjectzero"]), ("ossuary", ["necroking", "gatekeeper"]),
                        ("otherworld", ["butcherking", "entwined"]), ("outpost", ["subjectzero", "hivemind"]), ("hell", ["wrathful", "archheretic"])):
     BIOMES[_name]["bosses"] = _bosses
+for _name in ("otherworld", "limbo", "biotech", "lust"):      # the Ocularch drifts through the stranger places
+    BIOMES[_name]["bosses"] = BIOMES[_name]["bosses"] + ["ocularch"]
 for _name, _b_ in BIOMES.items():
     if _b_.get("stains"):
         STAINS[_name] = _b_["stains"]

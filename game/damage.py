@@ -32,10 +32,10 @@ for _cat, _names in {
     "undead": "zombie crawler skull wretch shade hollow drowned revenant bowman bonepriest flayed hookman shieldbearer "
               "pyrewraith boghag",
     "robot": "drone turret walker raddrone",
-    "demon": "hellspawn brute cinderfiend berserker heretic flagellant siren enthraller thornling harpy hoarder",
+    "demon": "imp pitdemon devil hellspawn brute cinderfiend berserker heretic flagellant siren enthraller thornling harpy hoarder",
     "construct": "goldgolem mourner chestmimic mimic rustbound",
     "mutant": "leech spider spitter bloater stalker specimen sporewalker clone radhound meltgunner meltman acidcrab eelmaw "
-              "lurker sludgegunner hazmatsprayer glutton maggot devourer wendigo pinkmelt",
+              "lurker sludgegunner hazmatsprayer glutton maggot devourer wendigo pinkmelt pinkheavy viper cobra scorpion roach",
 }.items():
     for _n in _names.split():
         CATEGORY[_n] = _cat
@@ -46,7 +46,7 @@ BOSS_CATEGORY = {
     "midasengine": "robot", "liquidator": "robot", "distiller": "robot",
     "wrathful": "demon", "archheretic": "demon", "butcherking": "demon", "thornmother": "demon", "tempestqueen": "demon",
     "entwined": "demon", "triplemaw": "demon",
-    "gorged": "mutant", "subjectzero": "mutant", "hivemind": "mutant", "coreabom": "mutant", "sewerking": "mutant",
+    "ocularch": "mutant", "gorged": "mutant", "subjectzero": "mutant", "hivemind": "mutant", "coreabom": "mutant", "sewerking": "mutant",
     "gatorbeast": "mutant", "melttitan": "mutant",
 }
 
@@ -62,13 +62,16 @@ WEAPON_TYPE = {
 }
 
 
+KIND_MULT = {}      # per-monster overrides, filled from bestiary.KIND_RESIST
+
+
 def category(kind):
     return CATEGORY.get(kind, "mutant")
 
 
 def mult(e, dtype, ammo=None):
     cat = getattr(e, "cat", None)
-    m = MULT.get(cat, {}).get(dtype or "kinetic", 1.0)
+    m = MULT.get(cat, {}).get(dtype or "kinetic", 1.0) * KIND_MULT.get(getattr(e, "kind", None), {}).get(dtype or "kinetic", 1.0)
     if ammo and (dtype or "kinetic") == "kinetic":
         m *= AMMO[ammo].get(cat, 1.0)
     return m

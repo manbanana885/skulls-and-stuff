@@ -1309,7 +1309,8 @@ class Game:
                 gsp = spr.get("gun_" + WP.sprite_arch(e.weapon.arch))
                 if gsp:
                     a_ = e.dir * math.tau / 8
-                    ga, gb = to_screen(e.x + math.cos(a_) * 0.35, e.y + math.sin(a_) * 0.35, 0.7)
+                    reach_, hz_ = (e.bdef or {}).get("grip", (0.35, 0.7))
+                    ga, gb = to_screen(e.x + math.cos(a_) * reach_, e.y + math.sin(a_) * reach_, hz_)
                     gimg = gsp.get("idle", 0, e.dir)
                     n += 1
                     items.append((e.x + e.y + 0.02, n, gimg, ga + ox - gsp.ax, gb + oy - gsp.ay))
@@ -1354,6 +1355,12 @@ class Game:
                     limg = self.tinted(limg, (160, 210, 255))
                 elif "confuse" in pl.status:
                     timg = self.tinted(timg, (255, 150, 220))
+                elif "burn" in pl.status:
+                    timg = self.tinted(timg, (255, 170, 110))
+                    limg = self.tinted(limg, (255, 170, 110))
+                elif "poison" in pl.status:
+                    timg = self.tinted(timg, (175, 240, 120))
+                    limg = self.tinted(limg, (175, 240, 120))
                 n += 1
                 items.append((plkey, n, limg, plx - legs.ax, ply - legs.ay))
                 n += 1

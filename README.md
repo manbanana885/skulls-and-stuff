@@ -15,7 +15,14 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - 17 module makers, each leaning its modules' power, speed, reach, recharge or stamina
 - Forward shields face where you aim and rear guards cover your back; both stop shots *and* claws from their
   side (explosions still get through)
-- Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
+- Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls. The Ocularch, a
+  floating eye ringed with eyestalks, fires scorching, freezing, venom, charm and death rays and spits plasma
+- Pink Heavies (rare early, common from about sector 5) lug a real chaingun, railgun, barrage launcher or
+  tactical nuke, and sometimes drop it
+- Vermin: vipers and spitting cobras that coil and strike with poison, armoured scorpions with a telegraphed
+  venom sting, and packs of giant cockroaches that dodge your aim and shrug off radiation
+- Fire demons: fireball-throwing imps, fire-breathing pit demons and devils that hurl hellfire and blink away;
+  burning and poison now tick on you until they wear off
 - Damage types (Kinetic, Explosive, Fire, Chemical, Cryo, Radiation, Electrical) against enemy categories
   (Undead, Robot, Demon, Construct, Mutant): bring the right gun. Kinetic guns can roll Penetrating Core or
   Expanding rounds; optional colour-coded damage numbers ([Q / Y] on the title or pause screen)
