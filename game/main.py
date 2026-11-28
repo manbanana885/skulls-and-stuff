@@ -12,6 +12,7 @@ from assets import load_all, to_screen, dir_index, glow, shadow, vignette, ROOT 
 from world import World, Particle  # noqa: E402
 import characters as CH  # noqa: E402
 import weapons as WP  # noqa: E402
+import support as SU  # noqa: E402
 from biomes import BIOMES, biome_for  # noqa: E402
 from bosses import eel_points  # noqa: E402
 import sfx  # noqa: E402
@@ -2085,7 +2086,7 @@ class Game:
                 continue
             pkey = pl.x + pl.y
             kind = su.kind
-            if kind == "shield":
+            if kind in SU.SHIELDS:
                 n += 1
                 items.append((pkey - 0.02, n, None, lambda su=su, pl=pl: self.draw_shield(su, pl, ground, False), 0))
                 n += 1
@@ -2315,7 +2316,8 @@ class Game:
         elif down:
             col = (70, 60, 90)
         else:
-            col = tuple(int(a + (b - a) * frac) for a, b in zip((255, 110, 110), (110, 200, 255)))
+            full = (110, 200, 255) if su.kind == "shield" else SU.KINDS[su.kind]["color"]
+            col = tuple(int(a + (b - a) * frac) for a, b in zip((255, 110, 110), full))
         lo, hi = [], []
         for j in range(m + 1):
             a = su.ang - half + 2 * half * j / m
@@ -2353,10 +2355,15 @@ class Game:
         self.add_glow(mid[0], mid[1] + sc(14), sc(34), (col[0] // 8, col[1] // 7, col[2] // 6))
 
     def support_card(self, s, su, x, y, compare=None, title=None, width=None, alpha=170):
-        import support as SU
         lines = [(self.mid, su.name, su.color),
                  (self.small, "%s %s  -  LVL %d" % (su.rarity_name, su.label, su.level), (170, 175, 190)),
                  (self.small, "MODULE: " + su.blurb(), (150, 220, 160))]
+        if su.maker:
+            M_ = SU.MAKERS[su.maker]
+            lines.append((self.small, [(su.maker.upper(), M_["color"]), ("  -  " + M_["blurb"], (150, 150, 165))], None))
+            summ = SU.maker_summary(su.lean, su.kind)
+            if summ:
+                lines.append((self.small, summ, tuple(int(c_ * 0.8 + 40) for c_ in M_["color"])))
         dt_ = su.dtype()
         if dt_:
             import damage as DM
@@ -2589,11 +2596,12 @@ class Game:
             by += sc(22)
         for su in p.equipped():
             s.blit(self.small.render(su.name, True, su.color), (x, by))
-            if su.kind == "shield":
+            if su.kind in SU.SHIELDS:
                 cap = max(1, su.p["capacity"])
                 k = 1 - su.down / su.p["recharge"] if su.down > 0 else su.charge / cap
                 pygame.draw.rect(s, (30, 34, 44), (x, by + sc(16), bw, sc(4)))
-                pygame.draw.rect(s, (90, 90, 120) if su.down > 0 else (110, 200, 255), (x, by + sc(16), int(bw * k), sc(4)))
+                pygame.draw.rect(s, (90, 90, 120) if su.down > 0 else (110, 200, 255) if su.kind == "shield" else SU.KINDS[su.kind]["color"],
+                                 (x, by + sc(16), int(bw * k), sc(4)))
             elif su.kind == "medbot" and su.healing:
                 s.blit(self.small.render("+%.1f/s" % su.p["heal"], True, (120, 255, 150)), (x + bw - sc(40), by))
             elif su.kind in ("mgturret", "mortar"):
@@ -2640,7 +2648,6 @@ class Game:
         # a barrel / your turret in reach: say what E / A will do with it
         tg = getattr(w, "pickup_by", {}).get(p.idx)
         if tg is not None and tg[0] in ("barrel", "turret") and p.alive:
-            import support as SU
             key = "[E / A]" if p.idx == 0 else "[A]"
             if tg[0] == "barrel":
                 bx_, by_ = tg[1][0] + 0.5, tg[1][1] + 0.5
@@ -2733,7 +2740,7 @@ class Game:
                 busy = 1.0
             elif su.kind == "grenade" and su.cd > 0:
                 busy = min(1.0, su.cd / su.p["cooldown"])
-            elif su.kind == "shield" and su.down > 0:
+            elif su.kind in SU.SHIELDS and su.down > 0:
                 busy = su.down / su.p["recharge"]
             s.blit(icon, icon.get_rect(center=rect.center))
             if busy > 0:

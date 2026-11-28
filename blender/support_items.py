@@ -221,3 +221,57 @@ ASSETS["sup_sawbot"] = (build_sup_sawbot, 1, {"spin": 8}, (72, 72), 0.0)
 ASSETS["sup_shield"] = (build_sup_shield, 1, {"idle": 8}, (72, 72), 0.0)
 ASSETS["sup_medbot"] = (build_sup_medbot, 8, {"hover": 4}, (72, 72), 0.0)
 ASSETS["sup_gunbot"] = (build_sup_gunbot, 16, {"hover": 4}, (72, 72), 0.0)
+
+
+# ---- forward / rear shields: fixed walls instead of an orbiting ring
+mat("shieldglow_gold", (0.8, 0.55, 0.15), 0.0, 0.1, (1.0, 0.7, 0.25), 1.8)
+mat("shieldglow_violet", (0.45, 0.25, 0.8), 0.0, 0.1, (0.65, 0.4, 1.0), 1.8)
+
+
+def build_sup_shield_front():
+    """A tall curved wall of glowing plates on a heavy emitter sled, studded like a tower shield."""
+    root = empty("sf_root")
+    spin = empty("sf_spin", (0, 0, 0), root)
+    box("sf_sled", (0.16, 0.42, 0.06), (-0.04, 0, -0.18), M["darkmetal"], spin)
+    box("sf_rail", (0.04, 0.44, 0.03), (0.05, 0, -0.14), M["hazard"], spin)
+    n = 7
+    for k in range(n):
+        a = -0.6 + 1.2 * k / (n - 1)
+        x, y = math.cos(a) * 0.26 - 0.2, math.sin(a) * 0.26
+        box("sf_plate%d" % k, (0.03, 0.075, 0.36), (x, y, 0.03), M["shieldglow_gold"], spin, (0, 0, a))
+        sphere("sf_stud%d" % k, 0.014, (x + 0.02, y, 0.18), M["chrome"], spin)
+    for s_ in (-1, 1):
+        a = s_ * 0.68
+        x, y = math.cos(a) * 0.26 - 0.2, math.sin(a) * 0.26
+        cyl("sf_post%d" % s_, 0.03, 0.42, (x, y, 0.03), M["steel2"], spin, segs=8)
+        sphere("sf_tip%d" % s_, 0.035, (x, y, 0.25), M["glow_orange"], spin)
+    sphere("sf_boss", 0.05, (0.08, 0, 0.05), M["brass"], spin, (0.6, 1, 1))
+
+    def pose(anim, t):
+        spin.rotation_euler.z = math.tau * t
+    return root, pose
+
+
+def build_sup_shield_rear():
+    """A ribbed violet shell on a backpack frame: a turtle's back for watching your six."""
+    root = empty("sr_root")
+    spin = empty("sr_spin", (0, 0, 0), root)
+    box("sr_frame", (0.12, 0.26, 0.3), (0.06, 0, -0.02), M["darkmetal"], spin)
+    for s_ in (-1, 1):
+        bone("sr_strap%d" % s_, (0.12, s_ * 0.09, 0.12), (0.12, s_ * 0.09, -0.15), 0.018, M["rubber"], spin)
+    n = 6
+    for k in range(n):
+        a = -0.95 + 1.9 * k / (n - 1)
+        x, y = -math.cos(a) * 0.2, math.sin(a) * 0.2
+        box("sr_rib%d" % k, (0.035, 0.08, 0.32), (x, y, 0.02), M["shieldglow_violet"], spin, (0, 0, -a))
+        box("sr_ridge%d" % k, (0.04, 0.02, 0.34), (x - 0.01, y, 0.02), M["steel2"], spin, (0, 0, -a))
+    sphere("sr_dome", 0.09, (-0.08, 0, 0.2), M["steel2"], spin, (1, 1.6, 0.5), 12, 8, True)
+    sphere("sr_eye", 0.025, (-0.16, 0, 0.21), M["glow_red"], spin)
+
+    def pose(anim, t):
+        spin.rotation_euler.z = math.tau * t
+    return root, pose
+
+
+ASSETS["sup_shield_front"] = (build_sup_shield_front, 1, {"idle": 8}, (72, 72), 0.0)
+ASSETS["sup_shield_rear"] = (build_sup_shield_rear, 1, {"idle": 8}, (72, 72), 0.0)

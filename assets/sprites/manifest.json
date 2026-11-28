@@ -5775,5 +5775,33 @@
    0.99,
    1.18
   ]
+ },
+ "sup_shield_front": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
+ },
+ "sup_shield_rear": {
+  "dirs": 1,
+  "anims": {
+   "idle": 8
+  },
+  "size": [
+   144,
+   144
+  ],
+  "anchor": [
+   72.0,
+   72.0
+  ]
  }
 }
