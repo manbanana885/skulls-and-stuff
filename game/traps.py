@@ -417,41 +417,8 @@ class Reactor(Trap):
             L.solid[L.i(cx, cy)] = 0
             w.flow_tile = None
         w.gibs_from("barrel", self.x, self.y, 0.8, force=2.0)
-        R = REACTOR_RADIUS
         x, y = self.x, self.y
-        # everything in range: monsters, bosses, barrels, crates, hives, turrets, other reactors (chain) - and the walls
-        w.explode(x, y, R, 150, col, hurt_player=False, breach=R, dtype="explosive")
-        for (px_, py_), name in list(L.props.items()):      # heavy furniture too (barrels/crates went up in the blast)
-            if math.hypot(px_ + 0.5 - x, py_ + 0.5 - y) < R and L.solid[L.i(px_, py_)] == 2                     and (px_, py_) not in w.barrels and (px_, py_) not in w.crates:
-                if any(int(s_.x) == px_ and int(s_.y) == py_ for s_ in w.spawners):
-                    continue
-                if any(t.solid and t.alive and int(t.x) == px_ and int(t.y) == py_ for t in w.traps):
-                    continue
-                L.props.pop((px_, py_), None)
-                L.solid[L.i(px_, py_)] = 0
-                if rnd.random() < 0.5:
-                    w.gibs_from("rubble", px_ + 0.5, py_ + 0.5, 0.6, px_ + 0.5 - x, py_ + 0.5 - y, count=2, force=1.4)
-        w.flow_tile = None
-        for p in w.players:          # players: brutal up close, survivable at the edge
-            d = math.hypot(p.x - x, p.y - y)
-            if p.alive and d < R:
-                p.invuln = 0.0
-                w.hurt_player(12 + 78 * (1 - d / R), x, y, knock=18, who=p, dtype="explosive")
-        from world import Particle
-        for _ in range(140):
-            a = rnd.random() * math.tau
-            s_ = rnd.uniform(0.3, 1.0) * R * 1.4
-            w.add(Particle("fire", x, y, rnd.uniform(0.1, 1.2), math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(0.5, 4), rnd.uniform(0.6, 1.4),
-                           rnd.choice((col, (255, 240, 150), (255, 150, 40))), rnd.uniform(24, 44)))
-        for _ in range(70):           # rising mushroom column
-            w.add(Particle("smoke", x + rnd.uniform(-0.8, 0.8), y + rnd.uniform(-0.8, 0.8), rnd.uniform(0.5, 4.0), rnd.uniform(-0.4, 0.4),
-                           rnd.uniform(-0.4, 0.4), rnd.uniform(2, 5), rnd.uniform(2.5, 5), (80, 90, 60), rnd.uniform(0.5, 1.0)))
-        for k, rr in enumerate((R * 0.5, R, R * 1.3)):
-            w.add(Particle("ring", x, y, 0.05, rr, 0, 0, 0.5 + 0.25 * k, col, 0.2))
-        w.flash_white = 0.9
-        w.shake = 30
-        w.hitstop = max(w.hitstop, 0.15)
-        w.snd("nuke_blast", x, y)
+        w.cataclysm(x, y, REACTOR_RADIUS, col)
         # the contamination it leaves behind
         if self.style == "rad":
             w.hazards.append([x, y, 5.0, 16.0, "rad", 9, 16.0])

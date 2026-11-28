@@ -392,6 +392,11 @@ def make_puffs(n=6, size=64, seed=3):
 
 CHEM_RAMP = [(240, 255, 200), (215, 245, 110), (180, 225, 50), (140, 190, 30), (100, 150, 20), (70, 110, 15), (45, 70, 10), (25, 40, 6)]
 CRYO_RAMP = [(240, 250, 255), (200, 235, 255), (150, 210, 255), (110, 180, 250), (80, 140, 220), (55, 100, 180), (35, 65, 120), (20, 35, 70)]
+# player rounds from these tiers keep their usual shapes but take the tier's colours: (glow, edge, core)
+TIER_PAL = {WP.DEMONIC: ((150, 20, 8), (210, 35, 22), (12, 4, 4)),
+            WP.ELDRITCH: ((28, 115, 28), (80, 240, 80), (8, 14, 8)),
+            WP.SACRED: ((100, 100, 90), (225, 225, 210), (255, 255, 255)),
+            WP.VOID: ((95, 95, 110), (255, 255, 255), (0, 0, 0))}
 FLAME_RAMP = [(255, 250, 215), (255, 225, 120), (255, 175, 55), (255, 120, 25), (225, 70, 12), (150, 35, 6), (80, 18, 4), (40, 10, 3)]
 
 
@@ -1291,6 +1296,11 @@ class Game:
             if b.eels:
                 n += 1
                 items.append((b.x + b.y + 0.4, n, None, lambda b=b, ox=ox, oy=oy: self.draw_eels(b, ox, oy), 0))
+        for sm in getattr(w, "smites", []):
+            gx, gy = ground(sm[0], sm[1])
+            if on_screen(gx, gy):
+                n += 1
+                items.append((sm[0] + sm[1] + 0.35, n, None, lambda sm=sm, gx=gx, gy=gy: self.draw_smite(sm, gx, gy), 0))
         for v in getattr(w, "voids", []):
             gx, gy = ground(v["x"], v["y"])
             if on_screen(gx, gy):
@@ -1499,6 +1509,46 @@ class Game:
         pygame.draw.circle(hole, (255, 255, 255, 230), (r + 3, r + 3), r, max(1, sc(2)))
         self.screen.blit(hole, (x - r - 3, y - r - 3))
 
+    def draw_smite(self, sm, gx, gy):
+        """Smiting: a column of light or hellfire dropping onto the target, or a forked bolt out of the sky."""
+        s = self.screen
+        x_, y_, kind, life, mx, seed = sm
+        t = 1 - life / mx                       # 0 -> 1 over its life
+        k = min(1.0, t / 0.12) * (1 - max(0.0, (t - 0.35) / 0.65))     # slams in, then fades
+        top = gy - sc(320)
+        if kind == "lightning":
+            rng = random.Random(seed * 1000 + int(t * 14))
+            pts, x0 = [], gx + rng.uniform(-sc(40), sc(40))
+            for j in range(10):
+                u = j / 9
+                jit = 0 if j in (0, 9) else rng.uniform(-sc(16), sc(16))
+                pts.append((x0 + (gx - x0) * u + jit, top + (gy - top) * u))
+            pygame.draw.lines(s, (int(120 * k), int(140 * k), int(255 * k)), False, pts, max(2, int(sc(7) * k)))
+            pygame.draw.lines(s, (255, 255, 255), False, pts, max(1, int(sc(2.5) * k)))
+            self.add_glow(gx, gy, int(sc(60) * k) + 2, (int(90 * k), int(100 * k), int(150 * k)))
+            return
+        hell = kind == "hellfire"
+        wdt = max(2, int(sc(26) * (0.5 + 0.5 * k)))
+        h = gy - top
+        outer = (int(160 * k), int(50 * k), int(10 * k)) if hell else (int(120 * k), int(120 * k), int(105 * k))
+        inner = (int(255 * k), int(170 * k), int(60 * k)) if hell else (int(255 * k), int(255 * k), int(240 * k))
+        col_s = pygame.Surface((wdt * 2, h))
+        col_s.fill(outer)
+        s.blit(col_s, (gx - wdt, top), special_flags=pygame.BLEND_ADD)
+        core = pygame.Surface((max(1, wdt // 2), h))
+        core.fill(inner)
+        s.blit(core, (gx - wdt // 4, top), special_flags=pygame.BLEND_ADD)
+        if hell:                                # flames boil up the column
+            for j in range(6):
+                fy = gy - ((t * 2.5 + j / 6) % 1.0) * h
+                sz = max(4, int(sc(34) * k))
+                img = self.flame_puff((int(seed * 10) + j) % len(self.puffs), min(len(FLAME_RAMP) - 1, 1 + j // 2), sz)
+                s.blit(img, (gx - sz / 2, fy - sz / 2), special_flags=pygame.BLEND_ADD)
+        er = pygame.Rect(0, 0, int(wdt * 3.2), int(wdt * 1.4))
+        er.center = (gx, gy)
+        pygame.draw.ellipse(s, inner, er, max(1, sc(2)))
+        self.add_glow(gx, gy, int(sc(70) * k) + 2, outer)
+
     def draw_void(self, v, gx, gy):
         """A Void black hole: a growing black sphere, white rim, crowned in fractal white fire - then it snaps shut."""
         s = self.screen
@@ -1508,8 +1558,8 @@ class Game:
         else:
             q = min(1.0, (t - g) / c)
             size = 0.73 * (1 - q) ** 2 + 0.03
-        R = max(3, int(size * sc(44)))
-        cx, cy = gx, gy - sc(30)
+        R = max(3, int(size * sc(44) * v.get("scale", 1.0)))
+        cx, cy = gx, gy - sc(30) * v.get("scale", 1.0) ** 0.5
         rng = random.Random(int(self.time * 24) * 7919 + int(v["seed"] * 1e6))
 
         def branch(x, y, a, ln, depth):
@@ -1904,6 +1954,13 @@ class Game:
         k = b.kind
         a, bb = to_screen(b.x, b.y, b.z)
         hx, hy = a + ox, bb + oy
+        if not b.hostile and b.tier in TIER_PAL:
+            glow_, edge_, core_ = TIER_PAL[b.tier]
+            if k in ("bullet", "pellet", "slug", "bolt"):
+                self.draw_tier_streak(b, hx, hy, ox, oy, glow_, edge_, core_)
+                return
+            self.add_glow(hx, hy, sc(18), glow_)        # rockets, grenades, plasma...: their own shape, the tier's colour
+            c = edge_
         if k in ("bullet", "pellet", "slug", "bolt"):
             if b.hostile:
                 self.add_glow(hx, hy, sc(16), (c[0] // 2, c[1] // 2, c[2] // 2))
@@ -2051,6 +2108,22 @@ class Game:
             self.add_glow(hx, hy, sc(16), (40, 110, 20))
             pygame.draw.circle(s, (130, 255, 70), (hx, hy), sc(5))
             pygame.draw.circle(s, (220, 255, 180), (hx - sc(1.5), hy - sc(1.5)), sc(1.8))
+
+    def draw_tier_streak(self, b, hx, hy, ox, oy, glow_, edge_, core_):
+        """A top-tier bullet: the ordinary tracer streak, lettered in its tier's colours (an edge round a core)."""
+        s = self.screen
+        k = b.kind
+        tl = {"bullet": 0.025, "pellet": 0.02, "slug": 0.045, "bolt": 0.035}[k]
+        wdt = {"slug": sc(4.5), "pellet": sc(2.5), "bolt": sc(3.5)}.get(k, sc(3))
+        if b.effect == "sabot":
+            tl, wdt = 0.03, max(1, sc(1.5))
+        elif b.effect == "dumdum":
+            tl, wdt = 0.02, sc(5)
+        ta, tb = to_screen(b.x - b.vx * tl, b.y - b.vy * tl, b.z)
+        tx, ty = ta + ox, tb + oy
+        self.add_glow(hx, hy, sc(14 if k != "pellet" else 9), glow_)
+        pygame.draw.line(s, edge_, (tx, ty), (hx, hy), wdt + max(2, sc(2)))
+        pygame.draw.line(s, core_, (tx, ty), (hx, hy), max(1, wdt - max(1, sc(1))))
 
     def draw_wave(self, b, ox, oy):
         """Microwave ring: an arc of the circle around the muzzle; segments behind walls are shadowed out."""
@@ -2523,6 +2596,20 @@ class Game:
             c = q.color
             self.add_glow(x, y, sc(6), (int(c[0] * k * 0.6), int(c[1] * k * 0.6), int(c[2] * k * 0.6)))
             pygame.draw.rect(s, c, (x - sc(1), y - sc(1), sc(2), sc(2)))
+        elif kind == "twinkle":               # a four-pointed sparkle that pulses as it fades
+            tw = 0.55 + 0.45 * abs(math.sin(q.life * 22 + q.size))
+            ln = max(1, int(sc(q.size) * (0.5 + k) * tw))
+            v = int(255 * min(1.0, k * 1.6))
+            col = (v, v, v)
+            self.add_glow(x, y, ln + sc(2), (int(35 * k), int(35 * k), int(32 * k)))
+            pygame.draw.line(s, col, (x - ln, y), (x + ln, y), 1)
+            pygame.draw.line(s, col, (x, y - ln), (x, y + ln), 1)
+        elif kind == "ember":                 # a hot red speck that cools as it rises
+            c = q.color
+            f = 0.35 + 0.65 * k
+            col = (int(c[0] * f), int(c[1] * f * f), int(c[2] * f * f))
+            self.add_glow(x, y, sc(4), (int(90 * k), int(18 * k), int(6 * k)))
+            pygame.draw.rect(s, col, (x - max(1, sc(q.size) // 2), y - max(1, sc(q.size) // 2), max(1, sc(q.size)), max(1, sc(q.size))))
 
     # ------------------------------------------------------------ HUD
     def tier_text(self, font, txt, rarity, default_col):
@@ -2561,7 +2648,11 @@ class Game:
             lines.append((self.small, "+ %s: %s" % (m["adj"], m["desc"]), (150, 220, 160)))
         st_ = wp.st
         fx_ = WP.TIER_FX.get(wp.rarity)
-        if wp.rarity == WP.VOID:
+        if wp.rarity == WP.VOID and st_.get("doom"):
+            lines.append((self.small, "DOOM: opens a vast black hole (pulls %.0f tiles), then a reactor-sized blast" % st_["void"],
+                          (235, 235, 245)))
+            lines.append((self.small, "       that destroys everything in it - including you, if you're close", (235, 235, 245)))
+        elif wp.rarity == WP.VOID:
             lines.append((self.small, "VOID: hits open a black hole (pulls %.1f tiles), then explode"
                           % st_["void"], (235, 235, 245)))
         elif wp.rarity == WP.CHAOS:
@@ -2574,6 +2665,10 @@ class Game:
         elif wp.rarity == WP.DEMONIC:
             lines.append((self.small, "DEMONIC: burns you %.1f integrity/s while wielded, +%d%% damage"
                           % (-fx_["regen"], round(st_["demonic_bonus"] * 100)), (255, 70, 50)))
+        if st_.get("smite"):
+            lines.append((self.small, "SMITING: %d%% chance a hit calls down %s"
+                          % (max(1, round(st_["smite"] * 100)), WP.SMITE_LABEL[st_["smite_kind"]]),
+                          (255, 120, 50) if st_["smite_kind"] == "hellfire" else (255, 250, 220)))
         import damage as DM
         sec = DM.secondary(st_)
         main_ = st_["dtype"].upper() + ((" (%s)" % DM.AMMO_LABEL[st_["ammo"]]) if st_.get("ammo") else "")

@@ -87,7 +87,7 @@ def rot(vx, vy, a):
 
 # ---------------------------------------------------------------- particles
 class Particle:
-    """kind: blood | chunk | spark | smoke | fire | shell | ring | glow"""
+    """kind: blood | chunk | spark | smoke | fire | shell | ring | glow | twinkle | ember"""
     __slots__ = ("x", "y", "z", "vx", "vy", "vz", "life", "max", "color", "size", "kind", "rest")
 
     def __init__(self, kind, x, y, z, vx, vy, vz, life, color, size=2.0):
@@ -114,13 +114,13 @@ class Particle:
         if k == "ring":
             self.size += dt * self.vx
             return True
-        if k in ("fire", "glow"):
+        if k in ("fire", "glow", "twinkle", "ember"):
             self.x += self.vx * dt
             self.y += self.vy * dt
             self.z += self.vz * dt
             self.vx *= 0.92
             self.vy *= 0.92
-            self.vz += dt * (2 if k == "fire" else -4)
+            self.vz += dt * {"fire": 2, "glow": -4, "twinkle": -0.8, "ember": 1.2}[k]
             if self.z < 0:
                 self.z = 0
             return True
@@ -215,7 +215,7 @@ class Proj:
     """kind: bullet | pellet | slug | bolt | plasma | flame | grenade | rocket | acid"""
     __slots__ = ("kind", "x", "y", "z", "vx", "vy", "vz", "life", "dmg", "hostile", "color", "r", "pierce", "bounce",
                  "blast", "burn", "shock", "homing", "slow", "grav", "hit", "trail", "age", "maxspeed", "rad", "gas", "chill", "spin",
-                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech", "spatter", "void")
+                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech", "spatter", "void", "tier", "smite", "smite_kind")
 
     def __init__(self, kind, x, y, z, vx, vy, dmg, hostile=False, life=0.9, color=(255, 220, 140), r=0.1,
                  pierce=0, bounce=0, blast=0.0, burn=0.0, shock=0, homing=0, slow=0, vz=0.0, grav=0.0, maxspeed=22.0,
@@ -242,6 +242,11 @@ class Proj:
         self.acid = 0.0
         self.ammo = None
         self.tier_leech = 0.0
+        self.spatter = None
+        self.void = 0.0
+        self.tier = 0                   # the firing gun's rarity: Demonic / Eldritch / Sacred / Void rounds look their part
+        self.smite = 0.0
+        self.smite_kind = None
 
 
 class Loot:
@@ -1582,6 +1587,8 @@ class World:
         self.static_kick = 0.0
         self.warnings = []    # mortar target circles [x, y, r, life, max, colour]
         self.voids = []       # Void-tier black holes: dict(x, y, R, t, grow, collapse, b, seed)
+        self.smites = []      # smiting strikes for the renderer: [x, y, kind, life, max, seed]
+        self.smite_cd = 0.0
         self.flash_white = 0.0
         self.bosses = []
         from biomes import BIOMES
@@ -2071,6 +2078,10 @@ class World:
                 pr.dtype = st["dtype"]
                 pr.ammo = st["ammo"]
                 pr.void = st["void"]
+                pr.tier = wp.rarity
+                pr.smite, pr.smite_kind = st["smite"], st["smite_kind"]
+                if st["doom"]:
+                    pr.effect = "doom"
                 if kind == "jet":
                     pr.effect = "jet:" + st["jet"]
                     pr.r = 0.11
@@ -2207,6 +2218,8 @@ class World:
         pr.cone = math.atan2(ay, ax)      # where the salvo was aimed: missiles with nothing to chase drift back to it
         pr.dtype = st["dtype"]
         pr.tier_leech = st["tier_leech"]
+        pr.tier = wp.rarity
+        pr.smite, pr.smite_kind = st["smite"], st["smite_kind"]
         if st["acid"]:
             pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * (st["salvo"] or 1)))
             pr.spatter = st["spatter"]
@@ -2378,6 +2391,9 @@ class World:
             who = getattr(who, "owner_player", who)
             if isinstance(who, Player) and who.alive:
                 who.hp = min(who.max_hp, who.hp + dealt * tl)
+        smite = get("smite")
+        if smite and not get("hostile") and rnd.random() < smite:
+            self.smite(e, raw, get("smite_kind"))
         acid = get("acid")
         if acid:
             p_ = acid if not isinstance(fx, dict) else min(1.0, 1.6 / max(0.1, fx.get("rate", 1.0)))
@@ -2410,6 +2426,48 @@ class World:
                 self.snd("shock", e.x, e.y, 0.6)
         if blast and (isinstance(fx, dict) or fx.kind not in ("grenade", "rocket", "plasma")):
             self.explode(e.x, e.y, blast, raw * 0.6, (255, 170, 60), hurt_player=False, quiet=True, small=True)
+
+    def smite(self, e, raw, kind):
+        """Heaven (or hell) answers a hit: a pillar of light, a lightning strike, or a pillar of hellfire on the target."""
+        if self.smite_cd > 0 or not kind:
+            return
+        self.smite_cd = 0.3
+        x, y = e.x, e.y
+        foes = [o for o in list(self.enemies) + self.bosses if o.alive and not getattr(o, "submerged", False)]
+        if kind == "lightning":
+            self.smites.append([x, y, kind, 0.35, 0.35, rnd.random()])
+            e.hit(self, self.typed(e, raw * 2.6, "electrical"), 0, 0)
+            near = sorted((o for o in foes if o is not e and math.hypot(o.x - x, o.y - y) < 3.0),
+                          key=lambda o: math.hypot(o.x - x, o.y - y))[:2]
+            for o in near:                    # the bolt forks into its neighbours
+                self.beams.append([x, y, o.x, o.y, 0.5, 0.15, 0.15, (200, 215, 255), 0.8])
+                o.hit(self, self.typed(o, raw * 1.2, "electrical"), o.x - x, o.y - y)
+            for _ in range(16):
+                a = rnd.random() * math.tau
+                v = rnd.uniform(2, 7)
+                self.add(Particle("spark", x, y, 0.2, math.cos(a) * v, math.sin(a) * v, rnd.uniform(2, 5), 0.4, (220, 230, 255), 2))
+            self.flash_white = max(self.flash_white, 0.1)
+            self.shake = max(self.shake, 6)
+            self.snd("thunder", x, y, 0.8)
+            return
+        hell = kind == "hellfire"
+        self.smites.append([x, y, kind, 0.6, 0.6, rnd.random()])
+        for o in foes:
+            if math.hypot(o.x - x, o.y - y) < 1.1 + o.r:
+                o.hit(self, self.typed(o, raw * 2.2, "fire"), (o.x - x) * 8, (o.y - y) * 8)
+                if hell and hasattr(o, "burn_dps"):
+                    o.burn = max(o.burn, 4.0)
+                    o.burn_dps = max(o.burn_dps, raw * 0.6 * DM.mult(o, "fire"))
+        col = (255, 120, 30) if hell else (255, 250, 225)
+        for _ in range(22):
+            a = rnd.random() * math.tau
+            r_ = rnd.uniform(0, 0.9)
+            self.add(Particle("fire" if hell else "twinkle", x + math.cos(a) * r_, y + math.sin(a) * r_, rnd.uniform(0, 1.5),
+                              math.cos(a) * 0.6, math.sin(a) * 0.6, rnd.uniform(2, 5), rnd.uniform(0.4, 0.8), col,
+                              rnd.uniform(10, 18) if hell else rnd.uniform(2, 3.5)))
+        self.add(Particle("ring", x, y, 0.05, 4.0, 0, 0, 0.35, col, 0.1))
+        self.shake = max(self.shake, 5)
+        self.snd("fireball" if hell else "magnet_pulse", x, y, 0.8)
 
     def hit_solid(self, cell, dmg, x, y, z, b):
         """Something hit a solid cell: barrels / crates / hives take damage. Returns True if it was destructible."""
@@ -2887,6 +2945,11 @@ class World:
         self.warnings = [wn for wn in self.warnings if wn[3] > 0]
         if self.voids:
             self.update_voids(dt)
+        self.smite_cd -= dt
+        if self.smites:
+            for sm in self.smites:
+                sm[3] -= dt
+            self.smites = [sm for sm in self.smites if sm[3] > 0]
 
         self.blocked = set()
         for pl in self.players:
@@ -3123,8 +3186,13 @@ class World:
         b.void = 0
         if self.level.is_solid(int(x), int(y)):
             x, y = x - b.vx * 0.02, y - b.vy * 0.02
-        self.voids.append(dict(x=x, y=y, R=R, t=0.0, grow=1.9 if b.kind == "nuke" else 1.4, collapse=0.22, b=b, seed=rnd.random()))
-        self.snd("portal", x, y, 0.8)
+        doom = b.effect == "doom"
+        self.voids.append(dict(x=x, y=y, R=R, t=0.0, grow=3.2 if doom else (1.9 if b.kind == "nuke" else 1.4), collapse=0.3 if doom else 0.22,
+                               b=b, seed=rnd.random(), doom=doom, scale=2.3 if doom else 1.0))
+        self.snd("portal", x, y, 1.0 if doom else 0.8)
+        if doom:
+            self.warnings.append([x, y, WP.DOOM_RADIUS, 3.5, 3.5, (235, 235, 255)])
+            self.message("DOOM, DOOOOM? - GET CLEAR!", (235, 235, 255))
 
     def update_voids(self, dt):
         for v in self.voids:
@@ -3145,6 +3213,16 @@ class World:
                     e.awake = True
                     if d < 0.6:          # caught in the throat of it
                         self.dot(e, v["b"].dmg * 0.35 * dt, "kinetic")
+                for p in self.players:          # it drags at you too: a tug at the rim, a near-inescapable well at the heart
+                    if not p.alive:
+                        continue
+                    dx, dy = x - p.x, y - p.y
+                    d = math.hypot(dx, dy)
+                    if d > R or d < 0.15:
+                        continue
+                    pull = (0.8 + 5.2 * k) * (1 - d / R) ** 1.6
+                    step = min(d, pull * dt)
+                    p.x, p.y = resolve(self.level, p.x + dx / d * step, p.y + dy / d * step, p.R)
                 if rnd.random() < dt * 40:      # motes of light spiralling in
                     a = rnd.random() * math.tau
                     r_ = rnd.uniform(0.5, 1.0) * R
@@ -3155,7 +3233,9 @@ class World:
             elif v["t"] >= g + v["collapse"] and not v.get("done"):
                 v["done"] = True
                 b = v["b"]
-                if b.kind in ("nuke", "grenade", "rocket", "missile", "plasma"):
+                if v.get("doom"):
+                    self.cataclysm(x, y, WP.DOOM_RADIUS, (235, 235, 255), annihilate=True)
+                elif b.kind in ("nuke", "grenade", "rocket", "missile", "plasma"):
                     self.impact(b, x, y)                        # the warhead goes off at the heart of it
                 else:
                     self.explode(x, y, 1.6, b.dmg, (240, 240, 255), hurt_player=False)
@@ -3168,6 +3248,51 @@ class World:
                 self.shake = max(self.shake, 10)
                 self.snd("magnet_pulse", x, y)
         self.voids = [v for v in self.voids if not v.get("done")]
+
+    def cataclysm(self, x, y, R, col, annihilate=False):
+        """A reactor-sized blast: flattens monsters, furniture and walls within R tiles; brutal on players up close.
+        annihilate: nothing caught inside survives it (DOOM)."""
+        L = self.level
+        if annihilate:
+            for e in list(self.enemies) + self.bosses + [t for t in self.traps if t.shootable or t.mech == "reactor"]:
+                if e.alive and not getattr(e, "submerged", False) and math.hypot(e.x - x, e.y - y) < R + e.r:
+                    e.hit(self, max(1e5, getattr(e, "hp", 0) * 2), (e.x - x) * 30, (e.y - y) * 30)
+            for s in self.spawners:
+                if s.alive and math.hypot(s.x - x, s.y - y) < R:
+                    s.hit(self, 1e5)
+        # everything in range: monsters, bosses, barrels, crates, hives, turrets, reactors (chain) - and the walls
+        self.explode(x, y, R, 150, col, hurt_player=False, breach=R, dtype="explosive")
+        for (px_, py_), name in list(L.props.items()):      # heavy furniture too (barrels/crates went up in the blast)
+            if math.hypot(px_ + 0.5 - x, py_ + 0.5 - y) < R and L.solid[L.i(px_, py_)] == 2 \
+                    and (px_, py_) not in self.barrels and (px_, py_) not in self.crates:
+                if any(int(s_.x) == px_ and int(s_.y) == py_ for s_ in self.spawners):
+                    continue
+                if any(t.solid and t.alive and int(t.x) == px_ and int(t.y) == py_ for t in self.traps):
+                    continue
+                L.props.pop((px_, py_), None)
+                L.solid[L.i(px_, py_)] = 0
+                if rnd.random() < 0.5:
+                    self.gibs_from("rubble", px_ + 0.5, py_ + 0.5, 0.6, px_ + 0.5 - x, py_ + 0.5 - y, count=2, force=1.4)
+        self.flow_tile = None
+        for p in self.players:          # players: brutal up close, survivable at the edge
+            d = math.hypot(p.x - x, p.y - y)
+            if p.alive and d < R:
+                p.invuln = 0.0
+                self.hurt_player(12 + 78 * (1 - d / R), x, y, knock=18, who=p, dtype="explosive")
+        for _ in range(140):
+            a = rnd.random() * math.tau
+            s_ = rnd.uniform(0.3, 1.0) * R * 1.4
+            self.add(Particle("fire", x, y, rnd.uniform(0.1, 1.2), math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(0.5, 4), rnd.uniform(0.6, 1.4),
+                              rnd.choice((col, (255, 240, 150), (255, 150, 40))), rnd.uniform(24, 44)))
+        for _ in range(70):           # rising mushroom column
+            self.add(Particle("smoke", x + rnd.uniform(-0.8, 0.8), y + rnd.uniform(-0.8, 0.8), rnd.uniform(0.5, 4.0), rnd.uniform(-0.4, 0.4),
+                              rnd.uniform(-0.4, 0.4), rnd.uniform(2, 5), rnd.uniform(2.5, 5), (80, 90, 60), rnd.uniform(0.5, 1.0)))
+        for k, rr in enumerate((R * 0.5, R, R * 1.3)):
+            self.add(Particle("ring", x, y, 0.05, rr, 0, 0, 0.5 + 0.25 * k, col, 0.2))
+        self.flash_white = 0.9
+        self.shake = 30
+        self.hitstop = max(self.hitstop, 0.15)
+        self.snd("nuke_blast", x, y)
 
     def impact(self, b, x, y):
         """Projectile ended at (x, y)."""
@@ -3382,6 +3507,13 @@ class World:
     def step_proj(self, b, dt):
         L = self.level
         k = b.kind
+        if b.tier in (WP.SACRED, WP.DEMONIC) and not b.hostile and rnd.random() < dt * (6 if k == "pellet" else 18):
+            # holy rounds shed faint white sparkles that drift down; demonic rounds shed red embers that float up
+            sac = b.tier == WP.SACRED
+            self.add(Particle("twinkle" if sac else "ember", b.x + rnd.uniform(-0.05, 0.05), b.y + rnd.uniform(-0.05, 0.05), b.z,
+                              b.vx * 0.03 + rnd.uniform(-0.3, 0.3), b.vy * 0.03 + rnd.uniform(-0.3, 0.3),
+                              rnd.uniform(-0.2, 0.2) if sac else rnd.uniform(0.2, 0.7), rnd.uniform(0.25, 0.5),
+                              (255, 255, 255) if sac else (255, rnd.randint(60, 110), 30), rnd.uniform(0.8, 1.6)))
         if k == "rail":
             return self.step_rail(b, dt)
         if k == "wave":

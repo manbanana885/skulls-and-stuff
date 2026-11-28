@@ -11,7 +11,8 @@ import damage as DM
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
                 heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None,
-                tier_leech=0.0, demonic_bonus=0.0, jet=None, barrels=0, shell=None, spatter=None, void=0.0)
+                tier_leech=0.0, demonic_bonus=0.0, jet=None, barrels=0, shell=None, spatter=None, void=0.0,
+                smite=0.0, smite_kind=None, doom=False)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
@@ -121,6 +122,11 @@ TOP_TIERS = (MYTHICAL, DEMONIC, ELDRITCH, SACRED, VOID, CHAOS)
 # Void guns: only these archetypes. Every impact opens a black hole that drags monsters in, then collapses and explodes.
 VOID_ARCHS = ("revolver", "grenade", "tac_nuke")
 VOID_PULL = (4.0, 6.0)        # pull radius (tiles), rolled per gun
+# the one-of-a-kind Void tactical nuke: a far bigger hole, then a reactor-sized blast that destroys everything in it
+DOOM_NAME = "DOOM, DOOOOM?"
+DOOM_ODDS = 0.2               # share of Void tactical nukes that come out as DOOM
+DOOM_PULL = 9.0
+DOOM_RADIUS = 12.0            # same as a chemical reactor going up (traps.REACTOR_RADIUS)
 # Chaos guns: every shot takes a different damage type from the last
 CHAOS_TYPES = ("kinetic", "explosive", "fire", "chemical", "cryo", "radiation", "electrical")
 # how a tier's name is lettered: (text colour, outline colour or None); Chaos letters cycle through the spectrum
@@ -138,6 +144,11 @@ def chaos_color(t=None, phase=0.0):
     return int(r * 255), int(g * 255), int(b * 255)
 # while it's the gun in your hands: integrity per second (+ heals, - hurts) and the share of damage dealt that heals you
 TIER_FX = {SACRED: dict(regen=1.0), ELDRITCH: dict(regen=-1.0, leech=0.08), DEMONIC: dict(regen=-1.5)}
+# Smiting: a rolled trait. On a hit, a chance to call down a pillar of light / a lightning strike (Sacred) or a pillar
+# of hellfire (Demonic). Odds per hit shrink with how many hits a second the gun throws, so spray guns don't strobe.
+SMITE_ODDS = {SACRED: 0.6, DEMONIC: 0.5}           # chance a gun of the tier rolls the trait at all
+SMITE_KINDS = {SACRED: ("pillar", "lightning"), DEMONIC: ("hellfire",)}
+SMITE_LABEL = {"pillar": "a pillar of light", "lightning": "a lightning strike", "hellfire": "a pillar of hellfire"}
 
 # ---------------------------------------------------------------- manufacturers
 # Which weapon groups each archetype belongs to; a manufacturer only builds guns in its groups ("all" = anything).
@@ -501,6 +512,19 @@ class Weapon:
             adj = self.mods[0]["adj"] + " " if self.mods else ""
             ammo_word = (SHELLS[self.shell]["word"] + " ") if self.shell else {"pen": "Penetrating ", "exp": "Expanding "}.get(self.ammo_type, "")
             self.name = "%s%s%s" % (adj, ammo_word, st["label"])
+        if rarity in SMITE_ODDS:                         # own stream: doesn't disturb any other roll for this seed
+            srng = random.Random(("smite", seed if seed is not None else rng.random()).__repr__())
+            if srng.random() < SMITE_ODDS[rarity]:
+                st["smite_kind"] = srng.choice(SMITE_KINDS[rarity])
+                hits = max(0.1, st["rate"] * st["pellets"] * (1 + int(st["twin"])))
+                st["smite"] = min(0.3, 1.1 / hits) * srng.uniform(0.8, 1.2)
+        self.doom = False
+        if rarity == VOID and arch == "tac_nuke":
+            drng = random.Random(("doom", seed if seed is not None else rng.random()).__repr__())
+            if drng.random() < DOOM_ODDS:
+                self.doom = st["doom"] = True
+                st["void"] = DOOM_PULL
+                self.name = '"%s"' % DOOM_NAME
         self.ammo = st["mag"]
         self.reload_t = 0.0
         self.cd = 0.0
