@@ -13,6 +13,7 @@ from world import World, Particle  # noqa: E402
 import characters as CH  # noqa: E402
 import weapons as WP  # noqa: E402
 import perf  # noqa: E402
+import story as STORY  # noqa: E402
 import support as SU  # noqa: E402
 from biomes import BIOMES, biome_for  # noqa: E402
 from bosses import eel_points  # noqa: E402
@@ -511,6 +512,109 @@ def draw_crosshair(s, pos):
     pygame.draw.circle(s, (255, 70, 60), (x, y), max(1, sc(1.2)))
 
 
+# ================================================================ title background
+class TitleScene:
+    """A real generated sector behind the menus, panned like a security camera; a new biome every SHOW seconds.
+
+    The game's own renderer draws it: for the length of a draw the scene's world, camera and floor caches stand in
+    for the game's (the "player" it is centred on is a ghost that's never drawn). Generation runs on its own
+    random stream, so it never disturbs the game's."""
+    SHOW = 11.0
+    FADE = 0.8
+    SWAP = ("world", "cam", "floor_layer", "decal_layer", "ambient", "vig_biome", "_last_cam", "last_o")
+
+    def __init__(self, game):
+        self.g = game
+        self.rng = random.Random()
+        self.biome = None
+        self.cam_no = 1
+        self.last = game.time
+        self.new()
+
+    def new(self):
+        from world import Player
+        g, r = self.g, self.rng
+        self.biome = r.choice([b for b in BIOMES if b != self.biome])
+        state = random.getstate()
+        play = sfx.play
+        sfx.play = lambda *a, **k: None                  # building a world is silent
+        try:
+            random.seed(r.random())
+            ghost = Player(0, 0, 0, r.choice(CH.ORDER))
+            ghost.ghost = True
+            w = World(r.randint(1, 9), [ghost], 0, biome=self.biome)
+        finally:
+            sfx.play = play
+            random.setstate(state)
+        L = w.level
+        rooms = list(L.rooms)
+        a = r.choice(rooms)
+        far = [b for b in rooms if 9 <= math.dist(a.center, b.center) <= 24] or sorted(
+            rooms, key=lambda b: -math.dist(a.center, b.center))[:1]
+        b = r.choice(far)
+        self.a = (a.center[0] + 0.5, a.center[1] + 0.5)
+        self.b = (b.center[0] + 0.5, b.center[1] + 0.5)
+        B = BIOMES[self.biome]
+        self.title = B["title"]
+        self.state = {"world": w, "cam": list(to_screen(*self.a, 0.8)), "decal_layer": DecalLayer(),
+                      "ambient": Ambient(B["ambient"]), "vig_biome": g.vig.copy(), "_last_cam": None, "last_o": (0, 0)}
+        self.state["vig_biome"].fill(B["tint"], special_flags=pygame.BLEND_MULT)
+        self.state["floor_layer"] = FloorLayer(L, g.spr, self.state["decal_layer"])
+        self.ghost = ghost
+        self.t = 0.0
+        self.cam_no = r.randint(2, 48)
+
+    @property
+    def world(self):
+        return self.state["world"]
+
+    def step(self):
+        dt = min(0.1, max(0.0, self.g.time - self.last))
+        self.last = self.g.time
+        self.t += dt
+        if self.t > self.SHOW:
+            self.new()
+        k = self.t / self.SHOW
+        k = k * k * (3 - 2 * k)                           # ease in / out
+        x = self.a[0] + (self.b[0] - self.a[0]) * k
+        y = self.a[1] + (self.b[1] - self.a[1]) * k
+        self.ghost.x, self.ghost.y = x, y
+        self.state["cam"] = list(to_screen(x, y, 0.8))
+
+    def draw(self, s):
+        self.step()
+        g = self.g
+        missing = object()
+        saved = {k: getattr(g, k, missing) for k in self.SWAP}
+        for k in self.SWAP:
+            setattr(g, k, self.state[k])
+        if self.state["_last_cam"] is None:
+            g._last_cam = tuple(g.cam)
+        try:
+            g.draw_world(s)
+        finally:
+            for k in self.SWAP:
+                self.state[k] = getattr(g, k, None)
+                if saved[k] is missing:
+                    delattr(g, k)
+                else:
+                    setattr(g, k, saved[k])
+        fade = min(self.t, self.SHOW - self.t) / self.FADE
+        if fade < 1:
+            g.overlay(s, int(255 * (1 - max(0.0, fade))))
+
+    def draw_label(self, s):
+        """CAM 17 // THE OSSUARY   REC"""
+        g = self.g
+        x, y = sc(16), g.H - sc(36)
+        img = g.small.render("CAM %02d  //  %s" % (self.cam_no, self.title), True, (150, 200, 160))
+        s.blit(img, (x, y))
+        if int(g.time * 1.5) % 2 == 0:
+            pygame.draw.circle(s, (255, 50, 40), (x + img.get_width() + sc(14), y + img.get_height() // 2), sc(4))
+            rec = g.small.render("REC", True, (255, 90, 80))
+            s.blit(rec, (x + img.get_width() + sc(22), y))
+
+
 class Game:
     def __init__(self, windowed=False):
         pygame.init()
@@ -553,6 +657,9 @@ class Game:
         self.last_host = ""                 # last address typed on the join screen
         self.last_name = ""                 # ... and the game name
         self.player_name = ""               # your name in net games
+        self.intro_on = True                # settings: the story screen at startup
+        self.sound_vol, self.music_vol = 1.0, 1.0
+        self.fullscreen = not windowed
         try:
             with open(SAVE) as fh:
                 data = json.load(fh)
@@ -564,15 +671,26 @@ class Game:
                 self.player_name = str(data.get("player_name", ""))[:14]
                 if data.get("demand") in perf.MODES and not os.environ.get("SKULLS_DEMAND"):
                     perf.local = perf.sim = data["demand"]
+                self.intro_on = bool(data.get("intro", True))
+                self.sound_vol = min(1.0, max(0.0, float(data.get("sound", 1.0))))
+                self.music_vol = min(1.0, max(0.0, float(data.get("music", 1.0))))
         except Exception:
             pass
+        sfx.set_levels(self.sound_vol, self.music_vol)
         self._mouse_t = -99.0               # when the mouse last moved (the pointer hides after 5 s still)
         self._cursor_vis = None
         self.minimap = None
         self._mouse_was = False
         self._mouse_pos = None
         self.net = None                     # net play: a HostSession, GuestSession or JoinScreen
-        self.menu_i = 0                     # title menu: 0 play, 1 host, 2 join
+        self.menu_i = 0                     # the highlighted entry on the current title page
+        self.title_page = "main"            # main / local / online / settings
+        self.title_scene = None             # the generated map drifting behind the menus
+        self.story = STORY.generate()       # this launch's story (the intro screen, and the tagline on the title)
+        self.intro_t = 0.0
+        self.quit_req = False
+        if self.intro_on:
+            self.state = "intro"
         self.title_msg = ("", 0.0)
         self.W, self.H = W, H
         sfx.music("requiem")
@@ -607,6 +725,8 @@ class Game:
     def try_join(self):
         """Second player: BACK/SELECT (or START) on a free pad. With a single pad, P1 keeps the keyboard and P2 takes the pad."""
         if len(self.inputs) >= 2 or self.state not in ("play", "title") or self.net is not None:
+            return
+        if self.state == "title" and self.title_page != "local":
             return
         dev = None
         for inp in self.spare.values():
@@ -659,6 +779,7 @@ class Game:
         self.biome = biome_for(depth, self.run_seed)
         # demand mode for this sector: yours, or in a net game the lowest of everyone's (the host builds the world)
         perf.sim = self.net.session_mode() if hasattr(self.net, "session_mode") else perf.local
+        self.title_scene = None               # the menu background map isn't needed while playing
         self.world = World(depth, player, score, biome=self.biome)
         self.world.show_numbers = self.damage_numbers
         self.setup_view()
@@ -701,6 +822,7 @@ class Game:
         self.world = None
         self.transition = 0.0
         self.state = "title"
+        self.title_page, self.menu_i = "online", 0
         sfx.stop_loops()
         sfx.music("requiem")
 
@@ -718,7 +840,8 @@ class Game:
             with open(SAVE, "w") as fh:
                 json.dump({"best": self.best, "damage_numbers": self.damage_numbers, "chars": self.chars,
                            "last_host": self.last_host, "last_name": self.last_name,
-                           "player_name": self.player_name, "demand": perf.local}, fh)
+                           "player_name": self.player_name, "demand": perf.local, "intro": self.intro_on,
+                           "sound": round(self.sound_vol, 2), "music": round(self.music_vol, 2)}, fh)
         except Exception:
             pass
 
@@ -748,7 +871,7 @@ class Game:
                     self.on_devices_changed()
                 if ev.type == pygame.KEYDOWN:
                     if ev.key == pygame.K_F11:
-                        pygame.display.toggle_fullscreen()
+                        self.toggle_fullscreen()
                     elif self.net is not None and hasattr(self.net, "key") and self.net.key(self, ev):
                         pass                          # typed into a lobby / join screen box
                     elif ev.key == pygame.K_ESCAPE and self.net is not None:
@@ -756,8 +879,12 @@ class Game:
                             self.state = "pause"
                         else:
                             self.leave_net()
+                    elif ev.key == pygame.K_ESCAPE and self.state == "intro":
+                        self.end_intro()
+                    elif ev.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE) and self.state == "title" and self.title_page != "main":
+                        self.title_go("main")             # Esc / Backspace on a title page: back to the main menu
                     elif ev.key == pygame.K_ESCAPE:
-                        # Esc pauses; Esc again (or on title / game over) quits
+                        # Esc pauses; Esc again (or on the main menu / game over) quits
                         if self.state == "play":
                             self.state = "pause"
                         else:
@@ -769,6 +896,9 @@ class Game:
                 inp.poll((0, 0))
             self.try_join()
             self.update(dt)
+            if self.quit_req:
+                self.save_best()
+                return
             self.draw()
             self.draw_pointer(self.screen)
             pygame.display.flip()
@@ -795,8 +925,6 @@ class Game:
         sx, sy = to_screen(p.x, p.y, 1.1)
         return (sx - self.cam[0] + W / 2, sy - self.cam[1] + H / 2)
 
-    TITLE_MENU = ("PLAY", "HOST NET GAME", "JOIN NET GAME")
-
     def update(self, dt):
         inp = self.inputs
         self.title_msg = (self.title_msg[0], self.title_msg[1] - dt)
@@ -805,45 +933,11 @@ class Game:
             return
         if self.state != "play" or self.transition > 0:
             sfx.stop_loops()
+        if self.state == "intro":
+            self.update_intro(dt)
+            return
         if self.state == "title":
-            if self.any_pressed("swap"):
-                self.toggle_numbers()
-                return
-            if self.any_pressed("reload"):
-                perf.local = perf.cycle(perf.local)
-                self.save_settings()
-                sfx.play("swap", 0.6)
-                return
-            for i, inp_ in enumerate(self.inputs[:2]):
-                self.pick_char(i, inp_)
-            if self.any_pressed("nav_up") or self.any_pressed("nav_down"):
-                self.menu_i = (self.menu_i + (1 if self.any_pressed("nav_down") else -1)) % len(self.TITLE_MENU)
-                sfx.play("tink", 0.5)
-            clicked = False
-            if self.inputs[0].keyboard:           # the mouse: pointing at a box picks it, clicking it goes
-                down = pygame.mouse.get_pressed()[0]
-                pos = pygame.mouse.get_pos()
-                over = next((i for i, r in enumerate(self.title_menu_rects()) if r.collidepoint(pos)), None)
-                if over is not None and pos != self._mouse_pos:
-                    self.menu_i = over
-                self._mouse_pos = pos
-                clicked = down and not self._mouse_was and over is not None
-                if clicked:
-                    self.menu_i = over
-                self._mouse_was = down
-            if clicked or any(("start" in i.pressed or "a" in i.pressed) for i in self.inputs):
-                sfx.play("start")
-                if self.menu_i == 0:
-                    self.new_world(1)
-                    self.state = "play"
-                elif self.menu_i == 1:
-                    try:
-                        self.net = NP.HostSession(self)
-                    except OSError as ex:
-                        self.net = None
-                        self.title_msg = ("Can't host a game here: %s" % (ex.strerror or ex), 8.0)
-                else:
-                    self.net = NP.JoinScreen(self)
+            self.update_title(dt)
             return
         if self.state == "join":
             p2 = self.inputs[1]
@@ -917,6 +1011,9 @@ class Game:
     def draw(self):
         s = self.screen
         if self.net is not None and self.net.draw(self, s):
+            return
+        if self.state == "intro":
+            self.draw_intro(s)
             return
         if self.state == "title" or self.world is None:
             self.draw_title(s)
@@ -1151,7 +1248,8 @@ class Game:
         alive = [q for q in mine if q.alive] or [p]
         pcx = int(sum(q.x for q in alive) / len(alive))
         pcy = int(sum(q.y for q in alive) / len(alive))
-        pscr = [(to_screen(q.x, q.y)[0] + ox, to_screen(q.x, q.y)[1] + oy, q.x + q.y) for q in alive if q.alive]
+        pscr = [(to_screen(q.x, q.y)[0] + ox, to_screen(q.x, q.y)[1] + oy, q.x + q.y) for q in alive
+                if q.alive and not getattr(q, "ghost", False)]
         psx, psy = to_screen(p.x, p.y)
         psx += ox
         psy += oy
@@ -1386,6 +1484,8 @@ class Game:
                 items.append((e.x + e.y, n, sp.flash(img), gx - sp.ax, gy - sp.ay))
 
         for pl in w.players:
+            if getattr(pl, "ghost", False):          # the title camera's stand-in
+                continue
             plx, ply = ground(pl.x, pl.y)
             plkey = pl.x + pl.y
             if not pl.alive:      # downed: bones to stand on, with a revive ring
@@ -3056,14 +3156,253 @@ class Game:
             c = (255, 255, 255) if len(w.players) == 1 else self.PLAYER_COLORS[pl.idx % 4]
             pygame.draw.circle(s, c if pl.alive else (90, 90, 90), mpos(pl.x, pl.y), sc(2.5))
 
-    # ------------------------------------------------------------ title
-    def title_menu_rects(self):
-        mx = W / 2 - sc(330)
-        return [pygame.Rect(int(mx + i * sc(230)), int(H - sc(98)), sc(200), sc(38)) for i in range(len(self.TITLE_MENU))]
+    # ------------------------------------------------------------ title: pages, settings, the story intro
+    TITLE_PAGES = {
+        "main": (("local", "LOCAL PLAY"), ("online", "ONLINE PLAY"), ("settings", "SETTINGS"), ("quit", "QUIT")),
+        "local": (("start", "START RUN"), ("back", "BACK")),
+        "online": (("host", "HOST NET GAME"), ("join", "JOIN NET GAME"), ("back", "BACK")),
+        "settings": (("demand", "DEMAND MODE"), ("numbers", "DAMAGE NUMBERS"), ("sound", "SOUND VOLUME"),
+                     ("music", "MUSIC VOLUME"), ("fullscreen", "FULLSCREEN"), ("intro", "STORY AT STARTUP"),
+                     ("story", "TELL ME A NEW STORY"), ("back", "BACK")),
+    }
+    PAGE_TITLES = {"local": "LOCAL PLAY", "online": "ONLINE PLAY", "settings": "SETTINGS"}
+    SETTINGS = ("demand", "numbers", "sound", "music", "fullscreen", "intro")     # rows with a value (LEFT / RIGHT change it)
+    SETTING_HELP = {
+        "numbers": "Coloured damage numbers over whatever you hit (also Q / Y on the pause screen).",
+        "sound": "Volume of gunfire, monsters and everything else.",
+        "music": "Volume of the soundtrack.",
+        "fullscreen": "Fill the screen, or play in a window (F11 any time).",
+        "intro": "Show a new escape story every time the game starts.",
+        "story": "Generate a fresh escape story and play it now.",
+        "back": "Settings are saved as you change them.",
+    }
 
-    def draw_title_bg(self, s, vig=True):
-        """The scrolling floor behind the title / lobby screens."""
-        s.fill((12, 10, 18))
+    def title_go(self, page):
+        """Switch title page; going back to the main menu highlights the page you came from."""
+        keys = [k for k, _ in self.TITLE_PAGES["main"]]
+        self.menu_i = keys.index(self.title_page) if page == "main" and self.title_page in keys else 0
+        self.title_page = page
+        sfx.play("tink", 0.5)
+
+    def end_intro(self):
+        self.state, self.title_page, self.menu_i = "title", "main", 0
+        sfx.play("start", 0.7)
+
+    def toggle_fullscreen(self):
+        try:
+            pygame.display.toggle_fullscreen()
+            self.fullscreen = not self.fullscreen
+        except pygame.error:
+            pass
+
+    def setting_value(self, key):
+        if key == "demand":
+            return perf.MODES[perf.local]["label"]
+        if key in ("sound", "music"):
+            return "%d%%" % round(100 * (self.sound_vol if key == "sound" else self.music_vol))
+        return "ON" if {"numbers": self.damage_numbers, "fullscreen": self.fullscreen, "intro": self.intro_on}[key] else "OFF"
+
+    def change_setting(self, key, d, wrap=False):
+        """LEFT / RIGHT (d = -1 / +1) on a settings row; A / ENTER / click steps it and wraps round."""
+        if key == "demand":
+            i = perf.ORDER.index(perf.local) + d
+            if not wrap and not 0 <= i < len(perf.ORDER):
+                return
+            perf.local = perf.ORDER[i % len(perf.ORDER)]
+        elif key in ("sound", "music"):
+            v = round((self.sound_vol if key == "sound" else self.music_vol) + 0.1 * d, 1)
+            if wrap and v > 1.0:
+                v = 0.0
+            v = max(0.0, min(1.0, v))
+            if key == "sound":
+                self.sound_vol = v
+                sfx.set_levels(sound=v)
+            else:
+                self.music_vol = v
+                sfx.set_levels(music_=v)
+        elif key == "numbers":
+            self.toggle_numbers()
+            return
+        elif key == "fullscreen":
+            self.toggle_fullscreen()
+        elif key == "intro":
+            self.intro_on = not self.intro_on
+        self.save_settings()
+        sfx.play("swap", 0.6)
+
+    def menu_mouse(self, rects):
+        """The mouse on a menu: pointing at a box highlights it, clicking it picks it. Returns the click position."""
+        if not self.inputs[0].keyboard:
+            return None
+        down = pygame.mouse.get_pressed()[0]
+        pos = pygame.mouse.get_pos()
+        over = next((i for i, r in enumerate(rects) if r.collidepoint(pos)), None)
+        if over is not None and pos != self._mouse_pos:
+            self.menu_i = over
+        self._mouse_pos = pos
+        clicked = down and not self._mouse_was and over is not None
+        self._mouse_was = down
+        if clicked:
+            self.menu_i = over
+            return pos
+        return None
+
+    def update_title(self, dt):
+        page = self.title_page
+        items = self.TITLE_PAGES[page]
+        self.menu_i = min(self.menu_i, len(items) - 1)
+        if page == "local":
+            for i, inp_ in enumerate(self.inputs[:2]):
+                self.pick_char(i, inp_)
+        if self.any_pressed("nav_up") or self.any_pressed("nav_down"):
+            self.menu_i = (self.menu_i + (1 if self.any_pressed("nav_down") else -1)) % len(items)
+            sfx.play("tink", 0.5)
+        rects = self.title_menu_rects()
+        click = self.menu_mouse(rects)
+        key = items[self.menu_i][0]
+        if page == "settings" and key in self.SETTINGS and click is None:
+            d = self.any_pressed("nav_right") - self.any_pressed("nav_left")
+            if d:
+                self.change_setting(key, d)
+        if click is not None or any(("start" in i.pressed or "a" in i.pressed or "confirm" in i.pressed) for i in self.inputs):
+            self.title_select(key, click, rects[self.menu_i])
+        elif self.any_pressed("deploy") and page != "main":
+            self.title_go("main")
+
+    def title_select(self, key, click=None, rect=None):
+        page = self.title_page
+        if page == "settings" and key in self.SETTINGS:
+            left = click is not None and rect.right - sc(190) <= click[0] < rect.right - sc(130)   # the "<" steps down
+            self.change_setting(key, -1 if left else 1, wrap=True)
+        elif key in ("local", "online", "settings"):
+            self.title_go(key)
+        elif key == "back":
+            self.title_go("main")
+        elif key == "quit":
+            self.quit_req = True
+        elif key == "story":
+            self.story = STORY.generate()
+            self.state, self.intro_t, self._intro_typed = "intro", 0.0, 0
+        elif key == "start":
+            sfx.play("start")
+            self.new_world(1)
+            self.state = "play"
+        elif key == "host":
+            sfx.play("start")
+            try:
+                self.net = NP.HostSession(self)
+            except OSError as ex:
+                self.net = None
+                self.title_msg = ("Can't host a game here: %s" % (ex.strerror or ex), 8.0)
+        elif key == "join":
+            sfx.play("start")
+            self.net = NP.JoinScreen(self)
+
+    # the intro: the story types itself out, a line at a time
+    INTRO_CPS = 65              # characters per second
+    INTRO_PAUSE = 0.45          # beat between lines
+
+    def intro_times(self):
+        """When each story line starts typing, and when the whole thing is done."""
+        t, starts = 0.6, []
+        for ln in self.story.lines:
+            starts.append(t)
+            t += len(ln) / self.INTRO_CPS + self.INTRO_PAUSE
+        return starts, t
+
+    def update_intro(self, dt):
+        self.intro_t += dt
+        starts, end = self.intro_times()
+        lines = self.story.lines
+        typed = sum(max(0, min(len(ln), int((self.intro_t - st) * self.INTRO_CPS))) for ln, st in zip(lines, starts))
+        last = getattr(self, "_intro_typed", 0)
+        if typed > last and typed // 4 != last // 4:
+            sfx.play("tink", 0.12)
+        before_status = sum(len(ln) for ln in lines[:-1])
+        if last <= before_status < typed:
+            sfx.play("klaxon", 0.5)                      # the status line
+        self._intro_typed = typed
+        click = self.menu_mouse([pygame.Rect(0, 0, W, H)])
+        if click is not None or any(k in i.pressed for i in self.inputs for k in ("start", "a", "confirm", "deploy")):
+            if self.intro_t < end:
+                self.intro_t = end                       # first press: show it all
+                self._intro_typed = sum(len(ln) for ln in lines)
+            else:
+                self.end_intro()
+
+    @staticmethod
+    def wrap(font, text, width):
+        out, cur = [], ""
+        for word in text.split(" "):
+            t = (cur + " " + word).strip()
+            if cur and font.size(t)[0] > width:
+                out.append(cur)
+                cur = word
+            else:
+                cur = t
+        return out + ([cur] if cur else [])
+
+    def draw_intro(self, s):
+        self.draw_title_bg(s, dim=205)
+        for y in range(0, H, max(2, sc(3))):                          # scanlines
+            pygame.draw.line(s, (0, 0, 0), (0, y), (W, y))
+        if not hasattr(self, "story_font"):
+            self.story_font = pygame.font.Font(None, sc(26))
+        f = self.story_font
+        x, width = sc(90), W - sc(180)
+        st = self.story
+        hd = self.small.render(st.header, True, (90, 230, 120))
+        s.blit(hd, (x, sc(34)))
+        pygame.draw.line(s, (40, 110, 60), (x, sc(52)), (W - x, sc(52)))
+        starts, end = self.intro_times()
+        y = sc(68)
+        lh = f.get_linesize()
+        cursor = None
+        n = len(st.lines)
+        for i, (ln, t0) in enumerate(zip(st.lines, starts)):
+            k = max(0, min(len(ln), int((self.intro_t - t0) * self.INTRO_CPS)))
+            if k == 0:
+                break
+            if i == n - 1:                                            # the status line: big, red, centred
+                img = self.mid.render(ln[:k], True, (255, 70, 50))
+                y += sc(10)
+                x0 = W / 2 - self.mid.size(ln)[0] / 2
+                s.blit(img, (x0, y))
+                cursor = (x0 + img.get_width() + sc(3), y, self.mid.get_linesize())
+                continue
+            col = (255, 220, 120) if i == n - 2 else ((150, 200, 160) if i == 0 else (215, 222, 210))
+            shown = ln[:k]
+            used = 0
+            for row in self.wrap(f, ln, width):                     # wrap the whole line, so words don't jump rows
+                part = shown[used:used + len(row)]
+                used += len(row) + 1
+                if part:
+                    img = f.render(part, True, col)
+                    s.blit(img, (x, y))
+                    cursor = (x + img.get_width() + sc(3), y, lh)
+                y += lh
+                if used > len(shown):
+                    break
+            y += sc(7)
+        if cursor and int(self.time * 3) % 2 == 0:
+            pygame.draw.rect(s, (90, 230, 120), (cursor[0], cursor[1] + sc(3), sc(10), cursor[2] - sc(8)))
+        if self.intro_t >= end:
+            if int(self.time * 2) % 2 == 0:
+                self.center_text(s, self.font, "Press START / ENTER / A", H - sc(24), (255, 220, 120))
+        else:
+            hint = self.small.render("any button: skip", True, (90, 120, 100))
+            s.blit(hint, (W - hint.get_width() - sc(16), H - sc(22)))
+
+    def title_menu_rects(self):
+        n = len(self.TITLE_PAGES[self.title_page])
+        w_, h_, gap, y0 = {"main": (sc(320), sc(46), sc(14), sc(214)),
+                           "local": (sc(280), sc(40), sc(10), H - sc(132)),
+                           "online": (sc(320), sc(44), sc(12), sc(316)),
+                           "settings": (sc(560), sc(36), sc(8), sc(100))}[self.title_page]
+        return [pygame.Rect(int(W / 2 - w_ / 2), int(y0 + i * (h_ + gap)), int(w_), int(h_)) for i in range(n)]
+
+    def draw_floor_scroll(self, s):
+        """The old scrolling floor (a fallback if a background map can't be built)."""
         t = self.time
         fl = self.spr["floor_metal"].get("idle", 0)
         alt = [self.spr[n].get("idle", 0) for n in ("floor_grate", "floor_gore", "floor_cables", "floor_bones")]
@@ -3075,15 +3414,145 @@ class Game:
                 if -sc(40) < sx < W + sc(40) and -sc(20) < sy < H + sc(40):
                     h = (cx * 7 + cy * 13) % 11
                     s.blit(alt[h % 4] if h < 4 else fl, (sx - fax, sy - fay))
+
+    def draw_title_bg(self, s, vig=True, dim=150):
+        """Behind the title, intro and lobby screens: a real generated sector, as if on a security camera."""
+        s.fill((12, 10, 18))
+        if self.title_scene is None:
+            try:
+                self.title_scene = TitleScene(self)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                self.title_scene = False
+        if self.title_scene:
+            try:
+                self.title_scene.draw(s)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                self.title_scene = False
+        if not self.title_scene:
+            self.draw_floor_scroll(s)
+        if dim:
+            self.overlay(s, dim, (6, 5, 10))
         if vig:
             s.blit(self.vig, (0, 0), special_flags=pygame.BLEND_MULT)
 
     def draw_title(self, s):
-        self.draw_title_bg(s, vig=False)
-        self.draw_char_row(s, list(range(min(2, len(self.inputs)))), H / 2 + sc(100))
-        self.draw_title_text(s)
+        page = self.title_page
+        self.draw_title_bg(s, dim={"main": 125, "local": 150}.get(page, 170))
+        if page == "main":
+            self.draw_title_main(s)
+        else:
+            self.center_text(s, self.big, self.PAGE_TITLES[page], sc(48), (235, 240, 255))
+            getattr(self, "draw_title_" + page)(s)
+        self.draw_menu_items(s)
+        if self.title_msg[1] > 0:
+            self.center_text(s, self.mid, self.title_msg[0], H - sc(76) if page != "local" else sc(150), (255, 140, 120))
+        back = "ESC quit" if page == "main" else "ESC / B back"
+        hint = "UP / DOWN choose   -   ENTER / A select   -   " + back
+        if page == "settings":
+            hint = "UP / DOWN choose   -   LEFT / RIGHT change   -   " + back
+        elif page == "local":
+            hint = ("LEFT / RIGHT your body" + (" (each player on their own controller)" if len(self.inputs) > 1 else "")
+                    + "   -   UP / DOWN choose   -   ENTER / A select   -   " + back)
+        self.center_text(s, self.small, hint, H - sc(14), (200, 190, 140))
+        if self.title_scene:
+            self.title_scene.draw_label(s)
 
-    def draw_char_row(self, s, who, row_y, chars=None):
+    def draw_menu_items(self, s):
+        page = self.title_page
+        for i, ((key, label), r) in enumerate(zip(self.TITLE_PAGES[page], self.title_menu_rects())):
+            on = i == self.menu_i
+            self.panel(s, r, 220 if on else 175)
+            pygame.draw.rect(s, (255, 230, 120) if on else (70, 76, 96), r, max(2, sc(3)) if on else 1)
+            col = (255, 255, 255) if on else (165, 170, 185)
+            f = self.font if page == "settings" else self.mid
+            if page == "settings" and key in self.SETTINGS:
+                img = f.render(label, True, col)
+                s.blit(img, (r.x + sc(16), r.centery - img.get_height() / 2))
+                vx = r.right - sc(150)
+                if key in ("sound", "music"):
+                    v = self.sound_vol if key == "sound" else self.music_vol
+                    for k in range(10):
+                        c = (255, 220, 120) if k < round(v * 10) else (55, 58, 72)
+                        pygame.draw.rect(s, c, (vx - sc(8) + k * sc(8), r.centery - sc(6), sc(6), sc(12)))
+                    val = self.small.render(self.setting_value(key), True, col)
+                    s.blit(val, (r.right - sc(24) - val.get_width(), r.centery - val.get_height() / 2))
+                else:
+                    val = f.render(self.setting_value(key), True, (255, 220, 120) if on else col)
+                    s.blit(val, (vx + sc(75) - val.get_width() / 2, r.centery - val.get_height() / 2))
+                if on:
+                    for ch, ax in (("<", vx - sc(22) if key in ("sound", "music") else vx + sc(8)), (">", r.right - sc(10))):
+                        a = f.render(ch, True, (255, 230, 120))
+                        s.blit(a, (ax - a.get_width() / 2, r.centery - a.get_height() / 2))
+            else:
+                img = f.render(label, True, col)
+                s.blit(img, img.get_rect(center=r.center))
+
+    def draw_title_main(self, s):
+        y = sc(96)
+        for dx, dy, c in ((sc(4), sc(4), (0, 0, 0)), (sc(2), sc(2), (150, 20, 20))):
+            sh = self.big.render("SKULLS & STUFF", True, c)
+            s.blit(sh, sh.get_rect(center=(W / 2 + dx, y + dy)))
+        logo = self.big.render("SKULLS & STUFF", True, (235, 240, 255))
+        s.blit(logo, logo.get_rect(center=(W / 2, y)))
+        self.center_text(s, self.font, self.story.tagline, y + sc(46), (255, 95, 75))
+        self.center_text(s, self.small, "an isometric twin-stick shooter  -  procedurally generated sectors",
+                         y + sc(70), (150, 165, 190))
+        info = []
+        if self.best:
+            info.append("Best %d" % self.best)
+        info.append("Demand: %s" % perf.MODES[perf.local]["label"])
+        dev = self.input.device_name
+        info.append(("Controller: %s" % dev) if dev else "No controller (plug one in any time)")
+        for i, ln in enumerate(info):
+            img = self.small.render(ln, True, (150, 160, 180))
+            s.blit(img, (W - img.get_width() - sc(16), sc(14) + i * sc(17)))
+
+    def draw_title_local(self, s):
+        lines = [
+            "Pad: L-STICK move - R-STICK aim - RT fire - A pick up - X reload - Y swap - LB dash - D-PAD module - B/RB use - START menu",
+            "Keys: WASD move - MOUSE aim - CLICK fire - E pick up - R reload - Q swap - SHIFT dash - 1-4 module - F use - ENTER menu",
+        ]
+        for i, ln in enumerate(lines):
+            self.center_text(s, self.small, ln, sc(92 + i * 18), (185, 190, 205))
+        self.draw_char_row(s, list(range(min(2, len(self.inputs)))), H / 2 + sc(40))
+        p2 = ("PLAYER 2 READY  -  each of you picks a body with LEFT / RIGHT" if len(self.inputs) > 1 else
+              "CO-OP: a 2nd controller presses BACK / SELECT to join")
+        self.center_text(s, self.small, p2, H - sc(34), (90, 230, 210))
+        if self.best:
+            img = self.small.render("Best %d" % self.best, True, (150, 160, 180))
+            s.blit(img, (W - img.get_width() - sc(16), sc(14)))
+
+    def draw_title_online(self, s):
+        mode = perf.MODES[perf.local]["label"]
+        lines = [
+            ("Up to 4 players, each on their own screen. Windows, Mac, Linux and Raspberry Pi play together.", (215, 220, 230)),
+            ("Everyone needs the same version of the game.", (215, 220, 230)),
+            ("Same Wi-Fi: the host's game shows up in the JOIN list.  Over the internet: Tailscale (F1 on the host / join screen).",
+             (170, 180, 200)),
+            ("The host gets a game name - it's the password, so only give it to friends.", (170, 180, 200)),
+            ("The session runs at the lowest demand mode in it (yours: %s)." % mode, (120, 230, 255)),
+        ]
+        for i, (ln, c) in enumerate(lines):
+            self.center_text(s, self.font if i < 2 else self.small, ln, sc(118 + i * 30), c)
+        if self.player_name:
+            self.center_text(s, self.small, "Your name: %s  (N in the lobby to change it)" % self.player_name, sc(282), (255, 220, 120))
+
+    def draw_title_settings(self, s):
+        key = self.TITLE_PAGES["settings"][self.menu_i][0]
+        if key == "demand":
+            dm = perf.MODES[perf.local]
+            help_ = "%s: %s. Lower modes go easier on slower machines." % (dm["label"], dm["blurb"])
+            if perf.is_raspberry_pi():
+                help_ += " (This looks like a Raspberry Pi.)"
+        else:
+            help_ = self.SETTING_HELP.get(key, "")
+        self.center_text(s, self.font, help_, H - sc(48), (170, 185, 210))
+
+    def draw_char_row(self, s, who, row_y, chars=None, tag_dy=128):
         """Character select: three bodies walking in place, tops spinning; a P1 / P2 tag over each player's pick."""
         chars = self.chars if chars is None else chars
         t = self.time
@@ -3115,47 +3584,7 @@ class Game:
             s.blit(de, (cx - de.get_width() / 2, cy + sc(60)))
             for k in picked:
                 tag = self.mid.render("P%d" % (k + 1), True, self.PLAYER_COLORS[k])
-                s.blit(tag, (cx - tag.get_width() / 2 + (picked.index(k) - (len(picked) - 1) / 2) * sc(40), cy - sc(128)))
-
-    def draw_title_text(self, s):
-        t = self.time
-        s.blit(self.vig, (0, 0), special_flags=pygame.BLEND_MULT)
-        self.center_text(s, self.big, "SKULLS & STUFF", sc(70), (235, 240, 255))
-        self.center_text(s, self.font, "an isometric twin-stick shooter  -  procedurally generated sectors", sc(112), (150, 170, 200))
-        dev = self.input.device_name
-        lines = [
-            "Pad: L-STICK move - R-STICK aim - RT fire - A pick up - X reload - Y swap - LB dash - D-PAD module - B/RB use - START menu",
-            "Keys: WASD move - MOUSE aim - CLICK fire - E pick up - R reload - Q swap - SHIFT dash - 1-4 module - F use - ENTER menu",
-            ("Controller detected: %s" % dev) if dev else "No controller detected (plug one in any time)",
-            "CO-OP: a 2nd controller presses BACK / SELECT to join on this screen  -  or HOST / JOIN a net game for up to 4"
-            + ("   (P2 READY)" if len(self.inputs) > 1 else ""),
-        ]
-        for i, ln in enumerate(lines):
-            self.center_text(s, self.font, ln, sc(150 + i * 22), (190, 195, 210) if i < 2 else ((120, 230, 255) if i == 2 else (90, 230, 210)))
-        dn = self.font.render("[Q / Y]  Damage numbers: %s" % ("ON" if self.damage_numbers else "OFF"), True,
-                              (255, 220, 120) if self.damage_numbers else (150, 160, 180))
-        s.blit(dn, (W - dn.get_width() - sc(16), sc(14)))
-        dm = perf.MODES[perf.local]
-        dl = self.font.render("[R / X]  Demand: %s" % dm["label"], True, {"high": (150, 160, 180), "mid": (255, 220, 120),
-                                                                          "low": (120, 230, 255)}[perf.local])
-        s.blit(dl, (W - dl.get_width() - sc(16), sc(34)))
-        dh = self.small.render(dm["blurb"] + (" (this looks like a Raspberry Pi)" if perf.is_raspberry_pi() else ""), True,
-                               (130, 135, 150))
-        s.blit(dh, (W - dh.get_width() - sc(16), sc(54)))
-        for i, (item, r) in enumerate(zip(self.TITLE_MENU, self.title_menu_rects())):
-            on = i == self.menu_i
-            self.panel(s, r, 210 if on else 120)
-            if on:
-                pygame.draw.rect(s, (255, 230, 120), r, max(2, sc(3)))
-            img = self.font.render(item, True, (255, 255, 255) if on else (150, 155, 170))
-            s.blit(img, img.get_rect(center=r.center))
-        if int(t * 2) % 2 == 0:
-            self.center_text(s, self.font, "LEFT / RIGHT your body" + (" (each player on their own controller)" if len(self.inputs) > 1 else "")
-                             + "   -   UP / DOWN choose   -   START / ENTER / A go", H - sc(40), (255, 220, 120))
-        if self.title_msg[1] > 0:
-            self.center_text(s, self.mid, self.title_msg[0], sc(246), (255, 140, 120))
-        if self.best:
-            self.center_text(s, self.font, "Best %d" % self.best, H - sc(14), (140, 150, 170))
+                s.blit(tag, (cx - tag.get_width() / 2 + (picked.index(k) - (len(picked) - 1) / 2) * sc(40), cy - sc(tag_dy)))
 
 
 if __name__ == "__main__":

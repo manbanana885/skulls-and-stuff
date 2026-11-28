@@ -39,14 +39,17 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
   burning and poison now tick on you until they wear off
 - Damage types (Kinetic, Explosive, Fire, Chemical, Cryo, Radiation, Electrical) against enemy categories
   (Undead, Robot, Demon, Construct, Mutant): bring the right gun. Kinetic guns can roll Penetrating Core or
-  Expanding rounds; optional colour-coded damage numbers ([Q / Y] on the title or pause screen)
-- Three playable bodies, picked on the title screen: Skelebot (undead, balanced), CanBot (robot drum on tank
+  Expanding rounds; optional colour-coded damage numbers (Settings, or Q / Y on the pause screen)
+- Three playable bodies, picked on the Local Play page: Skelebot (undead, balanced), CanBot (robot drum on tank
   treads, +20% integrity / -20% speed) and Super Mutant (mutant, +20% speed / -20% integrity)
 - Deployable MG and mortar turret modules (F / B) that draw monsters, take damage, and go up like a tactical nuke
 - Explosive barrels in four kinds: red (fire + burning ground), green (toxic gas + acid), yellow (radiation
   fallout) and orange (shrapnel) - they hurt monsters and you alike, and chain off each other. Pick one up
   with E / A and put it down somewhere better
 - Drop-in local co-op for 2 players, and net play for up to 4 across Windows, Mac and Linux
+- Every launch opens on a new, randomly written escape story: you're a facility's experiment that woke up and
+  wants out (who built you, what you are, who's hunting you all change). The menus sit over real generated
+  sectors, shown like a security-camera feed that cuts to a new biome every few seconds
 
 ## How to play (Windows, no Python experience needed)
 
@@ -107,7 +110,11 @@ WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). Q / Y sw
 (with Jump Jets equipped). Aiming with the mouse shows a red crosshair; it (and the normal pointer on menus)
 hides after 5 seconds without mouse movement.
 
-- **Demand mode: R / X on the title screen** cycles HIGH / MID / LOW. Lower modes put fewer monsters on the
+- **Menus:** the main menu has **Local Play** (pick your body, 2-player co-op), **Online Play** (host or join a
+  net game) and **Settings**. UP / DOWN choose, ENTER / A select, ESC / B back; the mouse works too.
+- **Settings:** demand mode, damage numbers, sound and music volume, fullscreen, and whether the story plays at
+  startup ("Tell me a new story" plays a fresh one any time). Everything is saved as you change it.
+- **Demand mode (Settings)** steps HIGH / MID / LOW. Lower modes put fewer monsters on the
   map to go easy on slower machines, and make up for it: MID has about 3/4 of the monsters with 1.4x health,
   LOW about half with 2x health, and both make them quicker and more aggressive. Lower modes also use fewer
   particles. A Raspberry Pi starts on LOW, a PC on HIGH. In a net game the whole session runs at the lowest
@@ -130,14 +137,14 @@ and confirms with A / START (B / BACK backs out). The game waits while they choo
 Everyone needs the **same version** of the game. The easiest way is for everyone to download it from the
 same place at the same time. Windows, Mac and Linux players can play together.
 
-**Hosting:** on the title screen, choose **HOST NET GAME**. The lobby shows your **game name** (a random
+**Hosting:** on the main menu, choose **ONLINE PLAY**, then **HOST NET GAME**. The lobby shows your **game name** (a random
 one like `grim-otter-47`) and your address (for example `192.168.1.20`). The game name is the password, so
 only give it to the people you want in. Press TAB to type your own game name, or Y / Q for a new random one. Press **N** to set **your player
 name**: it's shown over your head and in everyone's lobby.
 Pick your body, wait for friends to show up, then press START / A to begin. Friends can also drop into a
 game that's already running.
 
-**Joining:** choose **JOIN NET GAME**.
+**Joining:** choose **ONLINE PLAY**, then **JOIN NET GAME**.
 - **Same network** (same Wi-Fi or router): the host's game appears in the list. Pick it and press A / ENTER.
 - **Over the internet:** type the host's address. The easiest and safest way is **Tailscale** (free):
   1. Everyone installs it from [tailscale.com/download](https://tailscale.com/download) and signs in (a Google or

@@ -682,7 +682,7 @@ class HostSession:
 def draw_lobby_players(g, s, info, me):
     chars = {p["slot"]: p["char"] for p in info["players"]}
     slots = sorted(chars)
-    g.draw_char_row(s, slots, g.H / 2 + g.sc(142), chars=chars)
+    g.draw_char_row(s, slots, g.H / 2 + g.sc(142), chars=chars, tag_dy=108)
     x0 = g.W / 2 - g.sc(330)
     for i in range(net.MAX_PLAYERS):
         p = next((q for q in info["players"] if q["slot"] == i), None)
