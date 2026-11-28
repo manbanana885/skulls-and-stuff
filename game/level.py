@@ -196,7 +196,7 @@ class Level:
                     if free:
                         x, y = free.pop()
                         self.spawners.append((weighted(rng, hive_kinds), x + 0.5, y + 0.5))
-            for _ in range(rng.randint(1, 3 + depth)):
+            for _ in range(rng.randint(1 + depth // 3, 3 + depth + depth // 3)):     # rooms fill up as you go deeper
                 if free:
                     x, y = free.pop()
                     kind = weighted(rng, kinds)

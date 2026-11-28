@@ -40,7 +40,7 @@ for a in SHOTGUNS:
         if WP.ARCH[a].get("barrels") and wp.st["mag"] != 1:
             bad_mag += 1
         if wp.shell and (wp.st["pellets"] != n or wp.st["proj"] != "slug"
-                         or wp.projectiles_per_shot() != n * (2 if wp.st["twin"] else 1)):
+                         or wp.projectiles_per_shot() != n * (1 + int(wp.st["twin"]))):
             bad_slugs += 1
         if wp.shell and wp.ammo_type != WP.SHELLS[wp.shell]["ammo"]:
             bad_slugs += 1

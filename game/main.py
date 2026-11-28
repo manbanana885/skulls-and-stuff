@@ -1188,7 +1188,9 @@ class Game:
         for hz in w.hazards:
             gx, gy = ground(hz[0], hz[1])
             if on_screen(gx, gy):
-                if hz[4] in ("acid", "acidp"):
+                if hz[4] == "acidp" and len(hz) > 7 and hz[7] == "radiation":
+                    self.draw_rad(gx, gy, hz)          # Irradiated spatter glows like fallout
+                elif hz[4] in ("acid", "acidp"):
                     self.draw_pool(gx, gy, hz)
                 elif hz[4] == "jet":
                     self.draw_jet_pool(gx, gy, hz)
@@ -1241,7 +1243,10 @@ class Game:
                 col, rar = lt.item.color, lt.item.rarity
                 n += 1
                 items.append((key, n, None, lambda gx=gx, gy=gy, c=col, r=rar: self.draw_pillar(gx, gy, c, r), 0))
-                if rar >= WP.DEMONIC:            # top-tier pickups glow hard
+                if rar == WP.VOID:
+                    n += 1
+                    items.append((key, n, None, lambda gx=gx, gy=gy: self.draw_void_aura(gx, gy - sc(30), sc(34)), 0))
+                elif rar >= WP.DEMONIC:            # top-tier pickups glow hard
                     n += 1
                     items.append((key, n, None, lambda gx=gx, gy=gy, c=col: self.add_glow(gx, gy - sc(30), sc(70), (c[0] // 3, c[1] // 3, c[2] // 3)), 0))
                 n += 1
@@ -1286,6 +1291,11 @@ class Game:
             if b.eels:
                 n += 1
                 items.append((b.x + b.y + 0.4, n, None, lambda b=b, ox=ox, oy=oy: self.draw_eels(b, ox, oy), 0))
+        for v in getattr(w, "voids", []):
+            gx, gy = ground(v["x"], v["y"])
+            if on_screen(gx, gy):
+                n += 1
+                items.append((v["x"] + v["y"] + 0.3, n, None, lambda v=v, gx=gx, gy=gy: self.draw_void(v, gx, gy), 0))
         for e in w.enemies:
             gx, gy = ground(e.x, e.y)
             if not on_screen(gx, gy):
@@ -1368,8 +1378,19 @@ class Game:
                 if pl.flash > 0:
                     n += 1
                     items.append((plkey, n, torso.flash(timg), plx - torso.ax, ply - torso.ay + bob))
-                aura = {WP.SACRED: (140, 140, 130), WP.ELDRITCH: (30, 120, 30), WP.DEMONIC: (140, 28, 14)}.get(pl.weapon.rarity)
-                if aura:
+                rar_ = pl.weapon.rarity
+                aura = {WP.SACRED: (140, 140, 130), WP.ELDRITCH: (30, 120, 30), WP.DEMONIC: (140, 28, 14)}.get(rar_)
+                if rar_ == WP.CHAOS:
+                    aura = tuple(c_ // 2 for c_ in pl.weapon.color)
+                if rar_ == WP.VOID:
+                    pk_ = 0.85 + 0.15 * math.sin(self.time * 3)
+                    n += 1
+                    items.append((plkey - 0.05, n, None, lambda x_=plx, y_=ply, k=pk_: self.draw_void_aura(x_, y_ - sc(40), int(sc(40) * k)), 0))
+                    if rnd.random() < 0.45:       # light falling into it
+                        a_ = rnd.random() * math.tau
+                        w.add(Particle("glow", pl.x + math.cos(a_) * 0.6, pl.y + math.sin(a_) * 0.6, rnd.uniform(0.4, 1.4),
+                                       -math.cos(a_) * 1.2, -math.sin(a_) * 1.2, 0, 0.45, (240, 240, 255), 2))
+                elif aura:
                     pk_ = 0.75 + 0.25 * math.sin(self.time * 3)
                     n += 1
                     items.append((plkey - 0.05, n, None, lambda x_=plx, y_=ply, c=aura, k=pk_:
@@ -1377,7 +1398,8 @@ class Game:
                     if rnd.random() < 0.45:
                         w.add(Particle("fire" if pl.weapon.rarity == WP.DEMONIC else "glow", pl.x + rnd.uniform(-0.3, 0.3),
                                        pl.y + rnd.uniform(-0.3, 0.3), rnd.uniform(0.3, 1.3), 0, 0, rnd.uniform(0.6, 1.4), 0.6,
-                                       {WP.ELDRITCH: (90, 255, 90), WP.SACRED: (255, 255, 235)}.get(pl.weapon.rarity, (255, 70, 30)),
+                                       {WP.ELDRITCH: (90, 255, 90), WP.SACRED: (255, 255, 235),
+                                        WP.CHAOS: pl.weapon.color}.get(pl.weapon.rarity, (255, 70, 30)),
                                        8 if pl.weapon.rarity == WP.DEMONIC else 2))
                 if len(w.players) > 1:   # who's who
                     n += 1
@@ -1467,6 +1489,47 @@ class Game:
     def add_glow(self, x, y, r, col):
         g = glow(r, col)
         self.screen.blit(g, (x - r, y - r), special_flags=pygame.BLEND_ADD)
+
+    def draw_void_aura(self, x, y, r):
+        """Void tier: a hole of black ringed in white."""
+        r = max(4, r)
+        hole = pygame.Surface((r * 2 + 6, r * 2 + 6), pygame.SRCALPHA)
+        for k in range(4):                 # soft black falloff toward the rim
+            pygame.draw.circle(hole, (0, 0, 0, 70 + k * 45), (r + 3, r + 3), int(r * (1 - k * 0.18)))
+        pygame.draw.circle(hole, (255, 255, 255, 230), (r + 3, r + 3), r, max(1, sc(2)))
+        self.screen.blit(hole, (x - r - 3, y - r - 3))
+
+    def draw_void(self, v, gx, gy):
+        """A Void black hole: a growing black sphere, white rim, crowned in fractal white fire - then it snaps shut."""
+        s = self.screen
+        t, g, c = v["t"], v["grow"], v["collapse"]
+        if t < g:
+            size = 0.18 + 0.55 * (t / g) ** 0.7
+        else:
+            q = min(1.0, (t - g) / c)
+            size = 0.73 * (1 - q) ** 2 + 0.03
+        R = max(3, int(size * sc(44)))
+        cx, cy = gx, gy - sc(30)
+        rng = random.Random(int(self.time * 24) * 7919 + int(v["seed"] * 1e6))
+
+        def branch(x, y, a, ln, depth):
+            ex, ey = x + math.cos(a) * ln, y + math.sin(a) * ln * 0.8
+            shade = 255 - (3 - depth) * 40
+            pygame.draw.line(s, (shade, shade, shade), (int(x), int(y)), (int(ex), int(ey)), max(1, depth))
+            if depth > 1:
+                for sgn in (-1, 1):
+                    branch(ex, ey, a + sgn * rng.uniform(0.35, 0.8), ln * rng.uniform(0.5, 0.7), depth - 1)
+        n = 16
+        for i in range(n):                  # fractal white fire licking off the rim
+            a = i / n * math.tau + rng.uniform(-0.15, 0.15)
+            x0, y0 = cx + math.cos(a) * R, cy + math.sin(a) * R * 0.8
+            branch(x0, y0, a + rng.uniform(-0.35, 0.35), R * rng.uniform(0.35, 0.75), 3)
+        halo = pygame.Surface((R * 4, R * 4), pygame.SRCALPHA)
+        pygame.draw.circle(halo, (0, 0, 0, 90), (R * 2, R * 2), int(R * 1.6))
+        s.blit(halo, (cx - R * 2, cy - R * 2))
+        pygame.draw.circle(s, (0, 0, 0), (cx, cy), R)
+        pygame.draw.circle(s, (255, 255, 255), (cx, cy), R, max(1, sc(2)))
+        self.add_glow(cx, cy, R * 2, (40, 40, 50))
 
     def tinted(self, img, col):
         key = (id(img), col)
@@ -2498,7 +2561,12 @@ class Game:
             lines.append((self.small, "+ %s: %s" % (m["adj"], m["desc"]), (150, 220, 160)))
         st_ = wp.st
         fx_ = WP.TIER_FX.get(wp.rarity)
-        if wp.rarity == WP.SACRED:
+        if wp.rarity == WP.VOID:
+            lines.append((self.small, "VOID: hits open a black hole (pulls %.1f tiles), then explode"
+                          % st_["void"], (235, 235, 245)))
+        elif wp.rarity == WP.CHAOS:
+            lines.append((self.small, "CHAOS: a new damage type every shot", wp.color))
+        elif wp.rarity == WP.SACRED:
             lines.append((self.small, "SACRED: heals you %.0f integrity/s while wielded" % fx_["regen"], (255, 255, 255)))
         elif wp.rarity == WP.ELDRITCH:
             lines.append((self.small, "ELDRITCH: drains %.0f integrity/s while wielded, heals you %d%% of damage dealt"
@@ -2509,7 +2577,9 @@ class Game:
         import damage as DM
         sec = DM.secondary(st_)
         main_ = st_["dtype"].upper() + ((" (%s)" % DM.AMMO_LABEL[st_["ammo"]]) if st_.get("ammo") else "")
-        lines.append((self.small, [("DAMAGE: ", (130, 135, 150)), (main_, DM.COLOR[st_["dtype"]])]
+        if wp.rarity == WP.CHAOS:
+            main_ = "CHAOS - ANY OF THEM"
+        lines.append((self.small, [("DAMAGE: ", (130, 135, 150)), (main_, DM.COLOR[st_["dtype"]] if wp.rarity != WP.CHAOS else wp.color)]
                       + [x_ for t in sec for x_ in (("  +  ", (130, 135, 150)), (t.upper(), DM.COLOR[t]))], None))
         if st_.get("shell"):
             n_ = max(1, st_["barrels"])

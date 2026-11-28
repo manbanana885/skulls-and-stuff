@@ -35,14 +35,14 @@ def turret_mortar(root):
     for k in range(3):
         cyl("mo_shell%d" % k, 0.025, 0.12, (-0.16 + k * 0.035, 0.13, 0.22), M["brass"], root, segs=8)
     cyl("mo_turn", 0.12, 0.06, (0, 0, 0.07), M["steel2"], root, segs=14)
-    tube = empty("mo_tube", (0.0, 0, 0.12), root, (0, -0.85, 0))          # tilted ~50 degrees up, firing toward +X
+    tube = empty("mo_tube", (0.0, 0, 0.12), root, (0, 0.85, 0))           # tilted ~50 degrees up, firing toward +X
     cyl("mo_barrel", 0.065, 0.62, (0, 0, 0.3), M["olive"], tube, segs=14)
     ring("mo_band1", 0.07, 0.04, (0, 0, 0.12), M["hazard"], tube, segs=14)
     ring("mo_band2", 0.07, 0.03, (0, 0, 0.45), M["darkmetal"], tube, segs=14)
     ring("mo_mouth", 0.072, 0.04, (0, 0, 0.6), M["steel"], tube, segs=14)
     cyl("mo_bore", 0.05, 0.02, (0, 0, 0.615), M["black"], tube, segs=12)
     for s_ in (1, -1):                                   # bipod to the plate
-        bone("mo_bip%d" % s_, (0.18, s_ * 0.03, 0.42), (0.3, s_ * 0.15, 0.03), 0.016, M["steel2"], root)
+        bone("mo_bip%d" % s_, (0.3, s_ * 0.05, 0.4), (0.44, s_ * 0.16, 0.03), 0.016, M["steel2"], root)
     box("mo_sight", (0.06, 0.04, 0.05), (0.05, -0.1, 0.28), M["darkmetal"], root)
     sphere("mo_lens", 0.015, (0.08, -0.1, 0.3), M["glow_red"], root)
     sphere("mo_core", 0.028, (-0.12, -0.1, 0.1), M["glow_cyan"], root)

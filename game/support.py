@@ -40,20 +40,20 @@ KINDS = {
     "shield": dict(label="Arc Shield", color=(110, 200, 255), weight=9, params={
         "arc":      (0.75, 1.6, "ARC", "%d deg"),
         "spin":     (0.9, 2.6, "SPIN", "%.1f/s"),
-        "capacity": (5, 16, "BLOCKS", "%d"),
-        "recharge": (6.0, 2.5, "REBOOT", "%.1fs"),
+        "capacity": (4, 10, "BLOCKS", "%d"),
+        "recharge": (8.0, 3.5, "REBOOT", "%.1fs"),
         "size":     (0.85, 1.3, "RADIUS", "x%.2f"),
     }),
     "shield_front": dict(label="Forward Shield", color=(255, 205, 110), weight=7, params={
         "arc":      (1.1, 2.1, "ARC", "%d deg"),
-        "capacity": (8, 20, "BLOCKS", "%d"),
-        "recharge": (7.0, 3.0, "REBOOT", "%.1fs"),
+        "capacity": (5, 12, "BLOCKS", "%d"),
+        "recharge": (9.0, 4.0, "REBOOT", "%.1fs"),
         "size":     (0.85, 1.2, "RADIUS", "x%.2f"),
     }),
     "shield_rear": dict(label="Rear Guard", color=(190, 140, 255), weight=7, params={
         "arc":      (1.3, 2.4, "ARC", "%d deg"),
-        "capacity": (8, 20, "BLOCKS", "%d"),
-        "recharge": (7.0, 3.0, "REBOOT", "%.1fs"),
+        "capacity": (5, 12, "BLOCKS", "%d"),
+        "recharge": (9.0, 4.0, "REBOOT", "%.1fs"),
         "size":     (0.85, 1.2, "RADIUS", "x%.2f"),
     }),
     "medbot": dict(label="Medbot", color=(120, 255, 150), weight=8, params={
@@ -621,7 +621,7 @@ class Support:
             return
         if self.charge < cap:                # trickle back between hits
             self.regen += dt
-            if self.regen >= self.p["recharge"] * 0.5:
+            if self.regen >= self.p["recharge"]:      # one block back per reboot-time without a hit
                 self.regen = 0.0
                 self.charge += 1
         r = self.radius()
@@ -644,7 +644,8 @@ class Support:
             w.blocked.add(id(b))
             if b.blast:
                 w.explode(b.x, b.y, b.blast * 0.6, 0, KINDS[self.kind]["color"], hurt_player=False, quiet=True, small=True)
-            self.absorb(w, pl, b.x, b.y)
+            # big hits cost more: about one block per 10 damage, and anything that explodes at least two
+            self.absorb(w, pl, b.x, b.y, cost=max(2 if b.blast else 1, int(round(b.dmg / 10))))
             if self.down > 0:
                 break
 
@@ -1386,4 +1387,5 @@ def generate(level, rng=None, bonus=0, kind=None, rarity=None):
         kind = rng.choices(ks, weights=[KINDS[k]["weight"] for k in ks])[0]
     if rarity is None:
         rarity = WP.roll_rarity(rng, level, bonus)
+    rarity = min(rarity, WP.SACRED)        # Void and Chaos are weapon-only tiers
     return Support(kind, rarity, level, rng.randrange(1 << 30))
