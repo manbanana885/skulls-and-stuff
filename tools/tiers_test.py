@@ -104,7 +104,7 @@ def open_spot(w, p, dist):
 
 for arch in WP.VOID_ARCHS:
     best = None
-    for tries in range(12):
+    for tries in range(60):
         w, p = setup()
         spot = open_spot(w, p, 6.0)
         if spot:
@@ -144,8 +144,10 @@ for arch in WP.VOID_ARCHS:
           "void %s: hole pulled the pack from %.1f to %.1f tiles, then collapsed and exploded (%.0f damage)" % (arch, d0, d1, dmg))
 
 # void rounds fired for real open holes where they land
-w, p = setup()
-spot = open_spot(w, p, 5.0)
+spot = None
+while spot is None:
+    w, p = setup()
+    spot = open_spot(w, p, 5.0)
 e = W.Enemy("zombie", spot[0], spot[1], awake=True, depth=4)
 e.hp = e.maxhp = 5000
 e.speed = 0

@@ -4,6 +4,12 @@ An isometric twin-stick shooter about cyborg skeletons, written in Python with p
 Every sprite is pre-rendered from procedural Blender models and every sound is synthesized offline.
 
 - Procedural levels across 17 biomes, each with its own enemies, a signature monster, bosses and 2-3 trap types
+- Every room starts with a group that fits its biome, and rooms fill up the deeper you go: shooters hang back
+  from the doorways, brawlers hold the middle, swarms bunch up and ambushers lurk by the walls. Now and then a
+  room is built round a spawning station that keeps breeding until you shoot it: a rotting carcass (maggots,
+  leeches, roaches), a grave (the risen dead), a vat (pink melters and lab mutants), a fabricator (robots), a
+  hell-gate (demons) or a nest (spiders, snakes, scorpions). Rooms you haven't cleared slowly restock while
+  you're far away
 - Procedural guns (30+ archetypes x brands x rarities x mods) and power-ups, including heavy weapons
   (chaingun, railgun, barrage missile launcher, storm coil) that slow you down but hit much harder, a cluster
   bomb launcher and chemical jets (napalm / cryo / rad-waste) that leave hazardous puddles

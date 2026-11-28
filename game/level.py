@@ -1,8 +1,8 @@
-"""Procedural level generation: rooms + wide corridors, biome themes, props, spawners."""
+"""Procedural level generation: rooms + wide corridors, biome themes, props, monsters and spawning stations."""
 import random
 from collections import deque
 from biomes import BIOMES
-from bestiary import ENEMIES as _BEST
+import spawning as SP
 
 # enemy types unlocked by depth: (min_depth, type, weight)
 ENEMY_TABLE = [
@@ -11,7 +11,6 @@ ENEMY_TABLE = [
     (3, "spider", 2), (3, "turret", 2), (3, "skull", 3), (3, "hellspawn", 2.5),
     (4, "brute", 1.5), (4, "walker", 1.5),
 ]
-NOT_FROM_HIVES = {"turret", "walker", "brute", "mimic", "chestmimic", "mourner", "bonepriest", "lurker", "cinderfiend", "devourer"}
 # signature enemies roam outside their home biome too, just rarely (home biomes boost them x4)
 ENEMY_TABLE += [(1, "pinkmelt", 1.0)] + [(2, k, 0.35) for k in (
     "bonepriest", "rustbound", "wendigo", "cinderfiend", "mourner", "enthraller", "devourer", "chestmimic", "boghag",
@@ -19,6 +18,7 @@ ENEMY_TABLE += [(1, "pinkmelt", 1.0)] + [(2, k, 0.35) for k in (
 # vermin, fire demons and the Pink Heavy roam everywhere
 ENEMY_TABLE += [(1, "viper", 1.6), (1, "roach", 0.45), (2, "scorpion", 1.4), (3, "cobra", 1.2),
                 (2, "imp", 0.7), (3, "pitdemon", 1.0), (4, "devil", 0.9), (2, "pinkheavy", 1.0)]
+NATIVE_WEIGHT = 6.0      # base weight of a biome's own monsters (x5 biome bias): about half of what lives there
 # (first depth, depth it reaches full strength): weight climbs (quadratically) in between - rare early, common later
 RAMP = {"pinkheavy": (2, 5), "pitdemon": (3, 5), "devil": (4, 6)}
 # where the new monsters like to live (on top of the biome's own bias)
@@ -79,7 +79,9 @@ class Level:
         self.floor = [None] * (W * H)
         self.wallkind = [None] * (W * H)
         self.props = {}                          # (x,y) -> sprite name (decor or solid)
-        self.enemies, self.spawners, self.pickups = [], [], []
+        self.enemies, self.spawners, self.pickups = [], [], []   # spawners: spawning stations (name, x, y, kinds)
+        self.enemy_rooms = []                    # which room each of self.enemies was placed in (index into self.rooms)
+        self.room_info = []                      # per populated room: idx, rect, the kinds it restocks from, its headcount
         self.corridor_floor = B["floors"][0][0]
         decor = B["decor"]
 
@@ -174,10 +176,18 @@ class Level:
         # --- populate rooms
         bias = B["bias"]
         sig = set(B["signature"])
+        table = {k: [d, w] for d, k, w in ENEMY_TABLE}
+        for k in sig:                    # the biome's own monsters: common at home (they're not in the shared table)
+            if k in table:
+                table[k][1] = max(table[k][1], 1.5)
+            else:
+                table[k] = [1, NATIVE_WEIGHT]
         kinds = [(k, w * bias.get(k, 1.0) * HOMES.get(k, {}).get(biome, 1.0) * ramp(k, depth))
-                 for d, k, w in ENEMY_TABLE if depth >= d or k in sig]
-        hive_kinds = [(k, w) for k, w in kinds if k not in NOT_FROM_HIVES]
-        for r in rooms[1:]:
+                 for k, (d, w) in table.items() if depth >= d or k in sig]
+        n_st = 0
+        for ri, r in enumerate(rooms):
+            if ri == 0:
+                continue                           # the start room stays quiet
             free = [(x, y) for x, y in r.cells() if self.solid[self.i(x, y)] == 0 and (x, y) != (ex, ey)
                     and abs(x - ex) + abs(y - ey) > 2]
             rng.shuffle(free)
@@ -191,21 +201,16 @@ class Level:
             for _ in range(rng.randint(1, 4)):
                 if free:
                     self.props[free.pop()] = rng.choice(decor)
-            if r is not far and rng.random() < 0.45 + depth * 0.06:
-                for _ in range(1 + (rng.random() < depth * 0.1)):
-                    if free:
-                        x, y = free.pop()
-                        self.spawners.append((weighted(rng, hive_kinds), x + 0.5, y + 0.5))
-            for _ in range(rng.randint(1 + depth // 3, 3 + depth + depth // 3)):     # rooms fill up as you go deeper
-                if free:
-                    x, y = free.pop()
-                    kind = weighted(rng, kinds)
-                    self.enemies.append((kind, x + 0.5, y + 0.5))
-                    pack = (_BEST.get(kind) or {}).get("pack")
-                    for _ in range(rng.randint(*pack) - 1 if pack else 0):     # roaches and imps come in packs
-                        if free:
-                            x, y = free.pop()
-                            self.enemies.append((kind, x + 0.5, y + 0.5))
+            # a group that fits the biome, laid out by role; now and then round a spawning station
+            mob, st, rkinds = SP.compose(rng, self, r, free, kinds, depth,
+                                         allow_station=r is not far and n_st < SP.max_stations(depth))
+            if st:
+                n_st += 1
+                self.spawners.append(st)
+            for k, x, y in mob:
+                self.enemies.append((k, x, y))
+                self.enemy_rooms.append(ri)
+            self.room_info.append(dict(idx=ri, rect=(r.x, r.y, r.w, r.h), kinds=rkinds, quota=len(mob)))
             if free and rng.random() < 0.3:
                 x, y = free.pop()
                 self.pickups.append(("health", x + 0.5, y + 0.5))
