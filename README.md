@@ -10,8 +10,11 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - 21 manufacturers and nine rarity tiers, up to Mythical, Demonic, Eldritch and Sacred guns with their own
   effects (run `run_loot_test.bat` to get only those four tiers)
 - Modules with rolled stats, 4 equipped (one per D-pad direction) plus an 8-slot backpack, managed from the
-  pause menu: buzzsaw orbiter, arc shield, medbot, gun drone, jump jets, decoys, grenades (shrapnel, hex,
-  nuke, incendiary, cryo, corrosive), carryable barrels and more
+  pause menu: buzzsaw orbiter, arc shield, forward shield, rear guard, medbot, gun drone, jump jets, decoys,
+  grenades (shrapnel, hex, nuke, incendiary, cryo, corrosive), carryable barrels and more
+- 17 module makers, each leaning its modules' power, speed, reach, recharge or stamina
+- Forward shields face where you aim and rear guards cover your back; both stop shots *and* claws from their
+  side (explosions still get through)
 - Bosses with multi-phase bullet-hell attack patterns; explosives and bosses breach walls
 - Damage types (Kinetic, Explosive, Fire, Chemical, Cryo, Radiation, Electrical) against enemy categories
   (Undead, Robot, Demon, Construct, Mutant): bring the right gun. Kinetic guns can roll Penetrating Core or

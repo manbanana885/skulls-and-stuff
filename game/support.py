@@ -2,6 +2,8 @@
 
   sawbot    - Buzzsaw Orbiter: circles you and shreds whatever it passes through
   shield    - Arc Shield: a partial ring that orbits you and swallows enemy projectiles
+  shield_front - Forward Shield: a wide wall locked to where you aim; stops shots and claws from the front
+  shield_rear  - Rear Guard: a wall locked behind you; stops shots and claws from behind
   medbot    - Medbot: trails behind you and slowly patches you up
   gunbot    - Gun Drone: hovers beside you and shoots at monsters
   gunarm    - Gun Arm: a pipe arm on your back that fires your stowed gun at its own targets
@@ -41,6 +43,18 @@ KINDS = {
         "capacity": (5, 16, "BLOCKS", "%d"),
         "recharge": (6.0, 2.5, "REBOOT", "%.1fs"),
         "size":     (0.85, 1.3, "RADIUS", "x%.2f"),
+    }),
+    "shield_front": dict(label="Forward Shield", color=(255, 205, 110), weight=7, params={
+        "arc":      (1.1, 2.1, "ARC", "%d deg"),
+        "capacity": (8, 20, "BLOCKS", "%d"),
+        "recharge": (7.0, 3.0, "REBOOT", "%.1fs"),
+        "size":     (0.85, 1.2, "RADIUS", "x%.2f"),
+    }),
+    "shield_rear": dict(label="Rear Guard", color=(190, 140, 255), weight=7, params={
+        "arc":      (1.3, 2.4, "ARC", "%d deg"),
+        "capacity": (8, 20, "BLOCKS", "%d"),
+        "recharge": (7.0, 3.0, "REBOOT", "%.1fs"),
+        "size":     (0.85, 1.2, "RADIUS", "x%.2f"),
     }),
     "medbot": dict(label="Medbot", color=(120, 255, 150), weight=8, params={
         "heal":   (0.35, 1.1, "HEAL", "%.2f/s"),
@@ -144,6 +158,8 @@ KINDS = {
     }),
 }
 TURRETS = {"mgturret", "mortar"}
+SHIELDS = {"shield", "shield_front", "shield_rear"}
+FIXED_SHIELDS = {"shield_front": 0.0, "shield_rear": math.pi}      # facing, relative to where you aim
 # modules whose flavour is rolled, not just their numbers
 ELEMENTS = {"core": ("blast", "magnet", "storm"), "aura": ("burn", "chill", "rad"), "battery": ("revive", "nova"),
             "grenade": ("shrapnel", "hex", "nuke", "incendiary", "cryo", "corrosive"),
@@ -166,6 +182,8 @@ INT = {"capacity", "latches", "trigger", "max", "hp"}
 ADJ = {
     "sawbot": {"dmg": "Serrated", "spin": "Whirling", "orbit": "Wide-Orbit", "size": "Hulking"},
     "shield": {"arc": "Broad", "spin": "Spinning", "capacity": "Fortified", "recharge": "Rapid-Cycle", "size": "Wide"},
+    "shield_front": {"arc": "Broad", "capacity": "Fortified", "recharge": "Rapid-Cycle", "size": "Wide"},
+    "shield_rear": {"arc": "Broad", "capacity": "Fortified", "recharge": "Rapid-Cycle", "size": "Wide"},
     "medbot": {"heal": "Surgical", "reach": "Long-Range", "speed": "Nimble", "size": "Field"},
     "gunbot": {"dmg": "Heavy", "rate": "Rapid", "range": "Long-Range", "speed": "Agile", "spread": "Precise", "size": "Armored"},
     "gunarm": {"rate": "Rapid", "track": "Hunting", "range": "Long-Range", "size": "Extended"},
@@ -186,6 +204,8 @@ ADJ = {
     "mortar": {"dmg": "Heavy", "blast": "High-Yield", "rate": "Rapid", "range": "Long-Range", "hp": "Armored", "rebuild": "Quick-Build"},
 }
 UNIQUE = {"sawbot": ["Mr. Whirly", "The Lawnmower", "Grinder Prime"], "shield": ["The Umbrella", "Halo of Saint Rivet", "Bulwark-9"],
+          "shield_front": ["The Bulwark", "Saint Rivet's Door", "Phalanx"],
+          "shield_rear": ["Watch Your Six", "Turtleback", "The Rearguard"],
           "medbot": ["Nurse Ratchet", "Dr. Bolts", "Saint Gauze"], "gunbot": ["Little Buddy", "The Wingman", "Peacekeeper Mk.0"],
           "gunarm": ["Third Hand", "The Octopus", "Second Opinion"], "leech": ["Mother Tick", "The Sommelier", "Thirsty Boy"],
           "core": ["Spite", "Grudge Engine", "Payback"], "skull": ["Yorick", "Old Smokey", "Ghost Rider"],
@@ -198,6 +218,102 @@ UNIQUE = {"sawbot": ["Mr. Whirly", "The Lawnmower", "Grinder Prime"], "shield": 
 SCALED = {"dmg", "heal", "capacity", "drain", "dps", "burn", "hp"}     # grows with item level
 NOT_SCALED = {("battery", "capacity"), ("battery", "heal"), ("leech", "heal"), ("tether", "heal"), ("barrel", "hp")}
 SPRITE = {"barrel": lambda s: "barrel_" + s.elem}
+
+
+# ---------------------------------------------------------------- manufacturers
+# Every module (barrels aside) comes from a maker. A maker only builds modules in its lines and leans five qualities:
+#   power (damage / healing), speed (fire rate, spin, travel), reach (range, radius, arc),
+#   recharge (cooldowns, reboots, rebuilds) and stamina (blocks, armor, charges, duration).
+LINES = {
+    "sawbot": {"drone"}, "shield": {"defense"}, "shield_front": {"defense"}, "shield_rear": {"defense"},
+    "medbot": {"drone", "bio"}, "gunbot": {"drone", "weapon"}, "gunarm": {"weapon"}, "leech": {"bio"}, "core": {"defense"},
+    "skull": {"drone", "occult"}, "decoy": {"defense", "tech"}, "mines": {"weapon"}, "aura": {"occult", "bio"},
+    "battery": {"occult", "tech"}, "autoloader": {"tech"}, "jets": {"tech"}, "tether": {"tech"}, "magnet": {"tech"},
+    "mgturret": {"weapon", "turret"}, "mortar": {"weapon", "turret"}, "grenade": {"weapon"},
+}
+QUALITY = {
+    "dmg": "power", "dps": "power", "drain": "power", "heal": "power", "burn": "power",
+    "rate": "speed", "spin": "speed", "speed": "speed", "track": "speed", "pull": "speed",
+    "range": "reach", "radius": "reach", "reach": "reach", "orbit": "reach", "length": "reach", "arc": "reach", "dist": "reach",
+    "blast": "reach", "spread": "reach",
+    "cooldown": "recharge", "recharge": "recharge", "rebuild": "recharge", "reload": "recharge", "stow": "recharge",
+    "spacing": "recharge",
+    "capacity": "stamina", "hp": "stamina", "max": "stamina", "latches": "stamina", "duration": "stamina",
+}
+QUALITY_LABEL = {"power": "POWER", "speed": "SPEED", "reach": "REACH", "recharge": "RECHARGE", "stamina": "STAMINA"}
+
+
+def _maker(lines, color, blurb, lean, tier=0, weight=1.0, wild=False):
+    return dict(lines=lines, color=color, blurb=blurb, lean=lean, tier=tier, weight=weight, wild=wild)
+
+
+MAKERS = {
+    "Ossuary Arms": _maker("all", (215, 205, 180), "old reliable bone-and-steel", {"power": 1.15, "speed": 0.9}),
+    "Necrotek": _maker({"drone", "tech", "defense"}, (90, 230, 255), "corporate death-tech",
+                       {"speed": 1.3, "recharge": 1.2, "stamina": 0.85}),
+    "Marrow & Sons": _maker("all", (190, 150, 110), "family workshop, built to last", {"stamina": 1.4, "power": 0.9}),
+    "Cadaver Dynamics": _maker({"weapon", "turret"}, (150, 170, 120), "military ordnance",
+                               {"power": 1.25, "recharge": 1.15, "reach": 0.9}),
+    "Halcyon Biomech": _maker({"bio", "drone"}, (130, 230, 170), "clean-room bio-machines",
+                              {"stamina": 1.2, "reach": 1.2, "power": 0.9}),
+    "Thornwall Defense": _maker({"defense", "turret"}, (120, 140, 110), "frame-mounted, never quits",
+                                {"stamina": 1.45, "speed": 0.8}),
+    "Voltaic Mortuary": _maker({"tech", "weapon"}, (150, 140, 255), "electrified undertakers",
+                               {"reach": 1.25, "power": 1.1, "stamina": 0.9}),
+    "Rattlebone Surplus": _maker("all", (160, 140, 90), "junkyard gadgets, wildly uneven", {}, weight=0.8, wild=True),
+    "Gravewright Robotics": _maker({"drone"}, (200, 210, 225), "skeletal servitors, eager to please",
+                                   {"speed": 1.25, "power": 1.15, "stamina": 0.9}),
+    "Saint Rivet Aegis Works": _maker({"defense"}, (255, 225, 150), "holy shield-smiths",
+                                      {"reach": 1.25, "stamina": 1.25, "speed": 0.9}),
+    "Carrion Bioworks": _maker({"bio", "occult"}, (200, 90, 110), "grown, not built",
+                               {"power": 1.35, "stamina": 0.85}),
+    "Hollowpoint Ordnance": _maker({"weapon", "turret"}, (230, 150, 70), "long guns and big bangs",
+                                   {"reach": 1.25, "power": 1.15, "recharge": 0.85}),
+    # top-tier houses (the same ones that forge the top guns)
+    "The Ninefold Choir": _maker("all", (255, 210, 120), "nine voices, one hymn of ruin",
+                                 dict.fromkeys(QUALITY_LABEL, 1.2), tier=WP.LEGENDARY),
+    "The Gilded Pantheon": _maker("all", (40, 230, 255), "forged by the smiths of dead gods",
+                                  dict.fromkeys(QUALITY_LABEL, 1.3), tier=WP.MYTHICAL),
+    "Brimstone Covenant": _maker("all", (255, 50, 40), "forged in the ninth pit", {"power": 1.5, "recharge": 1.15},
+                                 tier=WP.DEMONIC),
+    "The Unspeakable Works": _maker("all", (90, 255, 90), "built by something that should not build",
+                                    {"power": 1.4, "speed": 1.3}, tier=WP.ELDRITCH),
+    "The Reliquary": _maker("all", (255, 245, 200), "relics of a dead god", dict.fromkeys(QUALITY_LABEL, 1.4), tier=WP.SACRED),
+}
+ARC_MAX = 2.8                          # no shield wraps more than ~160 degrees
+
+
+def makers_for(kind, rarity):
+    lines = LINES.get(kind)
+    if not lines:
+        return []
+    out = []
+    for name, m in MAKERS.items():
+        if m["tier"] > rarity:
+            continue
+        if rarity >= WP.MYTHICAL and m["tier"] < WP.LEGENDARY:
+            continue
+        if m["lines"] != "all" and not (m["lines"] & lines):
+            continue
+        if not m["wild"] and not any(v > 1 and q in qualities_of(kind) for q, v in m["lean"].items()):
+            continue                     # its strengths would do nothing for this module
+        w = m["weight"] * (14.0 if m["tier"] and m["tier"] == rarity else (3.0 if m["tier"] else 1.0))
+        out.append((name, w))
+    return out
+
+
+def qualities_of(kind):
+    out = {QUALITY[n] for n in KINDS[kind]["params"] if n in QUALITY}
+    if kind in SHIELDS | {"sawbot"}:
+        out.add("reach")
+    return out
+
+
+def maker_summary(lean, kind=None):
+    """'+25% REACH  -10% SPEED'; given a kind, only the qualities that module actually has."""
+    has = qualities_of(kind) if kind else set(QUALITY_LABEL)
+    return "  ".join("%+d%% %s" % (round((v - 1) * 100), QUALITY_LABEL[q]) for q, v in lean.items()
+                     if abs(v - 1) > 0.005 and q in has)
 
 
 def targets(w, x, y, rng):
@@ -235,6 +351,26 @@ class Support:
             if name in INT:
                 v = int(round(v)) if name != "trigger" else int(v)
             self.p[name] = v
+        # the maker leans the numbers: x1.25 power = 25% better, whichever way "better" points for that number
+        options = makers_for(kind, rarity)
+        self.maker = rng.choices([n for n, _ in options], weights=[w_ for _, w_ in options])[0] if options else None
+        self.lean = {}
+        if self.maker:
+            M_ = MAKERS[self.maker]
+            self.lean = {q: round(rng.uniform(0.75, 1.35), 2) for q in QUALITY_LABEL} if M_["wild"] else dict(M_["lean"])
+            for name, (lo, hi, _, _) in K["params"].items():
+                q = QUALITY.get(name)
+                if name == "size" and kind in SHIELDS | {"sawbot"}:
+                    q = "reach"
+                f = self.lean.get(q, 1.0) if q else 1.0
+                if f == 1.0:
+                    continue
+                v = self.p[name] * f if hi >= lo else self.p[name] / f
+                if name in INT:
+                    v = max(1, int(round(v)))
+                self.p[name] = v
+            if "arc" in self.p:
+                self.p["arc"] = min(ARC_MAX, self.p["arc"])
         self.p.setdefault("size", 1.0)
         self.p["capacity"] = int(round(self.p.get("capacity", 0)))
         self.elem = rng.choice(ELEMENTS[kind]) if kind in ELEMENTS else None
@@ -265,7 +401,7 @@ class Support:
         self.flash = 0.0
         self.muzzle = 0.0
         self.snd_t = 0.0
-        self.charge = self.p.get("capacity", 0) if kind == "shield" else 0
+        self.charge = self.p.get("capacity", 0) if kind in SHIELDS else 0
         self.last_hp = None
         self.state = "idle"
         self.latched = []          # leech: [enemy, grow 0..1]
@@ -331,6 +467,8 @@ class Support:
     def blurb(self):
         return {"sawbot": "Orbits you, shredding monsters it touches",
                 "shield": "Orbiting barrier that blocks enemy shots",
+                "shield_front": "Faces your aim; stops shots and claws",
+                "shield_rear": "Guards your back from shots and claws",
                 "medbot": "Follows you and slowly repairs integrity",
                 "gunbot": "Hovers beside you and fires at monsters",
                 "gunarm": "Back-mounted arm that fires your stowed gun",
@@ -374,7 +512,39 @@ class Support:
 
     def radius(self):
         """sawbot orbit / shield ring radius in tiles"""
-        return self.p["orbit"] if self.kind == "sawbot" else 1.0 * self.p["size"]
+        if self.kind == "sawbot":
+            return self.p["orbit"]
+        return (0.8 if self.kind in FIXED_SHIELDS else 1.0) * self.p["size"]
+
+    def facing(self, pl):
+        """Fixed shields: the angle they face this frame (aim, or straight behind it)."""
+        ax, ay = pl.aim
+        return math.atan2(ay, ax) + FIXED_SHIELDS[self.kind]
+
+    def covers(self, pl, sx, sy):
+        """Is a blow coming from (sx, sy) inside this shield's arc (and is the shield up)?"""
+        if self.down > 0 or self.charge <= 0:
+            return False
+        da = (math.atan2(sy - pl.y, sx - pl.x) - self.ang + math.pi) % math.tau - math.pi
+        return abs(da) < self.p["arc"] / 2
+
+    def absorb(self, w, pl, x, y, cost=1):
+        """Take a hit on the shield: spend charge, sparkle, maybe overload."""
+        self.charge -= cost
+        self.regen = 0.0
+        self.flash = 0.12
+        from world import Particle
+        col = KINDS[self.kind]["color"]
+        for _ in range(8):
+            a = random.random() * math.tau
+            s = random.uniform(1.5, 4)
+            w.add(Particle("glow", x, y, 0.9, math.cos(a) * s, math.sin(a) * s, random.uniform(0, 2), 0.35, col, 2))
+        w.snd("shield_block", x, y, 0.7)
+        if self.charge <= 0:
+            self.charge = 0
+            self.down = self.p["recharge"]
+            w.snd("shield_down", pl.x, pl.y, 0.8)
+            w.message("%s OVERLOADED" % KINDS[self.kind]["label"].upper(), col)
 
     def update_grenade(self, w, dt, pl):
         self.station(w, dt, pl, 1.5)
@@ -430,8 +600,17 @@ class Support:
                 self.snd_t = 0.12
                 w.snd("saw_bounce", self.x, self.y, 0.45)
 
+    def update_shield_front(self, w, dt, pl):
+        self.update_shield(w, dt, pl)
+
+    def update_shield_rear(self, w, dt, pl):
+        self.update_shield(w, dt, pl)
+
     def update_shield(self, w, dt, pl):
-        self.ang += self.p["spin"] * dt
+        if self.kind in FIXED_SHIELDS:
+            self.ang = self.facing(pl)
+        else:
+            self.ang += self.p["spin"] * dt
         self.x, self.y = pl.x, pl.y
         cap = self.p["capacity"]
         if self.down > 0:
@@ -463,22 +642,10 @@ class Support:
             if not hit:
                 continue
             w.blocked.add(id(b))
-            self.charge -= 1
-            self.regen = 0.0
-            self.flash = 0.12
-            from world import Particle
-            for _ in range(8):
-                a = random.random() * math.tau
-                s = random.uniform(1.5, 4)
-                w.add(Particle("glow", b.x, b.y, max(0.5, b.z), math.cos(a) * s, math.sin(a) * s, random.uniform(0, 2), 0.35,
-                               (150, 220, 255), 2))
             if b.blast:
-                w.explode(b.x, b.y, b.blast * 0.6, 0, (130, 200, 255), hurt_player=False, quiet=True, small=True)
-            w.snd("shield_block", b.x, b.y, 0.7)
-            if self.charge <= 0:
-                self.down = self.p["recharge"]
-                w.snd("shield_down", pl.x, pl.y, 0.8)
-                w.message("ARC SHIELD OVERLOADED", (110, 200, 255))
+                w.explode(b.x, b.y, b.blast * 0.6, 0, KINDS[self.kind]["color"], hurt_player=False, quiet=True, small=True)
+            self.absorb(w, pl, b.x, b.y)
+            if self.down > 0:
                 break
 
     def update_medbot(self, w, dt, pl):

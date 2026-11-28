@@ -2213,6 +2213,14 @@ class World:
         p = who or self.nearest_player(sx, sy)
         if p.invuln > 0 or not p.alive:
             return
+        if dtype != "explosive" and (sx - p.x) ** 2 + (sy - p.y) ** 2 > 1e-4:
+            for su in p.equipped():           # forward / rear shields catch blows from their side: claws, bites, shots
+                if su.kind in SU.FIXED_SHIELDS and su.covers(p, sx, sy):
+                    su.absorb(self, p, p.x + (sx - p.x) * 0.5, p.y + (sy - p.y) * 0.5, cost=max(1, int(round(dmg / 12))))
+                    p.invuln = 0.25
+                    d = math.hypot(p.x - sx, p.y - sy) or 1
+                    p.kbx, p.kby = (p.x - sx) / d * knock * 0.4, (p.y - sy) / d * knock * 0.4
+                    return
         p.hp -= dmg * p.mult("aegis") * CH.player_mult(p, dtype)
         p.invuln = 0.6
         p.flash = 0.15
