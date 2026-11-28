@@ -432,5 +432,25 @@ for d, arch, kind in ((1, "barrage", "sawbot"), (3, "coil_heavy", "shield"), (5,
         errs += 1
 bot.fire = False
 check(errs == 0, "soak runs without errors")
+
+# autoloader: holding the trigger must never leave the gun reloading over and over on an empty magazine
+stuck = 0
+for trial in range(16):
+    w, p, L = fresh(1)
+    al = SU.Support("autoloader", trial % 7, 1, trial)
+    p.gear[0] = al
+    al.attach(p, 0)
+    p.weapons[p.cur] = WP.Weapon(("pistol", "smg", "assault", "shotgun")[trial % 4], 1, 1, trial)
+    aim_at(1, 0)
+    bot.fire = True
+    shots = 0
+    for f in range(60 * 8):
+        a0 = p.weapon.ammo
+        g.update(1 / 60)
+        p.hp = p.max_hp
+        shots += p.weapon.ammo < a0
+    bot.fire = False
+    stuck += shots <= p.weapon.st["mag"]
+check(stuck == 0, "with an autoloader the gun always comes back from a reload loaded (%d of 16 runs stuck)" % stuck)
 print()
 print("FAILED:", fails if fails else "none")
