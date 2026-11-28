@@ -41,19 +41,19 @@ KINDS = {
         "arc":      (0.75, 1.6, "ARC", "%d deg"),
         "spin":     (0.9, 2.6, "SPIN", "%.1f/s"),
         "capacity": (4, 10, "BLOCKS", "%d"),
-        "recharge": (8.0, 3.5, "REBOOT", "%.1fs"),
+        "recharge": (13.0, 8.0, "REBOOT", "%.1fs"),
         "size":     (0.85, 1.3, "RADIUS", "x%.2f"),
     }),
     "shield_front": dict(label="Forward Shield", color=(255, 205, 110), weight=7, params={
         "arc":      (1.1, 2.1, "ARC", "%d deg"),
         "capacity": (5, 12, "BLOCKS", "%d"),
-        "recharge": (9.0, 4.0, "REBOOT", "%.1fs"),
+        "recharge": (14.0, 9.0, "REBOOT", "%.1fs"),
         "size":     (0.85, 1.2, "RADIUS", "x%.2f"),
     }),
     "shield_rear": dict(label="Rear Guard", color=(190, 140, 255), weight=7, params={
         "arc":      (1.3, 2.4, "ARC", "%d deg"),
         "capacity": (5, 12, "BLOCKS", "%d"),
-        "recharge": (9.0, 4.0, "REBOOT", "%.1fs"),
+        "recharge": (14.0, 9.0, "REBOOT", "%.1fs"),
         "size":     (0.85, 1.2, "RADIUS", "x%.2f"),
     }),
     "medbot": dict(label="Medbot", color=(120, 255, 150), weight=8, params={
@@ -143,7 +143,7 @@ KINDS = {
     "grenade": dict(label="Grenade", color=(255, 170, 60), weight=8, params={
         "dmg":      (10, 100, "DMG", "%.0f"),
         "radius":   (1.6, 2.8, "BLAST", "%.1f m"),
-        "cooldown": (40.0, 10.0, "COOLDOWN", "%.0fs"),
+        "cooldown": (20.0, 5.0, "COOLDOWN", "%.0fs"),
     }),
     "barrel": dict(label="Barrel", color=(220, 120, 60), weight=6, params={
         "hp": (2, 6.49, "FUSE", "%d hits"),
