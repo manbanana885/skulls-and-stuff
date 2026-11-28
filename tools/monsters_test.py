@@ -44,6 +44,24 @@ tiers = [WP.roll_rarity(rr, 5) for _ in range(200000)]
 check(tiers.count(WP.MYTHICAL) > tiers.count(WP.DEMONIC) > tiers.count(WP.ELDRITCH) > tiers.count(WP.SACRED) > 0,
       "rarer tiers still roll less often (mythical > demonic > eldritch > sacred)")
 
+# ---- eldritch gifts: multi-shot, homing, radioactive / corrosive spatter
+gifts = {"twin": 0, "triple": 0, "seeking": 0, "acid": 0, "irradiated": 0}
+none_ = 0
+for i in range(400):
+    wp = WP.Weapon(random.choice(list(WP.ARCH)), WP.ELDRITCH, 5, i)
+    keys = {m["key"] for m in wp.mods}
+    for k in gifts:
+        gifts[k] += k in keys
+    none_ += not (keys & set(gifts))
+    if "triple" in keys:
+        check(wp.st["twin"] == 2 and "twin" not in keys, "triple-linked replaces twin-linked") if gifts["triple"] == 1 else None
+print("  400 eldritch guns:", gifts, "with no gift:", none_)
+check(gifts["triple"] > 40 and gifts["twin"] > 40 and gifts["seeking"] > 80 and gifts["irradiated"] > 40 and gifts["acid"] > 40,
+      "eldritch guns often double / triple, home and spatter")
+check(none_ < 40, "almost every eldritch gun carries a gift (%d without, all arch-limited)" % none_)
+plain = sum(1 for i in range(400) if any(m["key"] in ("triple", "irradiated") for m in WP.Weapon("assault", WP.LEGENDARY, 5, i).mods))
+check(plain == 0, "triple-linked and irradiated never roll outside eldritch")
+
 # ---- spawning: the Pink Heavy ramps up with depth; packs come in packs
 for d in (2, 3, 5, 7):
     print("  pink heavy weight at depth %d: %.2f" % (d, LV.ramp("pinkheavy", d)))
@@ -117,6 +135,49 @@ for kind, eff in (("viper", "poison"), ("cobra", "poison"), ("scorpion", "venom"
     taken = run(w, p, 60 * 10, cb=lambda f: seen.update(p.status))
     check(eff in seen and taken > 20, "%s hurts (%d in 10 s) and inflicts %s" % (kind, taken, eff))
     g.draw()
+
+# triple-linked guns fire three lanes; irradiated hits leave radioactive puddles
+w, p, e = setup("zombie", 5)
+wp = WP.Weapon("assault", WP.ELDRITCH, 5, 1)
+wp.mods = [WP.MOD_BY_KEY["triple"], WP.MOD_BY_KEY["irradiated"]]
+for m in wp.mods:
+    m["fn"](wp.st)
+check(wp.projectiles_per_shot() == 3, "triple-linked: 3 projectiles per shot")
+n0 = len(w.projs)
+w.fire_weapon(p, wp) if hasattr(w, "fire_weapon") else None
+check(len(w.projs) - n0 == 3, "triple-linked fires three shots at once (%d)" % (len(w.projs) - n0))
+w.acid_puddle(p.x + 1, p.y, 10, "radiation")
+check(w.hazards[-1][7] == "radiation", "irradiated spatter makes a radiation puddle")
+g.draw()
+
+# deeper sectors: meaner monsters
+z1, z9 = W.Enemy("zombie", 0, 0, depth=1), W.Enemy("zombie", 0, 0, depth=9)
+check(z1.aggro == 1.0 and z9.aggro > 1.5, "aggression climbs with depth (x%.2f at sector 9)" % z9.aggro)
+n3 = sum(len(LV.Level(3, seed=s, biome="facility").enemies) for s in range(10))
+n8 = sum(len(LV.Level(8, seed=s, biome="facility").enemies) for s in range(10))
+check(n8 > n3 * 2, "sector 8 holds far more monsters than sector 3 (%d vs %d per level)" % (n8 / 10, n3 / 10))
+
+# the deployed mortar lobs toward its target (not behind itself)
+import support as SU  # noqa: E402
+w, p, e = setup("zombie", 6)
+e.speed = 0
+mod = SU.generate(5, random.Random(2), kind="mortar")
+t = SU.Turret(mod, p.x, p.y, (1.0, 0.0))
+w.turrets.append(t)
+fired = None
+for f in range(240):
+    n0 = len(w.projs)
+    t.update(w, 1 / 60, p)
+    new = [q for q in w.projs[n0:] if q.kind == "mortar"]
+    if new:
+        fired = new[0]
+        break
+if fired:
+    to_e = ((e.x - t.x) * fired.vx + (e.y - t.y) * fired.vy) > 0
+    face = (t.aim[0] * (e.x - t.x) + t.aim[1] * (e.y - t.y)) > 0
+    check(to_e and face, "mortar faces and fires toward its target")
+else:
+    check(False, "mortar fired")
 
 # poison / burn tick down on their own
 w, p, e = setup("viper", 30)

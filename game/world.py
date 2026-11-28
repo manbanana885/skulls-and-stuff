@@ -215,7 +215,7 @@ class Proj:
     """kind: bullet | pellet | slug | bolt | plasma | flame | grenade | rocket | acid"""
     __slots__ = ("kind", "x", "y", "z", "vx", "vy", "vz", "life", "dmg", "hostile", "color", "r", "pierce", "bounce",
                  "blast", "burn", "shock", "homing", "slow", "grav", "hit", "trail", "age", "maxspeed", "rad", "gas", "chill", "spin",
-                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech")
+                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech", "spatter")
 
     def __init__(self, kind, x, y, z, vx, vy, dmg, hostile=False, life=0.9, color=(255, 220, 140), r=0.1,
                  pierce=0, bounce=0, blast=0.0, burn=0.0, shock=0, homing=0, slow=0, vz=0.0, grav=0.0, maxspeed=22.0,
@@ -578,6 +578,9 @@ for _k, _d in BE.ENEMIES.items():
 DM.KIND_MULT.update(BE.KIND_RESIST)
 
 
+CHAIN_FALLOFF = 0.65      # each coil-gun chain jump keeps this share of the damage
+
+
 def weapon_to_shot(wp):
     st = wp.st
     pk = st["proj"]
@@ -600,13 +603,13 @@ def weapon_to_shot(wp):
     # heavy weapons (the Pink Heavy's arsenal): each keeps its character, with a tell you can react to
     a = wp.arch
     if a == "chaingun":       # spins up, then hoses a long stream
-        sh.update(kind="bolt", speed=13.0, dmg=9, burst=16, gap=0.065, jitter=0.13, windup=0.6, cd=(2.8, 3.8), rng=9.0, r=0.1)
+        sh.update(kind="bolt", speed=13.0, dmg=9, burst=18, gap=0.065, jitter=0.13, windup=0.5, cd=(1.6, 2.3), rng=9.5, r=0.1)
     elif a == "railgun":      # laser sight for a second, then a slug that goes through everything
-        sh.update(kind="slug", speed=34.0, dmg=30, burst=1, aimed=1.0, cd=(3.4, 4.4), rng=13.0, r=0.11, color=(140, 230, 255))
+        sh.update(kind="slug", speed=34.0, dmg=30, burst=1, aimed=0.85, cd=(2.2, 3.0), rng=13.0, r=0.11, color=(140, 230, 255))
     elif a == "barrage":      # a rippling salvo of slow homing rockets
-        sh.update(kind="rocket", speed=5.5, dmg=12, blast=1.0, homing=0.45, burst=6, gap=0.14, jitter=0.55, cd=(4.2, 5.6), rng=9.5)
+        sh.update(kind="rocket", speed=5.5, dmg=12, blast=1.0, homing=0.45, burst=6, gap=0.14, jitter=0.55, cd=(2.8, 3.8), rng=9.5)
     elif a == "tac_nuke":     # a slow, glowing warhead: get out of its way
-        sh.update(kind="nuke", speed=4.0, dmg=55, blast=1.8, rad=(1.6, 6.0, 5.0, 2.0), burst=1, cd=(6.5, 8.5), rng=10.0, minr=4.0,
+        sh.update(kind="nuke", speed=4.0, dmg=55, blast=1.8, rad=(1.6, 6.0, 5.0, 2.0), burst=1, cd=(4.5, 6.0), rng=10.0, minr=4.0,
                   r=0.24, color=(170, 255, 70))
     return sh
 
@@ -618,7 +621,9 @@ class Enemy:
         st = STATS[kind]
         self.st = st
         self.hp = st["hp"] * (1 + 0.15 * (depth - 1))
-        self.speed = st["speed"] * rnd.uniform(0.9, 1.15)
+        # deeper sectors breed meaner monsters: quicker attacks (cooldowns run faster), quicker feet, sharper senses
+        self.aggro = min(1.65, 1 + 0.07 * (depth - 1))
+        self.speed = st["speed"] * rnd.uniform(0.9, 1.15) * min(1.25, 1 + 0.025 * (depth - 1))
         self.r = st["r"]
         self.blood = GIB_SETS[kind][1]
         self.x, self.y = x, y
@@ -731,8 +736,8 @@ class Enemy:
                 self.wake_mimic(w)
             return
         if not self.awake:
-            rng_wake = 10 if k == "turret" else 9
-            if (d < rng_wake and self.los) or d < 3:
+            rng_wake = (10 if k == "turret" else 9) + (self.aggro - 1) * 6
+            if (d < rng_wake and self.los) or d < 3 + (self.aggro - 1) * 3:
                 self.awake = True
                 if k == "turret":
                     w.snd("turret_beep", self.x, self.y)
@@ -740,6 +745,9 @@ class Enemy:
                     w.snd("brute_roar", self.x, self.y)
             else:
                 return
+        if self.aggro > 1.0:          # attack timers tick faster the deeper you are
+            self.cd -= dt * (self.aggro - 1)
+            self.cd2 -= dt * (self.aggro - 1)
         if not p.alive:
             tx, ty = 0.0, 0.0
         elif d < 1.5 or (self.los and d < 7):
@@ -1843,11 +1851,12 @@ class World:
                 e._dot_acc = None
         self.dot_targets = keep
 
-    def acid_puddle(self, x, y, dps):
+    def acid_puddle(self, x, y, dps, kind=None):
+        """Acid-Augmented / Irradiated spatter: a puddle that eats monsters and leaves players alone."""
         L = self.level
         if L.is_solid(int(x), int(y)):
             return
-        self.hazards.append([x, y, 0.55, 3.5, "acidp", dps, 3.5])
+        self.hazards.append([x, y, 0.55, 3.5, "acidp", dps, 3.5, kind or "chemical"])
         self.snd("sizzle", x, y, 0.35)
 
     def dot(self, e, amount, dtype=None):
@@ -1994,7 +2003,7 @@ class World:
         extra = int(p.mult("multishot", 0))
         count = st["pellets"] + extra
         spread = st["spread"]
-        lanes = (-0.09, 0.09) if st["twin"] else (0.0,)
+        lanes = {0: (0.0,), 1: (-0.09, 0.09), 2: (-0.13, 0.0, 0.13)}[int(st["twin"])]
         p.muzzle = 0.05
         p.muzzle_color = st["color"]
         if st["salvo"]:                   # missiles ripple out of the pod over the next few frames
@@ -2046,6 +2055,7 @@ class World:
                 pr.tier_leech = st["tier_leech"]
                 if st["acid"]:
                     pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * st["pellets"]))
+                    pr.spatter = st["spatter"]
                 if kind == "grenade":
                     pr.vz, pr.grav = 3.0, 14.0
                 if st["cluster"]:               # the mother shell: bigger, carries its bomblet count
@@ -2174,6 +2184,7 @@ class World:
         pr.tier_leech = st["tier_leech"]
         if st["acid"]:
             pr.acid = min(1.0, 1.6 / max(0.1, st["rate"] * (st["salvo"] or 1)))
+            pr.spatter = st["spatter"]
         pr.owner = p
         self.projs.append(pr)
         for _ in range(2):
@@ -2247,10 +2258,10 @@ class World:
             hit = {id(first)}
             cur, k = first, dmg
             for _ in range(st["chain"]):
-                nxt = next((o for o in SU.targets(self, cur.x, cur.y, 3.6) if id(o) not in hit and los(L, cur.x, cur.y, o.x, o.y)), None)
+                nxt = next((o for o in SU.targets(self, cur.x, cur.y, 3.0) if id(o) not in hit and los(L, cur.x, cur.y, o.x, o.y)), None)
                 if nxt is None:
                     break
-                k *= 0.85
+                k *= CHAIN_FALLOFF
                 hit.add(id(nxt))
                 pts.append((nxt.x, nxt.y, hz(nxt)))
                 self.hit_enemy(nxt, k, (nxt.x - cur.x) * 8, (nxt.y - cur.y) * 8, st)
@@ -2346,7 +2357,7 @@ class World:
         if acid:
             p_ = acid if not isinstance(fx, dict) else min(1.0, 1.6 / max(0.1, fx.get("rate", 1.0)))
             if rnd.random() < p_:
-                self.acid_puddle(e.x, e.y, raw * 0.9)
+                self.acid_puddle(e.x, e.y, raw * 0.9, get("spatter"))
         if burn and hasattr(e, "burn_dps"):
             e.burn = max(e.burn, 2.5)
             e.burn_dps = max(e.burn_dps, burn * DM.mult(e, "fire"))
@@ -2420,7 +2431,7 @@ class World:
         if dtype != "explosive" and (sx - p.x) ** 2 + (sy - p.y) ** 2 > 1e-4:
             for su in p.equipped():           # forward / rear shields catch blows from their side: claws, bites, shots
                 if su.kind in SU.FIXED_SHIELDS and su.covers(p, sx, sy):
-                    su.absorb(self, p, p.x + (sx - p.x) * 0.5, p.y + (sy - p.y) * 0.5, cost=max(1, int(round(dmg / 12))))
+                    su.absorb(self, p, p.x + (sx - p.x) * 0.5, p.y + (sy - p.y) * 0.5, cost=max(1, int(round(dmg / 8))))
                     p.invuln = 0.25
                     d = math.hypot(p.x - sx, p.y - sy) or 1
                     p.kbx, p.kby = (p.x - sx) / d * knock * 0.4, (p.y - sy) / d * knock * 0.4
@@ -2974,7 +2985,7 @@ class World:
                 k_ = min(1.0, hz[3] / hz[6] * 2)
                 for e in self.nearby(hz[0], hz[1]):
                     if e.alive and e.kind not in FLYERS and (e.x - hz[0]) ** 2 + (e.y - hz[1]) ** 2 < (hz[2] + e.r) ** 2:
-                        self.dot(e, hz[5] * k_ * dt, "chemical")
+                        self.dot(e, hz[5] * k_ * dt, hz[7] if len(hz) > 7 else "chemical")
                 if rnd.random() < dt * 5:
                     self.add(Particle("glow", hz[0] + rnd.uniform(-0.3, 0.3), hz[1] + rnd.uniform(-0.3, 0.3), 0.02, 0, 0, 0.8, 0.5,
                                       (140, 255, 70), 2))
@@ -3082,7 +3093,7 @@ class World:
     def impact(self, b, x, y):
         """Projectile ended at (x, y)."""
         if getattr(b, "acid", 0) and not b.hostile and rnd.random() < b.acid:
-            self.acid_puddle(x, y, b.dmg * 0.9)
+            self.acid_puddle(x, y, b.dmg * 0.9, getattr(b, "spatter", None))
         if b.kind == "nuke":
             rr, dur, dps, breach_r = b.rad     # terrain destruction: 3 tiles (tactical) / 5 tiles (nuke)
             big = rr >= 3

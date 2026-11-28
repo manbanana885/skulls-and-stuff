@@ -11,7 +11,7 @@ import damage as DM
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
                 heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None,
-                tier_leech=0.0, demonic_bonus=0.0, jet=None, barrels=0, shell=None)
+                tier_leech=0.0, demonic_bonus=0.0, jet=None, barrels=0, shell=None, spatter=None)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
@@ -72,12 +72,12 @@ ARCH = {
     "cluster":      dict(label="Cluster Launcher", dmg=9, rate=0.8, spread=0.03, speed=8, life=1.3, mag=4, reload=2.6, proj="grenade",
                          blast=1.6, cluster=(5, 9), kick=5, sound="shot_grenade", color=(255, 160, 60), weight=3),
     # coil guns: instant lightning that ricochets off walls and chains between monsters
-    "coil_pistol":  dict(label="Coil Pistol", dmg=2.4, rate=3.6, spread=0.04, speed=0, mag=12, reload=1.1, proj="arc",
+    "coil_pistol":  dict(label="Coil Pistol", dmg=1.9, rate=3.6, spread=0.04, speed=0, mag=12, reload=1.1, proj="arc",
                          chain=2, bounce=1, arc_range=8.0, kick=1.0, sound="shot_coil", color=(150, 190, 255), heavy=1.2, weight=6),
-    "coil_rifle":   dict(label="Coil Rifle", dmg=1.5, rate=7, spread=0.05, speed=0, mag=28, reload=1.5, proj="arc",
+    "coil_rifle":   dict(label="Coil Rifle", dmg=1.2, rate=7, spread=0.05, speed=0, mag=28, reload=1.5, proj="arc",
                          chain=3, bounce=2, arc_range=11.0, kick=1.2, sound="shot_coil", color=(140, 175, 255), weight=5),
-    "coil_heavy":   dict(label="Storm Coil", dmg=3.2, rate=5.5, spread=0.06, speed=0, mag=60, reload=2.8, proj="arc",
-                         chain=6, bounce=3, arc_range=13.0, kick=2.0, heavy=0.62, sound="shot_coil", color=(170, 150, 255), weight=3),
+    "coil_heavy":   dict(label="Storm Coil", dmg=2.5, rate=5.5, spread=0.06, speed=0, mag=60, reload=2.8, proj="arc",
+                         chain=4, bounce=2, arc_range=13.0, kick=2.0, heavy=0.62, sound="shot_coil", color=(170, 150, 255), weight=3),
     # microwave emitter: expanding rings that sweep a cone and cook everything in it
     "microwave":    dict(label="Microwave Emitter", dmg=2.6, rate=3.2, spread=0.0, speed=8.5, life=0.75, mag=18, reload=1.7,
                          proj="wave", pierce=99, cone=0.5, burn=0.5, kick=1.0, sound="shot_microwave", color=(235, 130, 255), weight=5),
@@ -260,7 +260,16 @@ def _add(**kw):
 
 
 def _set_twin(st):
-    st["twin"] = True
+    st["twin"] = max(1, int(st["twin"]))
+
+
+def _set_triple(st):
+    st["twin"] = 2          # three parallel shots
+
+
+def _irradiate(st):
+    st["acid"] = 1
+    st["spatter"] = "radiation"
 
 
 def _penetrating(st):
@@ -337,7 +346,11 @@ MODS = [
     _m("cryo", "Cryo", "Chills and slows targets", _add(slow=1)),
     _m("acid", "Acid-Augmented", "Hits leave corrosive puddles", _add(acid=1),
        lambda a: ARCH[a]["proj"] in ("bullet", "pellet", "slug", "bolt", "rocket", "grenade", "missile", "saw", "plasma", "rail")),
+    # eldritch-only: never rolled as ordinary mods
+    _m("triple", "Triple-Linked", "Fires three parallel shots", _set_triple, lambda a: False),
+    _m("irradiated", "Irradiated", "Hits leave radioactive puddles", _irradiate, lambda a: False),
 ]
+ELDRITCH_GIFTS = {"twin", "triple", "seeking", "acid", "irradiated"}
 MOD_BY_KEY = {m["key"]: m for m in MODS}
 
 MYTHICAL_NAMES = ["Starfall", "The Worldspine", "Titan's Mercy", "Aegis of Ash", "Hydra's Last Head", "Ironsong",
@@ -423,6 +436,8 @@ class Weapon:
                 self.mods[-1] = inc
             else:
                 self.mods.append(inc)
+        if rarity == ELDRITCH:
+            self.eldritch_gifts(rng, arch, n_mods)
         for m in self.mods:
             m["fn"](st)
         if rarity == DEMONIC:
@@ -460,8 +475,38 @@ class Weapon:
     def rarity_name(self):
         return RARITY[self.rarity][0]
 
+    def eldritch_gifts(self, rng, arch, n_mods):
+        """Eldritch guns lean on the strange: doubled or tripled shots, homing, radioactive or corrosive spatter.
+        Each gift rolls on its own; every eldritch gun gets at least one it can use."""
+        options = []
+        if MOD_BY_KEY["twin"]["ok"](arch):
+            options.append(("multi", 0.6))
+        if MOD_BY_KEY["seeking"]["ok"](arch):
+            options.append(("seeking", 0.55))
+        if MOD_BY_KEY["acid"]["ok"](arch):
+            options.append(("spatter", 0.6))
+        picks = [k for k, p in options if rng.random() < p]
+        if not picks and options:
+            picks = [rng.choice(options)[0]]
+        for k in picks:
+            if k == "multi":
+                key = "triple" if rng.random() < 0.45 else "twin"
+            elif k == "spatter":
+                key = "irradiated" if rng.random() < 0.5 else "acid"
+            else:
+                key = k
+            clash = {"triple": {"twin"}, "twin": {"triple"}, "irradiated": {"acid"}, "acid": {"irradiated"}}.get(key, set())
+            self.mods = [m for m in self.mods if m["key"] not in clash]
+            if any(m["key"] == key for m in self.mods):
+                continue
+            if len(self.mods) >= max(1, n_mods):        # make room by dropping an ordinary mod
+                plain = [i for i, m in enumerate(self.mods) if m["key"] not in ELDRITCH_GIFTS]
+                if plain:
+                    self.mods.pop(plain[-1])
+            self.mods.append(MOD_BY_KEY[key])
+
     def projectiles_per_shot(self):
-        return self.st["pellets"] * (2 if self.st["twin"] else 1) * (self.st["salvo"] or 1)
+        return self.st["pellets"] * (1 + int(self.st["twin"])) * (self.st["salvo"] or 1)
 
     def dps(self):
         st = self.st
@@ -470,8 +515,8 @@ class Weapon:
             per_shot += st["rad"][1] * st["rad"][2] * 0.5
         if st["saw_bounces"]:
             per_shot *= 2.5
-        if st["chain"]:
-            per_shot *= 1 + st["chain"] * 0.55
+        if st["chain"]:       # chain jumps (each keeps 65%), assuming a pack is there about 60% of the time
+            per_shot *= 1 + 0.6 * sum(0.65 ** (i + 1) for i in range(st["chain"]))
         if st["cluster"]:
             per_shot *= 1 + st["cluster"] * 0.45
         if st["proj"] == "wave":
@@ -517,7 +562,7 @@ RARE_ONLY = False      # run_loot_test.bat: every roll is Mythical / Demonic / E
 def roll_rarity(rng, level, bonus=0):
     if RARE_ONLY:
         return rng.choice((MYTHICAL, DEMONIC, ELDRITCH, SACRED))
-    w = [60, 26, 10, 3.5, 0.8, 0.24, 0.1, 0.06, 0.016]      # mythical and up: rare, but you will find some
+    w = [60, 26, 10, 3.5, 0.8, 0.24, 0.06, 0.035, 0.016]      # mythical and up: rare, but you will find some
     shift = min(level - 1, 8) * 0.35 + bonus
     for i in range(len(w)):
         w[i] *= (1 + shift) ** (min(i, LEGENDARY) * 0.8)     # tiers above legendary keep a fixed ratio to it

@@ -1188,7 +1188,9 @@ class Game:
         for hz in w.hazards:
             gx, gy = ground(hz[0], hz[1])
             if on_screen(gx, gy):
-                if hz[4] in ("acid", "acidp"):
+                if hz[4] == "acidp" and len(hz) > 7 and hz[7] == "radiation":
+                    self.draw_rad(gx, gy, hz)          # Irradiated spatter glows like fallout
+                elif hz[4] in ("acid", "acidp"):
                     self.draw_pool(gx, gy, hz)
                 elif hz[4] == "jet":
                     self.draw_jet_pool(gx, gy, hz)
