@@ -178,18 +178,25 @@ class Gib:
         self.bounces = 0
         self.trail = 0.0
 
+    @staticmethod
+    def _wall(L, x, y):
+        """A wall cell - and the map's edge counts as one, so a gib blasted off the side bounces back."""
+        if not (0 <= x < L.W and 0 <= y < L.H):
+            return True
+        return L.solid[int(y) * L.W + int(x)] == 1
+
     def update(self, w, dt):
         if self.rest:
             return
         L = w.level
         self.vz -= 18 * dt
         nx, ny = self.x + self.vx * dt, self.y + self.vy * dt
-        if L.solid[int(self.y) * L.W + int(nx)] == 1:
+        if self._wall(L, nx, self.y):
             self.vx *= -0.45
             nx = self.x
             if self.blood and self.z > 0.2 and rnd.random() < 0.5:
                 w.splat(nx, ny, self.blood, 0.12)
-        if L.solid[int(ny) * L.W + int(nx)] == 1:
+        if self._wall(L, nx, ny):
             self.vy *= -0.45
             ny = self.y
         self.x, self.y = nx, ny
