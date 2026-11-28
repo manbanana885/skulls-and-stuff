@@ -11,7 +11,11 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
   effects (run `run_loot_test.bat` to get only the six rarest tiers). Eldritch guns favour double / triple shots,
   homing and radioactive or corrosive spatter
 - Of the Void, the rarest tier: revolvers, grenade launchers and tactical nukes whose every impact opens a black
-  hole that drags monsters in from 4-6 tiles, then collapses and explodes
+  hole that drags monsters (and you) in from 4-6 tiles, then collapses and explodes. One in five Void tactical
+  nukes is DOOM, DOOOOM?: a far bigger hole, then a reactor-sized blast that destroys everything in it
+- Demonic, Eldritch, Sacred and Void rounds fly in their tier's colours; Sacred rounds shed sparkles and Demonic
+  rounds embers. Some Sacred guns smite what they hit with a pillar of light or a lightning strike, and some
+  Demonic guns with a pillar of hellfire
 - Chaos: every shot from a Chaos gun takes a different damage type from the last, with that type's side effect
 - Modules with rolled stats, 4 equipped (one per D-pad direction) plus an 8-slot backpack, managed from the
   pause menu: buzzsaw orbiter, arc shield, forward shield, rear guard, medbot, gun drone, jump jets, decoys,
