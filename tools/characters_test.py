@@ -404,7 +404,7 @@ start = [wq.rarity for wq in __import__("world").Player(0, 0).weapons]
 mod_r = SU.generate(2).rarity
 WP.RARE_ONLY = False
 print("  rare-loot mode: tiers rolled %s, starting guns %s, a module %s" % (sorted(tiers), start, mod_r))
-check(tiers == {WP.MYTHICAL, WP.DEMONIC, WP.ELDRITCH, WP.SACRED} and min(start) >= WP.MYTHICAL and mod_r >= WP.MYTHICAL,
+check(tiers == set(WP.TOP_TIERS) and min(start) >= WP.MYTHICAL and mod_r >= WP.MYTHICAL,
       "run_loot_test.bat: every roll (drops, starting guns, modules) is one of the four rarest tiers")
 
 # soak: each body with turrets, random fights

@@ -7,8 +7,12 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
 - Procedural guns (30+ archetypes x brands x rarities x mods) and power-ups, including heavy weapons
   (chaingun, railgun, barrage missile launcher, storm coil) that slow you down but hit much harder, a cluster
   bomb launcher and chemical jets (napalm / cryo / rad-waste) that leave hazardous puddles
-- 21 manufacturers and nine rarity tiers, up to Mythical, Demonic, Eldritch and Sacred guns with their own
-  effects (run `run_loot_test.bat` to get only those four tiers)
+- 23 manufacturers and eleven rarity tiers, up to Mythical, Demonic, Eldritch and Sacred guns with their own
+  effects (run `run_loot_test.bat` to get only the six rarest tiers). Eldritch guns favour double / triple shots,
+  homing and radioactive or corrosive spatter
+- Of the Void, the rarest tier: revolvers, grenade launchers and tactical nukes whose every impact opens a black
+  hole that drags monsters in from 4-6 tiles, then collapses and explodes
+- Chaos: every shot from a Chaos gun takes a different damage type from the last, with that type's side effect
 - Modules with rolled stats, 4 equipped (one per D-pad direction) plus an 8-slot backpack, managed from the
   pause menu: buzzsaw orbiter, arc shield, forward shield, rear guard, medbot, gun drone, jump jets, decoys,
   grenades (shrapnel, hex, nuke, incendiary, cryo, corrosive), carryable barrels and more

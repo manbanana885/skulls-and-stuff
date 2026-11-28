@@ -215,7 +215,7 @@ class Proj:
     """kind: bullet | pellet | slug | bolt | plasma | flame | grenade | rocket | acid"""
     __slots__ = ("kind", "x", "y", "z", "vx", "vy", "vz", "life", "dmg", "hostile", "color", "r", "pierce", "bounce",
                  "blast", "burn", "shock", "homing", "slow", "grav", "hit", "trail", "age", "maxspeed", "rad", "gas", "chill", "spin",
-                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech", "spatter")
+                 "hurt_cd", "effect", "owner", "ox", "oy", "cone", "reach", "dtype", "acid", "ammo", "tier_leech", "spatter", "void")
 
     def __init__(self, kind, x, y, z, vx, vy, dmg, hostile=False, life=0.9, color=(255, 220, 140), r=0.1,
                  pierce=0, bounce=0, blast=0.0, burn=0.0, shock=0, homing=0, slow=0, vz=0.0, grav=0.0, maxspeed=22.0,
@@ -1581,6 +1581,7 @@ class World:
         self.static = 0.0
         self.static_kick = 0.0
         self.warnings = []    # mortar target circles [x, y, r, life, max, colour]
+        self.voids = []       # Void-tier black holes: dict(x, y, R, t, grow, collapse, b, seed)
         self.flash_white = 0.0
         self.bosses = []
         from biomes import BIOMES
@@ -1989,6 +1990,29 @@ class World:
 
     # ---- combat
     def fire_weapon(self, p, wp):
+        """Chaos guns re-type every shot (never the same type twice running), with that type's side effect."""
+        if wp.rarity != WP.CHAOS:
+            return self._fire_weapon(p, wp)
+        st = wp.st
+        keep = {k: st[k] for k in ("dtype", "color", "blast", "burn", "chill", "shock", "acid", "spatter")}
+        t = wp.next_chaos_type(rnd)
+        st["dtype"], st["color"] = t, DM.COLOR[t]
+        if t == "explosive":
+            st["blast"] = max(st["blast"], 0.7)
+        elif t == "fire":
+            st["burn"] = max(st["burn"], 1.2)
+        elif t == "cryo":
+            st["chill"] = max(st["chill"], 0.06)
+        elif t == "electrical":
+            st["shock"] = max(st["shock"], 1)
+        elif t in ("chemical", "radiation"):
+            st["acid"], st["spatter"] = max(st["acid"], 1), t
+        try:
+            return self._fire_weapon(p, wp)
+        finally:
+            st.update(keep)
+
+    def _fire_weapon(self, p, wp):
         st = wp.st
         ax, ay = p.aim
         mf, mz = WP.MUZZLE[wp.arch]
@@ -2046,6 +2070,7 @@ class World:
                           homing=st["homing"], slow=st["slow"], rad=rad, gas=gas, chill=st["chill"])
                 pr.dtype = st["dtype"]
                 pr.ammo = st["ammo"]
+                pr.void = st["void"]
                 if kind == "jet":
                     pr.effect = "jet:" + st["jet"]
                     pr.r = 0.11
@@ -2860,6 +2885,8 @@ class World:
         for wn in self.warnings:
             wn[3] -= dt
         self.warnings = [wn for wn in self.warnings if wn[3] > 0]
+        if self.voids:
+            self.update_voids(dt)
 
         self.blocked = set()
         for pl in self.players:
@@ -3090,8 +3117,63 @@ class World:
                             self.explored[i] = 1
                             self.explore_dirty.append((x, y))
 
+    def open_void(self, b, x, y):
+        """A Void-tier round landed: a black hole opens here, drags monsters in, then collapses and explodes."""
+        R = b.void
+        b.void = 0
+        if self.level.is_solid(int(x), int(y)):
+            x, y = x - b.vx * 0.02, y - b.vy * 0.02
+        self.voids.append(dict(x=x, y=y, R=R, t=0.0, grow=1.9 if b.kind == "nuke" else 1.4, collapse=0.22, b=b, seed=rnd.random()))
+        self.snd("portal", x, y, 0.8)
+
+    def update_voids(self, dt):
+        for v in self.voids:
+            v["t"] += dt
+            x, y, R, g = v["x"], v["y"], v["R"], v["grow"]
+            if v["t"] < g:
+                k = v["t"] / g
+                for e in list(self.enemies) + self.bosses:
+                    if not e.alive or e.state == "dormant" or getattr(e, "submerged", False):
+                        continue
+                    dx, dy = x - e.x, y - e.y
+                    d = math.hypot(dx, dy)
+                    if d > R or d < 1e-3:
+                        continue
+                    pull = (2.5 + 7.5 * k) * (1.2 - d / R) * (0.25 if hasattr(e, "title") else 1.0)
+                    step = min(d, pull * dt)
+                    e.x, e.y = resolve(self.level, e.x + dx / d * step, e.y + dy / d * step, e.r)
+                    e.awake = True
+                    if d < 0.6:          # caught in the throat of it
+                        self.dot(e, v["b"].dmg * 0.35 * dt, "kinetic")
+                if rnd.random() < dt * 40:      # motes of light spiralling in
+                    a = rnd.random() * math.tau
+                    r_ = rnd.uniform(0.5, 1.0) * R
+                    sp = rnd.uniform(3, 6)
+                    self.add(Particle("glow", x + math.cos(a) * r_, y + math.sin(a) * r_, rnd.uniform(0.3, 1.2),
+                                      -math.cos(a) * sp - math.sin(a) * sp * 0.6, -math.sin(a) * sp + math.cos(a) * sp * 0.6, 0,
+                                      min(0.5, r_ / sp), (235, 235, 255), 2))
+            elif v["t"] >= g + v["collapse"] and not v.get("done"):
+                v["done"] = True
+                b = v["b"]
+                if b.kind in ("nuke", "grenade", "rocket", "missile", "plasma"):
+                    self.impact(b, x, y)                        # the warhead goes off at the heart of it
+                else:
+                    self.explode(x, y, 1.6, b.dmg, (240, 240, 255), hurt_player=False)
+                self.add(Particle("ring", x, y, 0.3, 7.0, 0, 0, 0.45, (255, 255, 255), 0.2))
+                for _ in range(30):
+                    a = rnd.random() * math.tau
+                    s_ = rnd.uniform(3, 9)
+                    self.add(Particle("glow", x, y, 0.6, math.cos(a) * s_, math.sin(a) * s_, rnd.uniform(0, 3), 0.5, (255, 255, 255), 3))
+                self.flash_white = max(self.flash_white, 0.2)
+                self.shake = max(self.shake, 10)
+                self.snd("magnet_pulse", x, y)
+        self.voids = [v for v in self.voids if not v.get("done")]
+
     def impact(self, b, x, y):
         """Projectile ended at (x, y)."""
+        if getattr(b, "void", 0) and not b.hostile:
+            self.open_void(b, x, y)
+            return
         if getattr(b, "acid", 0) and not b.hostile and rnd.random() < b.acid:
             self.acid_puddle(x, y, b.dmg * 0.9, getattr(b, "spatter", None))
         if b.kind == "nuke":
@@ -3501,6 +3583,9 @@ class World:
                         return False
                     b.hit.add(id(e))
                     self.hit_enemy(e, b.dmg, b.vx, b.vy, b)
+                    if getattr(b, "void", 0):           # a void round stops in the first thing it hits and opens there
+                        self.impact(b, b.x, b.y)
+                        return False
                     if b.effect == "dumdum":
                         self.dumdum_hit(e, b)
                     if k == "plasma":
@@ -3512,7 +3597,9 @@ class World:
                     b.pierce -= 1
         b.life -= dt
         if b.life <= 0:
-            if k in ("grenade", "rocket", "plasma", "fireball", "nuke", "missile", "jet"):
+            if getattr(b, "void", 0) and not b.hostile:
+                self.impact(b, b.x, b.y)
+            elif k in ("grenade", "rocket", "plasma", "fireball", "nuke", "missile", "jet"):
                 self.impact(b, b.x, b.y)
             elif k == "chem":
                 if rnd.random() < 0.55:

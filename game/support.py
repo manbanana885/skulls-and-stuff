@@ -1387,4 +1387,5 @@ def generate(level, rng=None, bonus=0, kind=None, rarity=None):
         kind = rng.choices(ks, weights=[KINDS[k]["weight"] for k in ks])[0]
     if rarity is None:
         rarity = WP.roll_rarity(rng, level, bonus)
+    rarity = min(rarity, WP.SACRED)        # Void and Chaos are weapon-only tiers
     return Support(kind, rarity, level, rng.randrange(1 << 30))

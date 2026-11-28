@@ -11,7 +11,7 @@ import damage as DM
 DEFAULTS = dict(pellets=1, life=0.9, pierce=0, blast=0.0, burn=0.0, bounce=0, shock=0, homing=0, slow=0,
                 lifesteal=0, twin=False, kick=1.5, spread=0.03, speed=19.0, rad=None, gas=0.0, chill=0.0, saw_bounces=None,
                 heavy=1.0, spinup=0.0, wallpierce=0, salvo=None, chain=0, arc_range=0.0, cone=0.0, acid=0, ammo=None, cluster=None,
-                tier_leech=0.0, demonic_bonus=0.0, jet=None, barrels=0, shell=None, spatter=None)
+                tier_leech=0.0, demonic_bonus=0.0, jet=None, barrels=0, shell=None, spatter=None, void=0.0)
 
 ARCH = {
     "pistol":       dict(label="Pistol", dmg=1.7, rate=5.0, spread=0.03, mag=12, reload=0.9, proj="bullet",
@@ -115,10 +115,27 @@ def sprite_arch(arch):
 
 RARITY = [("Common", (205, 205, 205)), ("Uncommon", (80, 225, 95)), ("Rare", (70, 145, 255)),
           ("Epic", (195, 85, 255)), ("Legendary", (255, 155, 30)), ("Mythical", (40, 230, 255)), ("Demonic", (255, 50, 40)),
-          ("Eldritch", (90, 255, 90)), ("Sacred", (255, 255, 255))]
-LEGENDARY, MYTHICAL, DEMONIC, ELDRITCH, SACRED = 4, 5, 6, 7, 8
-# how a tier's name is lettered: (text colour, outline colour or None)
-TIER_TEXT = {DEMONIC: ((12, 8, 8), (255, 50, 40)), ELDRITCH: ((8, 12, 8), (90, 255, 90)), SACRED: ((255, 255, 255), None)}
+          ("Eldritch", (90, 255, 90)), ("Sacred", (255, 255, 255)), ("Of the Void", (235, 235, 245)), ("Chaos", (255, 60, 200))]
+LEGENDARY, MYTHICAL, DEMONIC, ELDRITCH, SACRED, VOID, CHAOS = 4, 5, 6, 7, 8, 9, 10
+TOP_TIERS = (MYTHICAL, DEMONIC, ELDRITCH, SACRED, VOID, CHAOS)
+# Void guns: only these archetypes. Every impact opens a black hole that drags monsters in, then collapses and explodes.
+VOID_ARCHS = ("revolver", "grenade", "tac_nuke")
+VOID_PULL = (4.0, 6.0)        # pull radius (tiles), rolled per gun
+# Chaos guns: every shot takes a different damage type from the last
+CHAOS_TYPES = ("kinetic", "explosive", "fire", "chemical", "cryo", "radiation", "electrical")
+# how a tier's name is lettered: (text colour, outline colour or None); Chaos letters cycle through the spectrum
+TIER_TEXT = {DEMONIC: ((12, 8, 8), (255, 50, 40)), ELDRITCH: ((8, 12, 8), (90, 255, 90)), SACRED: ((255, 255, 255), None),
+             VOID: ((0, 0, 0), (255, 255, 255))}
+
+
+def chaos_color(t=None, phase=0.0):
+    """The Chaos tier's colour: a fast-cycling, saturated hue."""
+    import colorsys
+    import time as _time
+    t = _time.time() if t is None else t
+    h = round(((t * 1.7 + phase) % 1.0) * 36) / 36.0         # 36 steps: keeps colour-keyed caches small
+    r, g, b = colorsys.hsv_to_rgb(h, 0.85, 1.0)
+    return int(r * 255), int(g * 255), int(b * 255)
 # while it's the gun in your hands: integrity per second (+ heals, - hurts) and the share of damage dealt that heals you
 TIER_FX = {SACRED: dict(regen=1.0), ELDRITCH: dict(regen=-1.0, leech=0.08), DEMONIC: dict(regen=-1.5)}
 
@@ -198,6 +215,10 @@ BRANDS = {
                                     extra_mods=1, tier=ELDRITCH),
     "The Reliquary": _brand("all", (255, 245, 200), "relics of a dead god", {"dmg": 1.6, "rate": 1.2, "mag": 1.4, "reload": 0.7},
                             extra_mods=1, tier=SACRED),
+    "Event Horizon Works": _brand("all", (200, 200, 215), "they built it at the edge of nothing", {"dmg": 1.3, "reload": 0.85},
+                                  tier=VOID),
+    "The Discordant Forge": _brand("all", (255, 90, 220), "no two strokes of the hammer alike", {"dmg": 1.35, "rate": 1.1},
+                                   extra_mods=1, tier=CHAOS),
 }
 
 
@@ -207,6 +228,8 @@ def brands_for(arch, rarity):
     for name, b in BRANDS.items():
         if b["tier"] > rarity:
             continue
+        if b["tier"] in (VOID, CHAOS) and b["tier"] != rarity:
+            continue                     # the two rarest houses make nothing else
         if rarity >= MYTHICAL and b["tier"] < LEGENDARY:
             continue                     # mythical / sacred guns only come out of the top houses
         if b["groups"] != "all" and not (b["groups"] & groups):
@@ -359,6 +382,10 @@ DEMONIC_NAMES = ["Hellmaw Howitzer", "The Ninth Circle", "Brimstone Sermon", "Pi
                  "Infernal Writ", "Ashen Tongue", "Sulphur Kiss"]
 ELDRITCH_NAMES = ["The Hollow Psalm", "Mouth of the Deep", "Nine Black Stars", "The Unborn Choir", "Grief Engine",
                   "Whisper of Yth", "The Thing in the Barrel", "Sorrowmaw", "Last Light Eater"]
+VOID_NAMES = ["Event Horizon", "The Unmaking", "Singularity", "Hollow Star", "The Long Dark", "Nullheart", "Gravewell",
+              "Where Light Goes to Die", "The Collapse"]
+CHAOS_NAMES = ["Discord", "The Mad Prism", "Entropy's Grin", "Kaleidoscream", "Unravelling", "The Fickle God", "Bedlam",
+               "Wildfire Psalm", "Pandaemonium"]
 SACRED_NAMES = ["The Last Benediction", "Saint Ossein's Mercy", "Halo Breaker", "Requiem Aeterna", "Gospel of Teeth",
                 "The Marrow Relic", "Choirfall", "Lux Ultima"]
 UNIQUE_NAMES = ["Bonesaw", "Marrowmaker", "Gravewhisper", "Last Rites", "The Ossifier", "Hellmouth", "Cadaver Kiss",
@@ -371,7 +398,10 @@ class Weapon:
         rng = random.Random(seed)
         self.seed = seed
         self.arch = arch
+        if rarity == VOID and arch not in VOID_ARCHS:
+            rarity = SACRED                  # only a revolver, a grenade launcher or a tactical nuke can hold the void
         self.rarity = rarity
+        self.chaos_i = -1                    # Chaos: index of the damage type the last shot used
         self.level = level
         st = dict(DEFAULTS)
         st.update(ARCH[arch])
@@ -422,7 +452,8 @@ class Weapon:
             if self.ammo_type:
                 MOD_BY_KEY["penetrating" if self.ammo_type == "pen" else "expanding"]["fn"](st)
         pool = [m for m in MODS if m["ok"](arch)]
-        n_mods = max(0, {LEGENDARY: 3, MYTHICAL: 4, DEMONIC: 4, ELDRITCH: 5, SACRED: 5}.get(rarity, rarity) + B["extra_mods"])
+        n_mods = max(0, {LEGENDARY: 3, MYTHICAL: 4, DEMONIC: 4, ELDRITCH: 5, SACRED: 5, VOID: 3, CHAOS: 4}.get(rarity, rarity)
+                     + B["extra_mods"])
         n_mods = min(n_mods, 6)
         self.mods = []
         while pool and len(self.mods) < n_mods:        # weighted draw without replacement; brands lean toward their favourites
@@ -440,15 +471,23 @@ class Weapon:
             self.eldritch_gifts(rng, arch, n_mods)
         for m in self.mods:
             m["fn"](st)
+        if rarity == VOID:
+            st["void"] = rng.uniform(*VOID_PULL)
         if rarity == DEMONIC:
             st["demonic_bonus"] = rng.uniform(0.10, 0.30)
             st["dmg"] *= 1 + st["demonic_bonus"]
         st["tier_leech"] = TIER_FX.get(rarity, {}).get("leech", 0.0)
-        st["dmg"] *= (1 + 0.07 * rarity) * {LEGENDARY: 1.35, MYTHICAL: 1.7, DEMONIC: 1.85, ELDRITCH: 2.0, SACRED: 2.4}.get(rarity, 1.0) * (1 + 0.2 * (level - 1))
+        # void guns hit ~3x their ordinary counterparts once brand and mods are in (median dps ratio vs a common gun)
+        st["dmg"] *= (1 + 0.07 * rarity) * {LEGENDARY: 1.35, MYTHICAL: 1.7, DEMONIC: 1.85, ELDRITCH: 2.0, SACRED: 2.4, VOID: 1.05,
+                                            CHAOS: 1.6}.get(rarity, 1.0) * (1 + 0.2 * (level - 1))
         st["mag"] = 1 if st["barrels"] else max(1, int(round(st["mag"])))
         st["pellets"] = int(round(st["pellets"]))
         self.st = st
-        if rarity == SACRED:
+        if rarity == VOID:
+            self.name = '"%s"' % rng.choice(VOID_NAMES)
+        elif rarity == CHAOS:
+            self.name = '"%s"' % rng.choice(CHAOS_NAMES)
+        elif rarity == SACRED:
             self.name = '"%s"' % rng.choice(SACRED_NAMES)
         elif rarity == ELDRITCH:
             self.name = '"%s"' % rng.choice(ELDRITCH_NAMES)
@@ -469,7 +508,17 @@ class Weapon:
     # ---- derived info
     @property
     def color(self):
+        if self.rarity == CHAOS:
+            return chaos_color(phase=(self.seed or 0) % 12 / 12.0)
         return RARITY[self.rarity][1]
+
+    def next_chaos_type(self, rng=random):
+        """Chaos: pick this shot's damage type - never the same as the last one."""
+        i = rng.randrange(len(CHAOS_TYPES) - 1)
+        if getattr(self, "chaos_i", -1) >= 0 and i >= self.chaos_i:
+            i += 1
+        self.chaos_i = i
+        return CHAOS_TYPES[i]
 
     @property
     def rarity_name(self):
@@ -556,13 +605,13 @@ class Weapon:
         return False
 
 
-RARE_ONLY = False      # run_loot_test.bat: every roll is Mythical / Demonic / Eldritch / Sacred
+RARE_ONLY = False      # run_loot_test.bat: every roll is Mythical / Demonic / Eldritch / Sacred / Void / Chaos
 
 
 def roll_rarity(rng, level, bonus=0):
     if RARE_ONLY:
-        return rng.choice((MYTHICAL, DEMONIC, ELDRITCH, SACRED))
-    w = [60, 26, 10, 3.5, 0.8, 0.24, 0.06, 0.035, 0.016]      # mythical and up: rare, but you will find some
+        return rng.choice(TOP_TIERS)
+    w = [60, 26, 10, 3.5, 0.8, 0.24, 0.06, 0.035, 0.016, 0.006, 0.007]     # mythical .. sacred, void, chaos: rare, but you will find some
     shift = min(level - 1, 8) * 0.35 + bonus
     for i in range(len(w)):
         w[i] *= (1 + shift) ** (min(i, LEGENDARY) * 0.8)     # tiers above legendary keep a fixed ratio to it
@@ -570,17 +619,21 @@ def roll_rarity(rng, level, bonus=0):
     for i, wi in enumerate(w):
         r -= wi
         if r <= 0:
-            return min(SACRED, i)
+            return min(CHAOS, i)
     return 0
 
 
 def generate(level, rng=None, bonus=0, arch=None, rarity=None):
     rng = rng or random.Random()
+    free = arch is None
     if arch is None:
         archs = list(ARCH)
         arch = rng.choices(archs, weights=[ARCH[a]["weight"] for a in archs])[0]
     if rarity is None:
         rarity = roll_rarity(rng, level, bonus)
+    if rarity == VOID and free and arch not in VOID_ARCHS:
+        arch = rng.choice(VOID_ARCHS)      # a void roll picks one of the three guns that can hold it
+    # (a fixed archetype that can't be Void comes out Sacred instead - see Weapon)
     return Weapon(arch, rarity, level, rng.randrange(1 << 30))
 
 
