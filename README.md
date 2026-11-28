@@ -80,6 +80,14 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
    game's libraries in a `.venv` folder inside the game folder, so nothing else on your computer changes.
 3. **Play.** Double-click **`run_game.command`** (Mac), or run `bash run_game.sh` (Linux).
 
+## Raspberry Pi 4 / 5
+
+The Pi gets its own edition, with half-size sprites so it fits in memory and runs smoothly. On a Windows,
+Mac or Linux computer that has this game folder, run `python tools/make_pi_package.py`. It builds
+`pi_package/skulls-and-stuff-pi.zip`. Copy that zip to the Pi and follow `README_PI.txt` inside it: extract it,
+run `bash install_pi.sh` once, then start the game from the desktop icon. A Pi edition built from the same
+copy of the game can join net games with PC players.
+
 ### Running it yourself (any OS)
 
 You need Python 3.10 or newer.
