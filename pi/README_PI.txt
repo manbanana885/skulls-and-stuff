@@ -31,12 +31,12 @@ Net play
   isn't swamped by monsters. The lobby shows each player's mode.
 
 Demand mode
-  The title screen shows "Demand: LOW". Press R (or X on a controller) to cycle LOW / MID / HIGH.
+  The main menu shows "Demand: LOW". Change it under SETTINGS > DEMAND MODE (LEFT / RIGHT).
   LOW puts about half the monsters on the map, each with twice the health and a worse temper, so the
   game stays as hard while the Pi does half the work. MID is in between. HIGH is every monster.
 
 If it runs slowly
-  - Make sure the demand mode on the title screen is LOW.
+  - Make sure SETTINGS > DEMAND MODE is LOW.
   - Close the web browser and anything else that's open.
   - Deep sectors have hundreds of monsters. A Pi 4 copes, but it's the hardest part for it.
   - Make sure the Pi isn't overheating: a case with a fan or a heatsink helps a Pi 4 keep its full speed.

@@ -41,6 +41,8 @@ MIN_GAP = {
     "servo": 0.2, "tentacle": 0.2, "bubble": 0.3, "shot_chaingun": 0.04,
 }
 MUSIC_VOLUME = 0.55
+sound_level = 1.0     # the player's volume settings (0..1), from the settings page
+music_level = 1.0
 
 _sounds = {}
 _last = {}
@@ -88,7 +90,7 @@ def play(name, vol=1.0, net=True):
     snd = _rng.choice(variants)
     ch = snd.play()
     if ch is not None:
-        ch.set_volume(min(1.0, VOLUME.get(name, 0.5) * vol * _rng.uniform(0.85, 1.0)))
+        ch.set_volume(min(1.0, VOLUME.get(name, 0.5) * vol * sound_level * _rng.uniform(0.85, 1.0)))
 
 
 LOOP_CHANNEL = {"flame_loop": 0, "static_loop": 1, "chem_loop": 2, "cryo_loop": 3, "tread_loop": 4}
@@ -104,7 +106,7 @@ def loop(name, on, vol=1.0):
         if not _loop_on.get(name):
             ch.play(_sounds[name][0], loops=-1, fade_ms=60)
             _loop_on[name] = True
-        ch.set_volume(min(1.0, VOLUME.get(name, 0.5) * vol))
+        ch.set_volume(min(1.0, VOLUME.get(name, 0.5) * vol * sound_level))
     elif _loop_on.get(name):
         ch.fadeout(160)
         _loop_on[name] = False
@@ -113,6 +115,20 @@ def loop(name, on, vol=1.0):
 def stop_loops():
     for name in LOOP_CHANNEL:
         loop(name, False)
+
+
+def set_levels(sound=None, music_=None):
+    """The settings page's volume sliders."""
+    global sound_level, music_level
+    if sound is not None:
+        sound_level = max(0.0, min(1.0, sound))
+    if music_ is not None:
+        music_level = max(0.0, min(1.0, music_))
+        if _enabled:
+            try:
+                pygame.mixer.music.set_volume(MUSIC_VOLUME * music_level)
+            except pygame.error:
+                pass
 
 
 def music(track, fade_ms=1500):
@@ -133,7 +149,7 @@ def music(track, fade_ms=1500):
         return
     try:
         pygame.mixer.music.load(path)
-        pygame.mixer.music.set_volume(MUSIC_VOLUME)
+        pygame.mixer.music.set_volume(MUSIC_VOLUME * music_level)
         pygame.mixer.music.play(-1, fade_ms=fade_ms)
     except pygame.error:
         pass

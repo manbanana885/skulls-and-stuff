@@ -169,11 +169,11 @@ for ch in CH.ORDER:
 SFX.play, SFX.loop = _play, _loop
 
 # title screen: pick characters
-g.state = "title"
+g.state, g.title_page, g.menu_i = "title", "local", 0     # the LOCAL PLAY page
 g.chars = ["skelebot", "canbot"]
 g.inputs = [bot]
 press("nav_right")
-check(g.chars[0] == "canbot", "LEFT / RIGHT on the title screen picks a body (now %s)" % g.chars[0])
+check(g.chars[0] == "canbot", "LEFT / RIGHT on the LOCAL PLAY page picks a body (now %s)" % g.chars[0])
 g.draw()
 pygame.image.save(g.screen, os.path.join(out, "title_select.png"))
 press("nav_right")

@@ -80,12 +80,15 @@ check(FakeHost([FakeGuest("high"), FakeGuest("low")]).session_mode() == "low", "
 check(FakeHost([FakeGuest("mid")]).session_mode() == "mid", "a MID guest -> MID")
 check(FakeHost([FakeGuest("low", hello=False)]).session_mode() == "high", "someone still connecting doesn't count yet")
 
-# ---- title toggle cycles and saves
+# ---- the settings page steps it (LEFT / RIGHT, or A to cycle) and saves
 perf.local = "high"
-g.state, g.world = "title", None
-g.inputs[0].pressed = {"reload"}
+g.state, g.world, g.title_page, g.menu_i = "title", None, "settings", 0
+g.inputs[0].pressed = {"nav_left"}
 g.update(1 / 60)
-check(perf.local == "mid", "R / X on the title screen steps HIGH -> MID")
+check(perf.local == "mid", "LEFT on SETTINGS > DEMAND MODE steps HIGH -> MID")
+g.inputs[0].pressed = {"a"}
+g.update(1 / 60)
+check(perf.local == "high", "A on it cycles round (MID -> HIGH)")
 g.inputs[0].pressed = set()
 
 # ---- crosshair
