@@ -12,6 +12,7 @@ from assets import load_all, to_screen, dir_index, glow, shadow, vignette, ROOT 
 from world import World, Particle  # noqa: E402
 import characters as CH  # noqa: E402
 import weapons as WP  # noqa: E402
+import perf  # noqa: E402
 import support as SU  # noqa: E402
 from biomes import BIOMES, biome_for  # noqa: E402
 from bosses import eel_points  # noqa: E402
@@ -497,6 +498,19 @@ def smoke_surf(r, alpha, color):
     return s
 
 
+def draw_crosshair(s, pos):
+    """A red ring with four ticks and a dot, outlined dark so it reads on any floor."""
+    x, y = pos
+    r = sc(9)
+    gap, tick = sc(4), sc(7)
+    for col, wd in (((20, 6, 6), max(3, sc(3.5))), ((255, 45, 40), max(1, sc(1.6)))):
+        pygame.draw.circle(s, col, (x, y), r, wd)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            pygame.draw.line(s, col, (x + dx * (r - gap + tick), y + dy * (r - gap + tick)), (x + dx * (r - gap), y + dy * (r - gap)), wd)
+    pygame.draw.circle(s, (20, 6, 6), (x, y), max(2, sc(2.2)))
+    pygame.draw.circle(s, (255, 70, 60), (x, y), max(1, sc(1.2)))
+
+
 class Game:
     def __init__(self, windowed=False):
         pygame.init()
@@ -548,8 +562,12 @@ class Game:
                 self.last_host = str(data.get("last_host", ""))[:60]
                 self.last_name = str(data.get("last_name", ""))[:40]
                 self.player_name = str(data.get("player_name", ""))[:14]
+                if data.get("demand") in perf.MODES and not os.environ.get("SKULLS_DEMAND"):
+                    perf.local = perf.sim = data["demand"]
         except Exception:
             pass
+        self._mouse_t = -99.0               # when the mouse last moved (the pointer hides after 5 s still)
+        self._cursor_vis = None
         self.minimap = None
         self._mouse_was = False
         self._mouse_pos = None
@@ -639,6 +657,8 @@ class Game:
         if depth == 1:
             self.run_seed = random.randrange(1 << 30)
         self.biome = biome_for(depth, self.run_seed)
+        # demand mode for this sector: yours, or in a net game the lowest of everyone's (the host builds the world)
+        perf.sim = self.net.session_mode() if hasattr(self.net, "session_mode") else perf.local
         self.world = World(depth, player, score, biome=self.biome)
         self.world.show_numbers = self.damage_numbers
         self.setup_view()
@@ -698,7 +718,7 @@ class Game:
             with open(SAVE, "w") as fh:
                 json.dump({"best": self.best, "damage_numbers": self.damage_numbers, "chars": self.chars,
                            "last_host": self.last_host, "last_name": self.last_name,
-                           "player_name": self.player_name}, fh)
+                           "player_name": self.player_name, "demand": perf.local}, fh)
         except Exception:
             pass
 
@@ -720,6 +740,7 @@ class Game:
                     return
                 if ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN):
                     self.inputs[0].mouse_mode = True
+                    self._mouse_t = self.time
                 if ev.type == pygame.MOUSEWHEEL and self.state == "play":
                     self.inputs[0].pending.add("swap")
                 if ev.type in (pygame.JOYDEVICEADDED, pygame.JOYDEVICEREMOVED,
@@ -749,7 +770,22 @@ class Game:
             self.try_join()
             self.update(dt)
             self.draw()
+            self.draw_pointer(self.screen)
             pygame.display.flip()
+
+    POINTER_IDLE = 5.0      # seconds without mouse movement before the pointer / crosshair hides
+
+    def draw_pointer(self, s):
+        """In play, mouse aiming gets a red crosshair instead of the arrow; either one hides after 5 s of a still mouse."""
+        idle = self.time - self._mouse_t > self.POINTER_IDLE
+        inp = self.inputs[0] if self.inputs else None
+        aiming = self.state == "play" and self.world is not None and inp is not None and inp.keyboard and inp.mouse_mode
+        want = not aiming and not idle
+        if want != self._cursor_vis:
+            pygame.mouse.set_visible(want)
+            self._cursor_vis = want
+        if aiming and not idle:
+            draw_crosshair(s, pygame.mouse.get_pos())
 
     def player_on_screen(self, i=0):
         mine = self.local_players()
@@ -772,6 +808,11 @@ class Game:
         if self.state == "title":
             if self.any_pressed("swap"):
                 self.toggle_numbers()
+                return
+            if self.any_pressed("reload"):
+                perf.local = perf.cycle(perf.local)
+                self.save_settings()
+                sfx.play("swap", 0.6)
                 return
             for i, inp_ in enumerate(self.inputs[:2]):
                 self.pick_char(i, inp_)
@@ -3094,6 +3135,13 @@ class Game:
         dn = self.font.render("[Q / Y]  Damage numbers: %s" % ("ON" if self.damage_numbers else "OFF"), True,
                               (255, 220, 120) if self.damage_numbers else (150, 160, 180))
         s.blit(dn, (W - dn.get_width() - sc(16), sc(14)))
+        dm = perf.MODES[perf.local]
+        dl = self.font.render("[R / X]  Demand: %s" % dm["label"], True, {"high": (150, 160, 180), "mid": (255, 220, 120),
+                                                                          "low": (120, 230, 255)}[perf.local])
+        s.blit(dl, (W - dl.get_width() - sc(16), sc(34)))
+        dh = self.small.render(dm["blurb"] + (" (this looks like a Raspberry Pi)" if perf.is_raspberry_pi() else ""), True,
+                               (130, 135, 150))
+        s.blit(dh, (W - dh.get_width() - sc(16), sc(54)))
         for i, (item, r) in enumerate(zip(self.TITLE_MENU, self.title_menu_rects())):
             on = i == self.menu_i
             self.panel(s, r, 210 if on else 120)

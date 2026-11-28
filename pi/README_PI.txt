@@ -27,8 +27,16 @@ Play
 Net play
   The Pi can host or join net games with Windows, Mac and Linux players, as long as everyone has the
   same version of the game. Build this Pi package from the same copy of the game your friends have.
+  When a Pi is in the game, everyone plays at its demand mode (LOW unless you change it), so the Pi
+  isn't swamped by monsters. The lobby shows each player's mode.
+
+Demand mode
+  The title screen shows "Demand: LOW". Press R (or X on a controller) to cycle LOW / MID / HIGH.
+  LOW puts about half the monsters on the map, each with twice the health and a worse temper, so the
+  game stays as hard while the Pi does half the work. MID is in between. HIGH is every monster.
 
 If it runs slowly
+  - Make sure the demand mode on the title screen is LOW.
   - Close the web browser and anything else that's open.
   - Deep sectors have hundreds of monsters. A Pi 4 copes, but it's the hardest part for it.
   - Make sure the Pi isn't overheating: a case with a fan or a heatsink helps a Pi 4 keep its full speed.
