@@ -5,6 +5,7 @@ each guest gets a snapshot of the world around them (plus level edits and the ef
 Guest: shows the host's world, simulates the cosmetic bits (particles, gibs, splats, sounds) itself, and sends
 its controls. Its own gun follows its own aim straight away so aiming never feels laggy.
 """
+import perf
 import math
 import time
 import zlib
@@ -101,6 +102,7 @@ class Guest:
         self.slot = None
         self.char = "skelebot"
         self.name = ""
+        self.demand = "high"          # their demand mode: the session runs at the lowest one present
         self.ready = False
         self.input = RemoteInput()
         self.in_game = False          # has been sent the current world
@@ -212,6 +214,8 @@ class HostSession:
                         gu.char = d["char"]
                     if "name" in d:
                         gu.name = net.clean_player_name(d.get("name", ""))
+                    if d.get("dm") in perf.MODES:
+                        gu.demand = d["dm"]
                     if d.get("ready") and not gu.ready:
                         gu.ready = True
                         if g.state != "lobby" and g.world is not None:
@@ -261,18 +265,24 @@ class HostSession:
         gu.slot = free[0]
         gu.hello = True
         gu.name = net.clean_player_name(d.get("name", ""))
+        if d.get("dm") in perf.MODES:
+            gu.demand = d["dm"]
         if d.get("char") in CH.CHARS:
             gu.char = d["char"]
         gu.conn.send_json("w", {"slot": gu.slot, "v": self.version})
         self.lobby_t = 0.0
 
+    def session_mode(self):
+        """The demand mode new sectors are built at: the least demanding of the host and every guest."""
+        return perf.lowest([perf.local] + [gu.demand for gu in self.guests if gu.hello])
+
     def lobby_info(self, g):
-        ps = [{"slot": 0, "char": g.chars[0], "ready": True, "host": True, "name": g.player_name}]
+        ps = [{"slot": 0, "char": g.chars[0], "ready": True, "host": True, "name": g.player_name, "dm": perf.local}]
         for gu in self.guests:
             if gu.hello:
-                ps.append({"slot": gu.slot, "char": gu.char, "ready": gu.ready, "host": False, "name": gu.name})
+                ps.append({"slot": gu.slot, "char": gu.char, "ready": gu.ready, "host": False, "name": gu.name, "dm": gu.demand})
         return {"players": sorted(ps, key=lambda p: p["slot"]), "state": "lobby" if g.state == "lobby" else "play",
-                "depth": g.world.depth if g.world else 0}
+                "depth": g.world.depth if g.world else 0, "dm": self.session_mode()}
 
     # ---- worlds
     def prepare(self, w):
@@ -638,6 +648,15 @@ def draw_lobby_players(g, s, info, me):
         st = CH.CHARS[p["char"]]["name"] + ("" if p["ready"] else "  -  picking")
         t2 = g.small.render(st, True, (220, 225, 235) if p["ready"] else (150, 155, 170))
         s.blit(t2, (r.x + g.sc(8), r.y + g.sc(26)))
+        dm = p.get("dm")
+        if dm in perf.MODES:
+            t3 = g.small.render(perf.MODES[dm]["label"], True, (120, 230, 255) if dm != "high" else (130, 135, 150))
+            s.blit(t3, (r.right - t3.get_width() - g.sc(6), r.y + g.sc(26)))
+    sm = info.get("dm")
+    if sm in perf.MODES:
+        g.center_text(s, g.small, "DEMAND: %s  -  %s  (the session runs at the lowest setting anyone has)"
+                      % (perf.MODES[sm]["label"], perf.MODES[sm]["blurb"]), g.sc(294),
+                      (120, 230, 255) if sm != "high" else (150, 160, 180))
 
 
 # ================================================================ guest
@@ -666,7 +685,7 @@ class GuestSession:
             self.last_rx = time.monotonic()
             if kind == "n":
                 nonce = net.read_json(payload).get("nonce", "")
-                self.conn.send_json("h", {"v": self.version, "char": self.char0, "p": net.name_proof(self.name, nonce),
+                self.conn.send_json("h", {"dm": perf.local, "v": self.version, "char": self.char0, "p": net.name_proof(self.name, nonce),
                                           "name": g.player_name})
             elif kind == "w":
                 d = net.read_json(payload)
@@ -874,7 +893,7 @@ class GuestSession:
             changed = True
             sfx.play("start")
         if changed:
-            self.conn.send_json("c", {"char": g.chars[0], "ready": self.ready, "name": g.player_name})
+            self.conn.send_json("c", {"char": g.chars[0], "ready": self.ready, "name": g.player_name, "dm": perf.local})
         if "deploy" in inp.pressed or "back" in inp.pressed:
             g.leave_net()
 
@@ -893,7 +912,7 @@ class GuestSession:
         if self.slot is None:
             g.center_text(s, g.mid, "Talking to the host...", g.sc(140), (150, 170, 200))
         else:
-            mine = {"slot": self.slot, "char": g.chars[0], "ready": self.ready, "host": False, "name": g.player_name}
+            mine = {"slot": self.slot, "char": g.chars[0], "ready": self.ready, "host": False, "name": g.player_name, "dm": perf.local}
             info = dict(lob, players=[p for p in lob.get("players", []) if p["slot"] != self.slot] + [mine])
             draw_lobby_players(g, s, info, self.slot)
             if lob.get("state") == "play":

@@ -9,6 +9,7 @@ import damage as DM
 import characters as CH
 import bestiary as BE
 import spawning as SP
+import perf
 import sfx
 
 rnd = random.Random()
@@ -178,18 +179,25 @@ class Gib:
         self.bounces = 0
         self.trail = 0.0
 
+    @staticmethod
+    def _wall(L, x, y):
+        """A wall cell - and the map's edge counts as one, so a gib blasted off the side bounces back."""
+        if not (0 <= x < L.W and 0 <= y < L.H):
+            return True
+        return L.solid[int(y) * L.W + int(x)] == 1
+
     def update(self, w, dt):
         if self.rest:
             return
         L = w.level
         self.vz -= 18 * dt
         nx, ny = self.x + self.vx * dt, self.y + self.vy * dt
-        if L.solid[int(self.y) * L.W + int(nx)] == 1:
+        if self._wall(L, nx, self.y):
             self.vx *= -0.45
             nx = self.x
             if self.blood and self.z > 0.2 and rnd.random() < 0.5:
                 w.splat(nx, ny, self.blood, 0.12)
-        if L.solid[int(ny) * L.W + int(nx)] == 1:
+        if self._wall(L, nx, ny):
             self.vy *= -0.45
             ny = self.y
         self.x, self.y = nx, ny
@@ -634,10 +642,11 @@ class Enemy:
         self.cat = DM.category(kind)
         st = STATS[kind]
         self.st = st
-        self.hp = st["hp"] * (1 + 0.15 * (depth - 1))
+        dm = perf.S()                  # demand mode: fewer monsters on LOW / MID, so each is tougher and angrier
+        self.hp = st["hp"] * (1 + 0.15 * (depth - 1)) * dm["hp"]
         # deeper sectors breed meaner monsters: quicker attacks (cooldowns run faster), quicker feet, sharper senses
-        self.aggro = min(1.65, 1 + 0.07 * (depth - 1))
-        self.speed = st["speed"] * rnd.uniform(0.9, 1.15) * min(1.25, 1 + 0.025 * (depth - 1))
+        self.aggro = min(1.65, 1 + 0.07 * (depth - 1)) + dm["aggro"]
+        self.speed = st["speed"] * rnd.uniform(0.9, 1.15) * min(1.25, 1 + 0.025 * (depth - 1)) * dm["speed"]
         self.r = st["r"]
         self.blood = GIB_SETS[kind][1]
         self.x, self.y = x, y
@@ -1458,7 +1467,11 @@ class Enemy:
 
 
 STATION_HP = {"carcass": 40, "grave": 45, "vat": 50, "fabricator": 60, "hellgate": 55, "nest": 35}
-ENEMY_CAP = 260               # stations and off-screen restocking stop adding monsters past this many
+ENEMY_CAP = 260               # stations and off-screen restocking stop adding monsters past this many (x the demand mode)
+
+
+def enemy_cap():
+    return int(ENEMY_CAP * perf.S()["count"])
 TRICKLE_RANGE = 16.0          # restocking only happens this far (tiles) past a room's edge from every player
 
 
@@ -1476,7 +1489,7 @@ class Spawner:
         self.t = rnd.random() * 4
         self.children = 0             # live brood (kill_enemy counts them down)
         self.made = 0
-        self.limit = min(10, 4 + depth // 2)
+        self.limit = max(2, round(min(10, 4 + depth // 2) * perf.S()["count"]))
         self.alive = True
         self.r = 0.45
         self.room = -1
@@ -1491,7 +1504,7 @@ class Spawner:
         if self.cd > 0:
             return
         self.cd = rnd.uniform(6.0, 9.0) / (1 + 0.08 * w.depth)
-        if self.made >= self.limit or self.children >= 3 or len(w.enemies) >= ENEMY_CAP:
+        if self.made >= self.limit or self.children >= 3 or len(w.enemies) >= enemy_cap():
             return
         kind = SP.weighted(rnd, self.kinds)
         pack = BE.ENEMIES.get(kind, {}).get("pack")
@@ -1747,7 +1760,7 @@ class World:
             self.messages.pop(0)
 
     def add(self, p):
-        if len(self.particles) < MAX_PARTICLES:
+        if len(self.particles) < MAX_PARTICLES * perf.FX():      # this machine's cosmetic budget
             self.particles.append(p)
 
     def enemy_shoot(self, e, sh, a):
@@ -2768,7 +2781,7 @@ class World:
         if self.trickle_t > 0:
             return
         self.trickle_t = max(6.0, 20.0 - 1.2 * self.depth) * rnd.uniform(0.75, 1.3)
-        if len(self.enemies) >= ENEMY_CAP:
+        if len(self.enemies) >= enemy_cap():
             return
         counts = {}
         for e in self.enemies:

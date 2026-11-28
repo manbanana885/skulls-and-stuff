@@ -3,6 +3,7 @@ monster (picked from the biome's own roster) plus a few of its kin, laid out by 
 doorways, brawlers hold the middle, swarms bunch up, ambushers hug the walls. Now and then a room is built around a
 spawning station (a carcass, a grave, a tank, a fabricator, a hell-gate or a nest) that keeps breeding its family.
 World.update_trickle restocks rooms you haven't cleared yet, slowly and out of sight."""
+import perf
 import math
 from bestiary import ENEMIES as BEST
 from damage import CATEGORY
@@ -107,7 +108,7 @@ def compose(rng, L, room, free, roster, depth, allow_station=True, avoid=()):
     cat = CATEGORY.get(anchor)
     kin = [(k, w * (3.0 if CATEGORY.get(k) == cat else 0.3) * (2.0 if role(k) != role(anchor) else 1.0))
            for k, w in roster if k != anchor]
-    B = budget(depth, rw, rh) * (0.45 if typ == "quiet" else 1.0)
+    B = budget(depth, rw, rh) * (0.45 if typ == "quiet" else 1.0) * perf.S()["count"]   # lower demand modes: fewer, tougher
     station = None
     if allow_station and anchor in STATION_OF and rng.random() < station_odds(depth):
         st = STATION_OF[anchor]

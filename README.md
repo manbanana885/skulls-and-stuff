@@ -80,6 +80,15 @@ Every sprite is pre-rendered from procedural Blender models and every sound is s
    game's libraries in a `.venv` folder inside the game folder, so nothing else on your computer changes.
 3. **Play.** Double-click **`run_game.command`** (Mac), or run `bash run_game.sh` (Linux).
 
+## Raspberry Pi 4 / 5
+
+The Pi gets its own edition, with half-size sprites so it fits in memory and runs smoothly. On a Windows,
+Mac or Linux computer that has this game folder, run `python tools/make_pi_package.py`. It builds
+`pi_package/skulls-and-stuff-pi.zip`. Copy that zip to the Pi and follow `README_PI.txt` inside it: extract it,
+run `bash install_pi.sh` once, then start the game from the desktop icon. A Pi edition built from the same
+copy of the game can join net games with PC players (`tools/crossplay_test.py` checks this: a PC host and a
+Pi-edition guest in one game).
+
 ### Running it yourself (any OS)
 
 You need Python 3.10 or newer.
@@ -95,7 +104,14 @@ It clashes with `pygame-ce`.
 ## Controls
 
 WASD + mouse, or a gamepad (left stick move, right stick aim, RT fire). Q / Y swaps guns, SHIFT / LB dashes
-(with Jump Jets equipped).
+(with Jump Jets equipped). Aiming with the mouse shows a red crosshair; it (and the normal pointer on menus)
+hides after 5 seconds without mouse movement.
+
+- **Demand mode: R / X on the title screen** cycles HIGH / MID / LOW. Lower modes put fewer monsters on the
+  map to go easy on slower machines, and make up for it: MID has about 3/4 of the monsters with 1.4x health,
+  LOW about half with 2x health, and both make them quicker and more aggressive. Lower modes also use fewer
+  particles. A Raspberry Pi starts on LOW, a PC on HIGH. In a net game the whole session runs at the lowest
+  mode anyone in it has (the lobby shows everyone's), so a Pi joining a PC game isn't buried in monsters.
 
 - **Pick up: E, or the bottom face button** (A on Xbox, B on a SNES-style pad). Takes whatever you're next to
   and facing: a gun, a module, a barrel, or your own deployed turret. A turret packs into the selected D-pad
