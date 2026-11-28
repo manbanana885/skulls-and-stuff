@@ -1011,7 +1011,9 @@ class Support:
         self.station(w, dt, pl, 1.45)
         wp = pl.weapon
         if wp.reload_t > 0:
-            wp.reload_t -= dt * (1.0 / self.p["reload"] - 1.0)
+            # speed the reload up, but leave the last tick to the gun: Weapon.update only refills the magazine when
+            # its own countdown crosses zero (driving it to zero here left the gun empty and reloading forever)
+            wp.reload_t = max(1e-4, wp.reload_t - dt * (1.0 / self.p["reload"] - 1.0))
         off = pl.weapons[1 - pl.cur]
         if off.ammo < off.st["mag"] and off.reload_t <= 0:
             self.stow_t += dt

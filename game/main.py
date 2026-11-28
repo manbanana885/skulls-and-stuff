@@ -1228,7 +1228,7 @@ class Game:
         for s in w.spawners:
             gx, gy = ground(s.x, s.y)
             if on_screen(gx, gy):
-                sp = spr["spawner"]
+                sp = spr.get("st_" + getattr(s, "station", "")) or spr["spawner"]
                 img = sp.get("idle", 0, s.t * 5)
                 n += 1
                 items.append((s.x + s.y, n, img, gx - sp.ax, gy - sp.ay))
@@ -2950,7 +2950,8 @@ class Game:
                     self.draw_dpad_faded(s, p, W - sc(90), H - sc(110))
         scr = self.mid.render("%07d" % w.score, True, (240, 240, 240))
         s.blit(scr, (W / 2 - scr.get_width() / 2, sc(10)))
-        info = self.font.render("SECTOR %d   -   HIVES %d   -   find the exit portal" % (w.depth, len(w.spawners)), True, (160, 170, 190))
+        info = self.font.render(("SECTOR %d   -   SPAWNERS %d   -   find the exit portal" % (w.depth, len(w.spawners))) if w.spawners
+                                else ("SECTOR %d   -   find the exit portal" % w.depth), True, (160, 170, 190))
         s.blit(info, (W / 2 - info.get_width() / 2, sc(38)))
         self.draw_minimap(s)
         if len(w.players) == 1 and self.state == "play" and self.net is None and int(self.time * 0.5) % 2 == 0:

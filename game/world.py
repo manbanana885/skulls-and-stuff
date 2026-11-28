@@ -8,6 +8,7 @@ import support as SU
 import damage as DM
 import characters as CH
 import bestiary as BE
+import spawning as SP
 import sfx
 
 rnd = random.Random()
@@ -40,6 +41,14 @@ GIB_SETS = {
                 "gib_bone", "gib_chrome", "gib_jaw", "gib_rib"], OIL),
     "spawner": (["gib_pod", "gib_meat", "gib_gut", "gib_pod", "gib_meat", "gib_eye", "gib_gut", "gib_pod", "gib_leech",
                  "gib_meat", "gib_skull"], ICHOR),
+    # spawning stations
+    "st_carcass": (["gib_meat", "gib_gut", "gib_rib", "gib_bone", "gib_leech", "gib_meat_green", "gib_gut", "gib_skull", "gib_rib",
+                    "gib_meat", "gib_gut"], (120, 28, 18)),
+    "st_grave": (["gib_rubble", "gib_rubble", "gib_rubble", "gib_bone", "gib_skull", "gib_rib", "gib_rubble", "gib_jaw"], (70, 56, 40)),
+    "st_vat": (["gib_metal", "gib_chrome", "gib_wire", "gib_metal", "gib_meat", "gib_gut", "gib_chrome", "gib_wire"], (190, 60, 110)),
+    "st_fabricator": (["gib_metal", "gib_gear", "gib_wire", "gib_metal", "gib_gear", "gib_chrome", "gib_metal", "gib_gear"], OIL),
+    "st_hellgate": (["gib_rubble", "gib_rubble", "gib_skull", "gib_bone", "gib_rubble", "gib_jaw", "gib_rib"], (110, 25, 8)),
+    "st_nest": (["gib_chitin", "gib_spiderleg", "gib_pod", "gib_gut", "gib_chitin", "gib_pod", "gib_spiderleg", "gib_pod"], ICHOR),
     "barrel": (["gib_barrel", "gib_barrel", "gib_metal", "gib_barrel", "gib_metal"], ICHOR),
     "crate": (["gib_plank", "gib_plank", "gib_plank", "gib_plank", "gib_metal"], None),
     "rubble": (["gib_rubble", "gib_rubble", "gib_rubble", "gib_metal"], None),
@@ -638,6 +647,7 @@ class Enemy:
         self.frame = rnd.random() * 6
         self.flash = 0.0
         self.awake = awake
+        self.room = -1                 # the room it was placed in (index into Level.rooms); off-screen restocking counts by it
         self.los = False
         self.los_t = rnd.random() * 0.3
         self.cd = rnd.uniform(1.0, 2.5)
@@ -1447,37 +1457,56 @@ class Enemy:
             w.snd("hit_metal" if self.blood in (OIL, ASH) else "hit_flesh", self.x, self.y)
 
 
+STATION_HP = {"carcass": 40, "grave": 45, "vat": 50, "fabricator": 60, "hellgate": 55, "nest": 35}
+ENEMY_CAP = 260               # stations and off-screen restocking stop adding monsters past this many
+TRICKLE_RANGE = 16.0          # restocking only happens this far (tiles) past a room's edge from every player
+
+
 class Spawner:
-    def __init__(self, kind, x, y, depth=1):
-        self.kind, self.x, self.y, self.depth = kind, x, y, depth
-        self.hp = 30 * (1 + 0.12 * (depth - 1))
-        self.cd = rnd.uniform(1.5, 4.0)
+    """A spawning station - carcass, grave, vat, fabricator, hell-gate or nest - that breeds its family while
+    you're near. Shoot it to shut it down."""
+
+    def __init__(self, station, x, y, depth=1, kinds=None):
+        self.station = self.kind = station
+        self.kinds = list(kinds) if kinds else [("zombie", 1.0)]
+        self.x, self.y, self.depth = x, y, depth
+        self.hp = STATION_HP.get(station, 40) * (1 + 0.12 * (depth - 1))
+        self.cd = rnd.uniform(2.0, 4.5)
         self.flash = 0.0
         self.t = rnd.random() * 4
-        self.children = 0
+        self.children = 0             # live brood (kill_enemy counts them down)
+        self.made = 0
+        self.limit = min(10, 4 + depth // 2)
         self.alive = True
         self.r = 0.45
+        self.room = -1
 
     def update(self, w, dt):
         self.t += dt
         self.flash = max(0.0, self.flash - dt)
         p = w.nearest_player(self.x, self.y)
-        if math.hypot(p.x - self.x, p.y - self.y) > 11 or not p.alive:
+        if math.hypot(p.x - self.x, p.y - self.y) > 12 or not p.alive:
             return
         self.cd -= dt
-        if self.cd <= 0:
-            self.cd = rnd.uniform(3.0, 5.5) / (1 + w.depth * 0.12)
-            if self.children < 5 and len(w.enemies) < 70:
-                a = rnd.random() * math.tau
-                ex, ey = self.x + math.cos(a) * 0.8, self.y + math.sin(a) * 0.8
-                if not w.level.is_solid(int(ex), int(ey)):
-                    e = Enemy(self.kind, ex, ey, awake=True, depth=self.depth)
-                    e.owner = self
-                    self.children += 1
-                    w.enemies.append(e)
-                    w.spray(ex, ey, 0.5, ICHOR, 14, 3.0)
-                    w.splat(ex, ey, ICHOR, 0.2)
-                    w.snd("spawn", ex, ey)
+        if self.cd > 0:
+            return
+        self.cd = rnd.uniform(6.0, 9.0) / (1 + 0.08 * w.depth)
+        if self.made >= self.limit or self.children >= 3 or len(w.enemies) >= ENEMY_CAP:
+            return
+        kind = SP.weighted(rnd, self.kinds)
+        pack = BE.ENEMIES.get(kind, {}).get("pack")
+        for _ in range(rnd.randint(*pack) if pack else 1):
+            a = rnd.random() * math.tau
+            ex, ey = self.x + math.cos(a) * 0.85, self.y + math.sin(a) * 0.85
+            if w.level.is_solid(int(ex), int(ey)):
+                continue
+            e = Enemy(kind, ex, ey, awake=True, depth=self.depth)
+            e.owner = self
+            e.room = self.room
+            self.children += 1
+            self.made += 1
+            w.enemies.append(e)
+            w.station_fx(self, ex, ey)
 
     def hit(self, w, dmg):
         self.hp -= dmg
@@ -1529,9 +1558,19 @@ class World:
         self.score = score
         self.time = 0.0
         self.enemies = [Enemy(k, x, y, depth=depth) for k, x, y in L.enemies]
-        self.spawners = [Spawner(k, x, y, depth) for k, x, y in L.spawners]
+        for e, ri in zip(self.enemies, L.enemy_rooms):
+            e.room = ri
+        # rooms: seen once a player steps in, cleared once seen with nothing left alive in it (never restocked after)
+        self.rooms = [dict(r, seen=False, cleared=False) for r in L.room_info]
+        self.trickle_t = 20.0
+        self._room_tick = 0.0
+        self.spawners = [Spawner(st, x, y, depth, kinds) for st, x, y, kinds in L.spawners]
         for s in self.spawners:
             L.solid[L.i(int(s.x), int(s.y))] = 2
+            for r in self.rooms:
+                rx, ry, rw, rh = r["rect"]
+                if rx <= s.x < rx + rw and ry <= s.y < ry + rh:
+                    s.room = r["idx"]
         self.loot = []
         suprng = random.Random(L.seed ^ 0x5099)
         wspots = [i for i, pk in enumerate(L.pickups) if pk[0] == "weapon"]
@@ -2673,17 +2712,112 @@ class World:
         elif rnd.random() < 0.04:
             self.loot.append(Loot("health", e.x, e.y, pop=True))
 
+    def station_fx(self, s, x, y):
+        """A station just brought something into the world."""
+        st = getattr(s, "station", "")
+        col = GIB_SETS.get("st_" + st, GIB_SETS["spawner"])[1]
+        if st == "grave":                       # it claws up out of the dirt
+            for _ in range(12):
+                a = rnd.random() * math.tau
+                v = rnd.uniform(1, 3)
+                self.add(Particle("chunk", x, y, 0.1, math.cos(a) * v, math.sin(a) * v, rnd.uniform(1.5, 3.5), 1.0, (78, 62, 44), 2))
+            self.splat(x, y, (55, 44, 32), 0.25)
+            self.snd("spawn", x, y)
+        elif st == "fabricator":                # stamped out, sparking
+            for _ in range(14):
+                a = rnd.random() * math.tau
+                v = rnd.uniform(2, 6)
+                self.add(Particle("spark", x, y, 0.6, math.cos(a) * v, math.sin(a) * v, rnd.uniform(1, 4), 0.35, (255, 220, 120), 2))
+            self.add(Particle("smoke", x, y, 0.5, 0, 0, 0.8, 1.0, (90, 90, 95), 0.3))
+            self.snd("zap", x, y, 0.7)
+        elif st == "hellgate":                  # steps out of the fire
+            for _ in range(12):
+                a = rnd.random() * math.tau
+                self.add(Particle("fire", x, y, rnd.uniform(0, 0.8), math.cos(a) * 1.2, math.sin(a) * 1.2, rnd.uniform(1, 3), 0.5,
+                                  (255, rnd.randint(90, 160), 30), rnd.uniform(8, 16)))
+            self.snd("fireball", x, y, 0.6)
+        elif st == "vat":                       # slops out of the tank in a gush of fluid
+            self.spray(x, y, 0.8, col, 18, 3.0)
+            self.splat(x, y, col, 0.35)
+            self.snd("spawn", x, y)
+        else:                                   # carcass / nest: wriggles out
+            self.spray(x, y, 0.4, col, 14, 3.0)
+            self.splat(x, y, col, 0.2)
+            self.snd("spawn", x, y)
+
+    def update_trickle(self, dt):
+        """Rooms nobody has cleared yet slowly restock, out of sight, up to the headcount they started with."""
+        if not self.rooms:
+            return
+        self._room_tick -= dt
+        if self._room_tick <= 0:                # which rooms are seen / cleared
+            self._room_tick = 0.5
+            counts = {}
+            for e in self.enemies:
+                if e.alive:
+                    counts[e.room] = counts.get(e.room, 0) + 1
+            for r in self.rooms:
+                if r["cleared"]:
+                    continue
+                rx, ry, rw, rh = r["rect"]
+                if not r["seen"] and any(p.alive and rx <= p.x < rx + rw and ry <= p.y < ry + rh for p in self.players):
+                    r["seen"] = True
+                if r["seen"] and not counts.get(r["idx"]) and not any(s.alive and s.room == r["idx"] for s in self.spawners):
+                    r["cleared"] = True
+        self.trickle_t -= dt
+        if self.trickle_t > 0:
+            return
+        self.trickle_t = max(6.0, 20.0 - 1.2 * self.depth) * rnd.uniform(0.75, 1.3)
+        if len(self.enemies) >= ENEMY_CAP:
+            return
+        counts = {}
+        for e in self.enemies:
+            if e.alive:
+                counts[e.room] = counts.get(e.room, 0) + 1
+        live = [p for p in self.players if p.alive] or self.players
+        cands = []
+        for r in self.rooms:
+            if r["cleared"] or not r["kinds"] or counts.get(r["idx"], 0) >= r["quota"]:
+                continue
+            rx, ry, rw, rh = r["rect"]
+            cx, cy = rx + rw / 2, ry + rh / 2
+            if all(math.hypot(p.x - cx, p.y - cy) > TRICKLE_RANGE + max(rw, rh) / 2 for p in live):
+                cands.append(r)
+        if not cands:
+            return
+        r = rnd.choice(cands)
+        rx, ry, rw, rh = r["rect"]
+        L = self.level
+        kind = SP.weighted(rnd, r["kinds"])
+        pack = BE.ENEMIES.get(kind, {}).get("pack")
+        n = min(rnd.randint(*pack) if pack else 1, r["quota"] - counts.get(r["idx"], 0))
+        for _ in range(20):
+            if n <= 0:
+                break
+            x, y = rx + rnd.random() * rw, ry + rnd.random() * rh
+            if L.solid[L.i(int(x), int(y))] or (int(x), int(y)) in self.barrels:
+                continue
+            e = Enemy(kind, x, y, awake=False, depth=self.depth)
+            e.room = r["idx"]
+            self.enemies.append(e)
+            n -= 1
+
     def kill_spawner(self, s):
         self.score += 500
         L = self.level
         L.solid[L.i(int(s.x), int(s.y))] = 0
-        self.gibs_from("spawner", s.x, s.y, 0.5, force=1.4)
-        self.gibs_from("spawner", s.x, s.y, 0.5, count=6, force=1.1)
-        self.spray(s.x, s.y, 0.5, ICHOR, 40, 5)
-        self.spray(s.x, s.y, 0.5, RED, 25, 4)
-        self.splat(s.x, s.y, ICHOR, 0.7)
-        self.splat(s.x + 0.3, s.y - 0.2, RED, 0.4)
-        self.explode(s.x, s.y, 2.0, 6, (130, 255, 80), quiet=True)
+        st = getattr(s, "station", "")
+        gs = "st_" + st if "st_" + st in GIB_SETS else "spawner"
+        col = GIB_SETS[gs][1]
+        self.gibs_from(gs, s.x, s.y, 0.5, force=1.4)
+        self.gibs_from(gs, s.x, s.y, 0.5, count=6, force=1.1)
+        self.spray(s.x, s.y, 0.5, col, 40, 5)
+        self.splat(s.x, s.y, col, 0.7)
+        if st in ("carcass", "nest", "vat", ""):
+            self.spray(s.x, s.y, 0.5, RED, 25, 4)
+            self.splat(s.x + 0.3, s.y - 0.2, RED, 0.4)
+        self.explode(s.x, s.y, 2.0, 6, {"hellgate": (255, 120, 30), "fabricator": (255, 200, 90), "grave": (150, 130, 100),
+                                        "vat": (255, 120, 200)}.get(st, (130, 255, 80)), quiet=True)
         self.snd("hive_death", s.x, s.y)
         self.hitstop = 0.1
         self.drop_weapon(s.x, s.y, 1.0)
@@ -2937,6 +3071,7 @@ class World:
                 e.update(self, dt)
         for s in self.spawners:
             s.update(self, dt)
+        self.update_trickle(dt)
         for b in self.bosses:
             b.update(self, dt)
         self.bosses = [b for b in self.bosses if b.alive]

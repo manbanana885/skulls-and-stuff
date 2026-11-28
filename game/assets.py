@@ -115,7 +115,7 @@ OUTLINED = {"player_legs", "player_torso", "zombie", "spider", "leech", "drone",
 def load_all():
     if not _manifest:
         raise SystemExit("No sprites found. Run build_assets.bat first (renders assets with Blender).")
-    return {name: Sprite(name, meta, name in OUTLINED or name.startswith(("gib_", "torso_", "sup_")))
+    return {name: Sprite(name, meta, name in OUTLINED or name.startswith(("gib_", "torso_", "sup_", "st_")))
             for name, meta in _manifest.items() if not name.startswith("_")}
 
 
