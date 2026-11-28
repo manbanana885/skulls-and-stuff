@@ -35,6 +35,8 @@ EXCLUDE = {"level", "particles", "gibs", "decals", "grid", "flow", "flow_tile", 
            "blocked", "net_events", "actor", "local_idx", "show_numbers", "free_roam", "dot_targets", "shootables",
            "near_loot"}
 CULL = ("enemies", "projs", "spawners", "traps", "loot")
+MUTABLE = (list, dict, set, bytearray)
+_NOPE = object()
 # ... and never in the full-world message either
 FULL_SKIP = {"particles", "gibs", "decals", "grid", "flow", "flow_tile", "net_events", "actor", "blocked"}
 
@@ -115,6 +117,7 @@ class Guest:
         self.win_bytes = 0
         self.win_msgs = 0
         self.junk = 0
+        self.od = {}                  # net id -> the fields last sent for that monster / loot / trap (per-object deltas)
 
 
 class HostSession:
@@ -290,7 +293,8 @@ class HostSession:
         w.local_idx = set(self.local)
         w.net_events = []
         self.world_ref = w
-        self.seen_p, self.seen_g = set(), set()
+        self.seen_p, self.seen_g, self.seen_d = set(), set(), set()
+        self.next_nid = getattr(self, "next_nid", 1)
         L = w.level
         self.level_copy = (bytes(L.solid), list(L.floor), list(L.wallkind), dict(L.props), bytes(w.explored))
 
@@ -315,6 +319,7 @@ class HostSession:
         state = {k: v for k, v in vars(w).items() if k not in FULL_SKIP}
         raw = net.pack(state, None)
         gu.conn.zprev = b""
+        gu.od = {}
         gu.conn.send("W", zlib.compress(raw, 6))
         gu.pending = []
         gu.in_game = True
@@ -354,7 +359,8 @@ class HostSession:
         self.seen_p = {id(p) for p in w.particles}
         gibs = [q for q in w.gibs if id(q) not in self.seen_g]
         self.seen_g = {id(q) for q in w.gibs}
-        decals = list(w.decals)
+        decals = [d_ for d_ in w.decals if id(d_) not in self.seen_d]   # only new ones (the host's renderer clears the list
+        self.seen_d = {id(d_) for d_ in w.decals}                       # as it bakes them, but don't rely on that)
         diff = self.level_diff(w)
         for gu in self.guests:
             if not gu.in_game:
@@ -392,18 +398,67 @@ class HostSession:
             me = next((p for p in w.players if p.idx == gu.slot), None)
             fx, fy = (me.x, me.y) if me is not None else (w.player.x, w.player.y)
             snap = dict(base)
+            objs, refs, seen = {}, {}, set()
             for k in CULL:
-                snap[k] = [o for o in getattr(w, k) if near(o, fx, fy)]
+                lst = [o for o in getattr(w, k) if near(o, fx, fy)]
+                if all(hasattr(o, "__dict__") for o in lst):
+                    objs[k] = self.obj_delta(gu, lst, refs, seen)     # monsters, loot, traps: only what changed
+                else:
+                    snap[k] = lst                                     # projectiles (slotted): whole, they're small
+            for nid in [n for n in gu.od if n not in seen]:          # out of view: start afresh if it comes back
+                del gu.od[nid]
             snap["_g"] = gstate
             snap["_ack"] = acks.get(gu.slot, 0)
             snap["_ev"] = gu.pending
             gu.pending = []
             try:
-                raw = net.pack(snap, w)
+                raw = net.pack_pair(objs, snap, w, refs)
             except Exception as ex:          # never let one odd object kill the session
                 print("net: snapshot failed:", ex)
+                gu.od = {}
                 continue
             gu.conn.send_delta("S", raw)
+
+    def obj_delta(self, gu, lst, refs, seen):
+        """[(net id, class if new, fields)]: a guest seeing a monster for the first time gets all of it (less its
+        NET_SKIP fields), after that only the fields that changed. Anything else in the snapshot that points at
+        one of these objects (a turret's target, the loot you stand by) points at the guest's copy (refs)."""
+        reg = net.registry().by_id
+        out = []
+        for o in lst:
+            d = o.__dict__
+            nid = d.get("_nid")
+            if nid is None:
+                nid = d["_nid"] = self.next_nid
+                self.next_nid += 1
+            seen.add(nid)
+            refs[id(o)] = ("O", nid)
+            skip = getattr(type(o), "NET_SKIP", None) or ()
+            prev = gu.od.get(nid)
+            if prev is None:
+                state = {a: v for a, v in d.items() if a not in skip and a != "_nid"}
+                gu.od[nid] = dict(state)
+                out.append((nid, type(o), state))
+                continue
+            ch = {}
+            for a, v in d.items():
+                if a in skip or a == "_nid":
+                    continue
+                pv = prev.get(a, _NOPE)
+                mutable = isinstance(v, MUTABLE) and id(v) not in reg
+                if not mutable:
+                    if v is pv:
+                        continue
+                    if type(v) is type(pv):
+                        try:
+                            if v == pv:
+                                continue
+                        except Exception:
+                            pass
+                ch[a] = v                # changed - or a list / dict that may have changed inside: always resent
+                prev[a] = v
+            out.append((nid, None, ch or None))
+        return out
 
     # ---- per frame
     def update(self, g, dt):
@@ -703,7 +758,7 @@ class GuestSession:
                     self.conn.close("bad world")
             elif kind == "S" and g.world is not None:
                 try:
-                    snap = net.unpack(self.conn.read_delta(payload), g.world)
+                    _, snap = net.unpack_pair(self.conn.read_delta(payload), g.world, self.apply_objs)
                 except Exception as ex:
                     self.error = "Lost sync with the host (%s)." % ex.__class__.__name__
                     self.conn.close("bad snapshot")
@@ -723,6 +778,7 @@ class GuestSession:
         w.free_roam = True
         w.show_numbers = g.damage_numbers
         self.conn.zprev = b""
+        self.objs, self.obj_lists = {}, {}
         g.world = w
         g.biome = w.biome
         g.transition = 0.0
@@ -730,8 +786,32 @@ class GuestSession:
         g.state = "play"
         self.dead_seen = False
 
+    def apply_objs(self, od):
+        """The snapshot's monsters / loot / traps: new ones built, known ones updated with what changed."""
+        cache = getattr(self, "objs", {})
+        new, lists = {}, {}
+        for key, items in od.items():
+            lst = []
+            for nid, cls, d in items:
+                if cls is not None:
+                    o = cls.__new__(cls)
+                    o.__dict__.update(d)
+                else:
+                    o = cache.get(nid)
+                    if o is None:
+                        continue
+                    if d:
+                        o.__dict__.update(d)
+                new[nid] = o
+                lst.append(o)
+            lists[key] = lst
+        self.objs, self.obj_lists = new, lists
+        return new
+
     def apply(self, g, snap):
         w = g.world
+        for k, lst in getattr(self, "obj_lists", {}).items():
+            setattr(w, k, lst)
         for k, v in snap.items():
             if not k.startswith("_"):
                 setattr(w, k, v)

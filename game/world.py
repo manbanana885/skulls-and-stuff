@@ -637,6 +637,18 @@ def weapon_to_shot(wp):
 
 
 class Enemy:
+    # AI-only state that net-play guests never look at: left out of snapshots (they only draw monsters),
+    # and read back as these defaults if anything on a guest ever asks
+    NET_SKIP = {"aggro": 1.0, "aim_t": 0.0, "cd": 0.0, "cd2": 0.0, "children": 0, "gen": 0, "los": False, "los_t": 0.0,
+                "owner": None, "room": -1, "speed": 0.0, "stx": 0.0, "sty": 0.0, "wshot": None, "burst": 0, "burst_t": 0.0,
+                "ldx": 0.0, "ldy": 0.0, "hitvx": 0.0, "hitvy": 0.0, "split_done": False, "burn_dps": 0.0}
+
+    def __getattr__(self, name):          # only reached when the attribute is missing (a guest's slimmed copy)
+        try:
+            return Enemy.NET_SKIP[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
     def __init__(self, kind, x, y, awake=False, depth=1):
         self.kind = kind
         self.cat = DM.category(kind)
